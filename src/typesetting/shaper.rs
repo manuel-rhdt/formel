@@ -1,6 +1,6 @@
 extern crate harfbuzz_rs;
 
-use self::harfbuzz_rs::hb;
+use self::harfbuzz_rs::sys as hb;
 use std;
 use std::cell::RefCell;
 use std::cmp::min;
