@@ -1,11 +1,12 @@
 use std::io::BufRead;
 
+use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
+
 use super::error::{ErrorType, ParsingError, Result};
 use super::escape::StringExtUnescape;
 use crate::host::MathElement;
 use crate::standalone::{MathDocument, NodeId};
-
-pub use quick_xml::{Element, Event, XmlReader};
 
 /// An element whose end tag hasn't been read yet.
 struct OpenElement {
@@ -18,33 +19,37 @@ struct OpenElement {
 /// Parses MathML markup into a [`MathDocument`].
 ///
 /// If the input isn't a single `<math>` element, its top-level elements are wrapped into an
-/// implicit `<math>` root.
+/// implicit `<math>` root. Entities are resolved with the HTML/MathML entity table.
 pub fn parse<R: BufRead>(input: R) -> Result<MathDocument> {
-    let mut parser = XmlReader::from_reader(input).trim_text(true);
+    let mut reader = Reader::from_reader(input);
+    reader.config_mut().trim_text(true);
+    let mut buffer = Vec::new();
     let mut document = MathDocument::new();
     let mut stack: Vec<OpenElement> = Vec::new();
     let mut top_level: Vec<NodeId> = Vec::new();
 
-    while let Some(event) = parser.next() {
-        match event? {
+    loop {
+        let event = reader
+            .read_event_into(&mut buffer)
+            .map_err(|error| ParsingError::at(reader.error_position(), ErrorType::XmlError(error)))?;
+        match event {
             Event::Start(ref element) => {
                 if let Some(token) = stack.last() {
                     if MathElement::from_local_name(&token.name).is_token() {
-                        return Err(ParsingError::from_string(
-                            &parser,
-                            format!(
+                        return Err(ParsingError::at(
+                            reader.buffer_position(),
+                            ErrorType::OtherError(format!(
                                 "<{}> inside the token element <{}> is not supported",
-                                String::from_utf8_lossy(element.name()),
+                                local_name(element)?,
                                 token.name
-                            ),
+                            )),
                         ));
                     }
                 }
                 stack.push(open_element(element)?);
             }
             Event::Empty(ref element) => {
-                let open = open_element(element)?;
-                let id = finish(&mut document, open);
+                let id = finish(&mut document, open_element(element)?);
                 match stack.last_mut() {
                     Some(parent) => parent.children.push(id),
                     None => top_level.push(id),
@@ -52,18 +57,29 @@ pub fn parse<R: BufRead>(input: R) -> Result<MathDocument> {
             }
             Event::Text(ref text) => {
                 if let Some(open) = stack.last_mut() {
-                    let text = std::str::from_utf8(text.content())?.unescape()?;
-                    open.text.push_str(&text);
+                    open.text.push_str(text);
+                }
+            }
+            Event::CData(ref data) => {
+                if let Some(open) = stack.last_mut() {
+                    open.text.push_str(data);
+                }
+            }
+            // `&name;` and `&#x…;`, which quick-xml reports separately from the text
+            Event::GeneralRef(ref reference) => {
+                if let Some(open) = stack.last_mut() {
+                    let escaped = format!("&{};", &**reference);
+                    open.text.push_str(&escaped.unescape()?);
                 }
             }
             Event::End(ref element) => {
-                let name = local_name(element.name())?;
+                let name = element.local_name().into_inner().to_owned();
                 let open = match stack.pop() {
                     Some(open) if open.name == name => open,
                     _ => {
-                        return Err(ParsingError::of_type(
-                            &parser,
-                            ErrorType::WrongEndElement(name.to_owned()),
+                        return Err(ParsingError::at(
+                            reader.buffer_position(),
+                            ErrorType::WrongEndElement(name),
                         ));
                     }
                 };
@@ -73,13 +89,15 @@ pub fn parse<R: BufRead>(input: R) -> Result<MathDocument> {
                     None => top_level.push(id),
                 }
             }
+            Event::Eof => break,
             _ => {}
         }
+        buffer.clear();
     }
 
     if !stack.is_empty() {
-        return Err(ParsingError::of_type(
-            &parser,
+        return Err(ParsingError::at(
+            reader.buffer_position(),
             ErrorType::UnexpectedEndOfInput,
         ));
     }
@@ -91,22 +109,21 @@ pub fn parse<R: BufRead>(input: R) -> Result<MathDocument> {
     Ok(document)
 }
 
-/// The name without a namespace prefix.
-fn local_name(name: &[u8]) -> Result<&str> {
-    let name = std::str::from_utf8(name)?;
-    Ok(name.rsplit(':').next().unwrap_or(name))
+/// The element name without a namespace prefix.
+fn local_name(element: &BytesStart) -> Result<String> {
+    Ok(element.local_name().into_inner().to_owned())
 }
 
-fn open_element(element: &Element) -> Result<OpenElement> {
+fn open_element(element: &BytesStart) -> Result<OpenElement> {
     let mut attributes = Vec::new();
     for attribute in element.attributes() {
-        let (key, value) = attribute?;
-        let key = local_name(key)?.to_owned();
-        let value = std::str::from_utf8(value)?.unescape()?.into_owned();
+        let attribute = attribute.map_err(quick_xml::Error::from)?;
+        let key = attribute.key.local_name().into_inner().to_owned();
+        let value = attribute.value.unescape()?.into_owned();
         attributes.push((key, value));
     }
     Ok(OpenElement {
-        name: local_name(element.name())?.to_owned(),
+        name: local_name(element)?,
         attributes,
         children: Vec::new(),
         text: String::new(),

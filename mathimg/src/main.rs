@@ -8,7 +8,6 @@ use std::io;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use freetype::Face as FT_Face;
 
 use harfbuzz_rs::{sys as hb, Face, Font as HbFont, HarfbuzzObject};
 
@@ -19,7 +18,6 @@ use math_render::standalone::StyleOptions;
 
 use fontconfig::{list_fonts, Pattern};
 
-use memmap::{Mmap, Protection};
 
 use docopt::Docopt;
 
@@ -70,11 +68,6 @@ struct Font {
     face_index: u32,
 }
 
-struct Shaper<'a> {
-    hb_shaper: HarfbuzzShaper<'a>,
-    ft_face: FT_Face<'a>,
-}
-
 fn find_math_fonts() -> Vec<Font> {
     let pat = Pattern::new();
     let fontset = list_fonts(&pat);
@@ -100,39 +93,16 @@ fn find_math_fonts() -> Vec<Font> {
 
 /// checks if a math table exists in the font
 fn has_math_data(font: &Font) -> bool {
-    let mapped_file = Mmap::open_path(&font.path, Protection::Read).unwrap();
-    let buffer = unsafe { mapped_file.as_slice() };
-    let face = Face::new(buffer, font.face_index);
+    let Ok(buffer) = std::fs::read(&font.path) else {
+        return false;
+    };
+    let face = Face::new(&buffer[..], font.face_index);
     let result = unsafe { hb::hb_ot_math_has_data(face.as_raw()) };
     result != 0
 }
 
-fn create_shaper<'a>(font_bytes: &'a [u8]) -> Shaper<'a> {
-    // let mut font_funcs = FontFuncsBuilder::new();
-    // font_funcs.set_glyph_extents_func(|_, ft_face, glyph| {
-    //     let result = FT_Face::load_glyph(ft_face, glyph, face::NO_SCALE);
-    //     if result.is_err() {
-    //         return None;
-    //     }
-    //     let metrics = ft_face.glyph().metrics();
-    //     Some(GlyphExtents {
-    //         width: metrics.width as i32,
-    //         height: -metrics.height as i32,
-    //         x_bearing: metrics.horiBearingX as i32,
-    //         y_bearing: metrics.horiBearingY as i32,
-    //     })
-    // });
-    // let font_funcs = font_funcs.finish();
-    let library = freetype::Library::init().unwrap();
-    let face = library.new_memory_face(font_bytes, 0).unwrap();
-    let hb_face = Face::new(font_bytes, 0);
-    let font = HbFont::new(hb_face);
-    // font.set_font_funcs(&font_funcs, face.clone());
-    let hb_shaper = HarfbuzzShaper::new(font.into());
-    Shaper {
-        hb_shaper: hb_shaper,
-        ft_face: face,
-    }
+fn create_shaper(font_bytes: &[u8]) -> HarfbuzzShaper<'_> {
+    HarfbuzzShaper::new(HbFont::new(Face::new(font_bytes, 0)).into())
 }
 
 fn main() {
@@ -208,20 +178,18 @@ fn main() {
         out_path.to_mut().push(output_name.into_owned() + extension);
     }
 
-    let mapped_file =
-        Mmap::open_path(font_path, Protection::Read).expect("could not mmap font file");
-    let font_bytes = unsafe { mapped_file.as_slice() };
+    let font_bytes = std::fs::read(&font_path).expect("could not read font file");
 
-    let shaper = create_shaper(font_bytes);
+    let shaper = create_shaper(&font_bytes);
 
     let document = list.as_ref().unwrap();
     // A font size of one em per font unit makes px equal font units.
-    let units_per_em = shaper.hb_shaper.units_per_em() as f32;
+    let units_per_em = shaper.units_per_em() as f32;
     let options = StyleOptions {
         font_size: units_per_em,
         ..Default::default()
     };
-    let typeset = math_render::layout(document, &shaper.hb_shaper, options);
+    let typeset = math_render::layout(document, &shaper, options);
     match args.flag_output_format {
         Some(Format::Svg) => {
             let flags = svg_renderer::Flags {
@@ -232,7 +200,7 @@ fn main() {
             svg_renderer::render(
                 document,
                 &typeset.layouts,
-                &shaper.ft_face,
+                &shaper.font,
                 units_per_em,
                 flags,
                 &out_path,

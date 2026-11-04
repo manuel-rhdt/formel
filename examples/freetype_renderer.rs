@@ -141,7 +141,7 @@ impl Iterator for ColorIter<Color4> {
 
 struct Renderer {
     lib: Library,
-    ft_face: Face<'static>,
+    ft_face: Face,
 }
 impl Renderer {
     fn new() -> Renderer {

@@ -7,9 +7,7 @@ rust-version = "1.85"
 
 [dependencies]
 math-render = { path = "..", version = "0.1.0", features = ["mathml_parser"] }
-freetype-rs = "0.11"
 docopt = "1.1"
-memmap = "0.5"
 serde = { version = "1", features = ["derive"] }
 svg = "*"
 harfbuzz_rs = { version = "3.0.1", features = ["sys"] }

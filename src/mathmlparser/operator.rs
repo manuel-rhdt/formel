@@ -2,6 +2,7 @@ use bitflags::bitflags;
 
 bitflags! {
     /// Boolean operator properties, as stored in the operator dictionary.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct Flags: u8 {
         const SYMMETRIC         = 0b00000001;
         const FENCE             = 0b00000010;

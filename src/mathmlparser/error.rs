@@ -1,31 +1,20 @@
 use std::fmt;
-#[cfg(feature = "mathml_parser")]
-use std::io::prelude::*;
-
-#[cfg(feature = "mathml_parser")]
-use quick_xml::{self, XmlReader};
 
 pub type Result<T> = std::result::Result<T, ParsingError>;
 
 #[derive(Debug)]
 pub struct ParsingError {
-    pub position: Option<usize>,
+    /// Byte offset into the input, if known.
+    pub position: Option<u64>,
     pub error_type: ErrorType,
 }
-impl ParsingError {
-    #[cfg(feature = "mathml_parser")]
-    pub fn from_string<B: BufRead, S: ToString>(parser: &XmlReader<B>, string: S) -> ParsingError {
-        ParsingError {
-            position: Some(parser.buffer_position()),
-            error_type: ErrorType::OtherError(string.to_string()),
-        }
-    }
 
-    #[cfg(feature = "mathml_parser")]
-    pub fn of_type<B: BufRead>(parser: &XmlReader<B>, err_type: ErrorType) -> ParsingError {
+impl ParsingError {
+    /// An error at a byte offset into the input.
+    pub fn at(position: u64, error_type: ErrorType) -> ParsingError {
         ParsingError {
-            position: Some(parser.buffer_position()),
-            error_type: err_type,
+            position: Some(position),
+            error_type,
         }
     }
 }
@@ -38,7 +27,7 @@ pub enum ErrorType {
     OtherError(String),
     Utf8Error(std::str::Utf8Error),
     #[cfg(feature = "mathml_parser")]
-    XmlError(quick_xml::error::Error),
+    XmlError(quick_xml::Error),
 }
 
 impl fmt::Display for ParsingError {
@@ -84,19 +73,10 @@ impl ::std::convert::From<String> for ParsingError {
     }
 }
 #[cfg(feature = "mathml_parser")]
-impl ::std::convert::From<quick_xml::error::Error> for ParsingError {
-    fn from(error: quick_xml::error::Error) -> ParsingError {
+impl ::std::convert::From<quick_xml::Error> for ParsingError {
+    fn from(error: quick_xml::Error) -> ParsingError {
         ParsingError {
             position: None,
-            error_type: ErrorType::XmlError(error),
-        }
-    }
-}
-#[cfg(feature = "mathml_parser")]
-impl ::std::convert::From<(quick_xml::error::Error, usize)> for ParsingError {
-    fn from((error, position): (quick_xml::error::Error, usize)) -> ParsingError {
-        ParsingError {
-            position: Some(position),
             error_type: ErrorType::XmlError(error),
         }
     }

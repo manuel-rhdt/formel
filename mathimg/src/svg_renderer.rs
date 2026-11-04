@@ -6,12 +6,13 @@ use math_render::standalone::{MathDocument, NodeId};
 
 use svg::Document;
 use svg::node::Node;
-use svg::node::element::path::Data;
 use svg::node::element::{Group, Line, Path, Rectangle};
 
-use freetype::face::Face as FT_Face;
-use freetype::outline::Curve;
-use freetype::{Vector, face};
+use std::fmt::Write;
+use std::sync::Mutex;
+
+use harfbuzz_rs::draw_funcs::DrawState;
+use harfbuzz_rs::{DrawFuncs, Font as HbFont};
 
 pub struct Flags {
     /// Fill the boxes of token elements.
@@ -25,7 +26,7 @@ pub struct Flags {
 pub fn render<T: AsRef<path::Path>>(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &FT_Face<'_>,
+    font: &HbFont<'_>,
     units_per_em: f32,
     flags: Flags,
     out_path: T,
@@ -130,32 +131,59 @@ pub fn render<T: AsRef<path::Path>>(
     svg::save(out_path, &svg_document).unwrap();
 }
 
-fn draw_glyph(face: &FT_Face<'_>, glyph: u32, x: f32, y: f32, scale: f32) -> Group {
-    let mut group = Group::new().set(
-        "transform",
-        format!("translate({:?}, {:?}) scale({:?}, {:?})", x, y, scale, -scale),
-    );
+/// Collects a glyph outline from HarfBuzz as SVG path data.
+///
+/// `Font::draw_glyph` hands the callbacks a pointer derived from a shared reference, so the
+/// state lives in a `Mutex` rather than in plain fields.
+#[derive(Debug, Default)]
+struct PathBuilder {
+    data: Mutex<String>,
+}
 
-    face.load_glyph(glyph, face::NO_SCALE).unwrap();
-    let outline = face.glyph().outline().expect("Glyph has no outline.");
-
-    let mut data = Data::new();
-    for contour in outline.contours_iter() {
-        let Vector { x, y } = *contour.start();
-        data = data.move_to((x, y));
-        for curve in contour {
-            match curve {
-                Curve::Line(pt) => data = data.line_to((pt.x, pt.y)),
-                Curve::Bezier2(pt1, pt2) => {
-                    data = data.quadratic_curve_to((pt1.x, pt1.y, pt2.x, pt2.y))
-                }
-                Curve::Bezier3(pt1, pt2, pt3) => {
-                    data = data.cubic_curve_to((pt1.x, pt1.y, pt2.x, pt2.y, pt3.x, pt3.y))
-                }
-            }
-        }
+impl PathBuilder {
+    fn push(&self, command: std::fmt::Arguments) {
+        let mut data = self.data.lock().unwrap();
+        let _ = write!(data, "{} ", command);
     }
-    data = data.close();
-    group.append(Path::new().set("d", data));
-    group
+}
+
+impl DrawFuncs for PathBuilder {
+    fn move_to(&mut self, _: &DrawState, x: f32, y: f32) {
+        self.push(format_args!("M{} {}", x, y));
+    }
+    fn line_to(&mut self, _: &DrawState, x: f32, y: f32) {
+        self.push(format_args!("L{} {}", x, y));
+    }
+    fn quadratic_to(&mut self, _: &DrawState, cx: f32, cy: f32, x: f32, y: f32) {
+        self.push(format_args!("Q{} {} {} {}", cx, cy, x, y));
+    }
+    fn cubic_to(
+        &mut self,
+        _: &DrawState,
+        c1x: f32,
+        c1y: f32,
+        c2x: f32,
+        c2y: f32,
+        x: f32,
+        y: f32,
+    ) {
+        self.push(format_args!("C{} {} {} {} {} {}", c1x, c1y, c2x, c2y, x, y));
+    }
+    fn close_path(&mut self, _: &DrawState) {
+        self.push(format_args!("Z"));
+    }
+}
+
+/// Draws a glyph from the HarfBuzz font. Outlines are in font units with y pointing up, so
+/// they are flipped and scaled to px.
+fn draw_glyph(font: &HbFont<'_>, glyph: u32, x: f32, y: f32, scale: f32) -> Group {
+    let builder = PathBuilder::default();
+    font.draw_glyph(glyph, &builder);
+    let data = builder.data.into_inner().unwrap();
+    Group::new()
+        .set(
+            "transform",
+            format!("translate({:?}, {:?}) scale({:?}, {:?})", x, y, scale, -scale),
+        )
+        .add(Path::new().set("d", data.trim_end().to_owned()))
 }
