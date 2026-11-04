@@ -800,11 +800,23 @@ impl MathLayout for Operator {
             }
             _ => {
                 if self.is_large_op && options.style.math_style == MathStyle::Display {
-                    let display_min_height = (options
+                    // Use the font's DisplayOperatorMinHeight. Only if the font does not
+                    // provide a usable value, scale the base glyph by sqrt(2).
+                    let mut display_min_height = options
                         .shaper
-                        .math_constant(MathConstant::DisplayOperatorMinHeight)
-                        as f32
-                        * 1.42) as i32;
+                        .math_constant(MathConstant::DisplayOperatorMinHeight);
+                    if display_min_height <= 0 {
+                        if let Field::Unicode(ref string) = self.field {
+                            let base = options.shaper.shape(
+                                string,
+                                options.style.no_flat_accent_style(),
+                                options.user_data,
+                            );
+                            display_min_height =
+                                (base.extents().height() as f32 * std::f32::consts::SQRT_2) as i32;
+                        }
+                    }
+                    let display_min_height = max(0, display_min_height);
                     self.layout_stretchy(display_min_height as u32, 0, options)
                 } else {
                     self.field.layout(options)
