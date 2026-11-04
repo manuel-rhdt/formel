@@ -1,7 +1,6 @@
 // includes a generated list of xml entity names and their replacement characters named ENTITIES.
 include!(concat!(env!("OUT_DIR"), "/entities.rs"));
 
-use std;
 use std::borrow::Cow;
 use super::error::ParsingError;
 
@@ -20,11 +19,11 @@ impl StrOrChr {
 }
 
 pub trait StringExtUnescape {
-    fn unescape(&self) -> Result<Cow<str>, ParsingError>;
+    fn unescape(&self) -> Result<Cow<'_, str>, ParsingError>;
 }
 
 impl StringExtUnescape for str {
-    fn unescape(&self) -> Result<Cow<str>, ParsingError> {
+    fn unescape(&self) -> Result<Cow<'_, str>, ParsingError> {
         let mut escapes = Vec::new();
         'outer: for ent_ref in self.split('&').skip(1) {
             if let Some(i) = ent_ref.find(';') {

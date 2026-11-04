@@ -1,9 +1,7 @@
-extern crate math_render;
-extern crate freetype;
 
 mod util;
 
-use math_render::shaper::*;
+use math_render::host::MathConstant;
 use crate::util::TEST_FONT;
 
 #[test]

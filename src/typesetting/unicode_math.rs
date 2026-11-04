@@ -479,3 +479,68 @@ mod tests {
                    convert_character_to_family(latin_dotless_i, Family::Italics));
     }
 }
+
+impl Family {
+    /// Parses a MathML `mathvariant` attribute value.
+    pub fn from_mathvariant(value: &str) -> Option<Family> {
+        Some(match value.trim() {
+            "normal" => Family::Normal,
+            "bold" => Family::Bold,
+            "italic" => Family::Italics,
+            "bold-italic" => Family::BoldItalics,
+            "double-struck" => Family::DoubleStruck,
+            "bold-fraktur" => Family::BoldFraktur,
+            "script" => Family::Script,
+            "bold-script" => Family::BoldScript,
+            "fraktur" => Family::Fraktur,
+            "sans-serif" => Family::SansSerif,
+            "bold-sans-serif" => Family::SansSerifBold,
+            "sans-serif-italic" => Family::SansSerifItalics,
+            "sans-serif-bold-italic" => Family::SansSerifBoldItalics,
+            "monospace" => Family::Monospace,
+            _ => return None,
+        })
+    }
+}
+
+/// Text transforms for the content of MathML token elements.
+pub trait StringExtMathml {
+    /// Maps the text to the mathematical alphanumeric characters of `family`. With `None`
+    /// (CSS `text-transform: math-auto`), a single character becomes italic and longer text is
+    /// left alone.
+    fn adapt_to_family(&self, family: Option<Family>) -> std::borrow::Cow<'_, str>;
+
+    /// Replaces ASCII characters that have a better mathematical counterpart: `-` becomes a
+    /// minus sign in operators (a hyphen elsewhere) and `'` becomes a prime.
+    fn replace_anomalous_characters(&self, is_operator: bool) -> String;
+}
+
+impl StringExtMathml for str {
+    fn adapt_to_family(&self, family: Option<Family>) -> std::borrow::Cow<'_, str> {
+        match family {
+            None if self.chars().count() == 1 => {
+                let c = self.chars().next().unwrap();
+                convert_character_to_family(c, Family::Italics)
+                    .to_string()
+                    .into()
+            }
+            None => self.into(),
+            Some(family) => self
+                .chars()
+                .map(|c| convert_character_to_family(c, family))
+                .collect::<String>()
+                .into(),
+        }
+    }
+
+    fn replace_anomalous_characters(&self, is_operator: bool) -> String {
+        self.chars()
+            .map(|c| match c {
+                '-' if is_operator => '\u{2212}', // minus sign
+                '-' => '\u{2010}',                // hyphen
+                '\'' => '\u{2032}',               // prime
+                c => c,
+            })
+            .collect()
+    }
+}

@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-mkdir -p svgs
+# Run from the repository root regardless of where the script is invoked.
+cd "$(dirname "$0")/.."
+
+FONT="${FONT:-tests/testfiles/latinmodern-math.otf}"
+OUT="${OUT:-svgs}"
+
+mkdir -p "$OUT"
 
 cargo build -p mathimg
-# find -E tests/testfiles -regex .*.xml -print0 | xargs -t -P8 -I{} -0 target/debug/mathimg -f "/Library/Fonts/Microsoft/Cambria Math.ttf" --show-ink-bounds --show-logical-bounds {} svgs
-find -E tests/testfiles -regex .*.xml -print0 | xargs -t -P8 -I{} -0 target/debug/mathimg -f ~/Library/Fonts/latinmodern-math.otf --show-ink-bounds --show-logical-bounds {} svgs
-# find -E ../tests/testfiles -regex .*.xml -print0 | xargs -t -P8 -I{} -0 target/debug/mathimg -f ~/Library/Fonts/latinmodern-math.otf {} svgs
+find tests/testfiles -name '*.xml' -print0 \
+    | xargs -t -P8 -I{} -0 target/debug/mathimg -f "$FONT" --show-ink-bounds --show-logical-bounds {} "$OUT"

@@ -1,300 +1,161 @@
-use freetype;
-
-use math_render;
-use svg;
-
+use std::collections::HashMap;
 use std::path;
 
-use math_render::math_box::*;
-use math_render::shaper::*;
+use math_render::host::{Fragment, NodeLayout, Point};
+use math_render::standalone::{MathDocument, NodeId};
 
-use self::svg::node::element::path::Data;
-use self::svg::node::element::{Group, Line, Path, Rectangle};
-use self::svg::node::Node;
-use self::svg::Document;
+use svg::Document;
+use svg::node::Node;
+use svg::node::element::path::Data;
+use svg::node::element::{Group, Line, Path, Rectangle};
 
 use freetype::face::Face as FT_Face;
 use freetype::outline::Curve;
-use freetype::{face, Vector};
+use freetype::{Vector, face};
 
 pub struct Flags {
+    /// Fill the boxes of token elements.
     pub show_ink_bounds: bool,
+    /// Outline the border box of every element.
     pub show_logical_bounds: bool,
-    pub show_top_accent_attachment: bool,
 }
 
-pub fn render<'a, T: AsRef<path::Path>>(
-    math_box: MathBox,
-    _: &HarfbuzzShaper<'_>,
-    font: &'a FT_Face<'_>,
+/// Renders a laid-out document to SVG. Coordinates are px; `units_per_em` converts glyph
+/// outlines from font units.
+pub fn render<T: AsRef<path::Path>>(
+    document: &MathDocument,
+    layouts: &HashMap<NodeId, NodeLayout>,
+    font: &FT_Face<'_>,
+    units_per_em: f32,
     flags: Flags,
     out_path: T,
 ) {
-    let logical_extents = math_box.extents();
+    let root = document.root().expect("document has a root");
+    let root_layout = &layouts[&root];
 
-    let mut document = Document::new();
-    // let mut group = Group::new();
-    document.assign(
+    let mut svg_document = Document::new();
+    svg_document.assign(
         "viewBox",
         (
-            math_box.origin.x - 10,
-            math_box.origin.y - math_box.extents().ascent - 10,
-            math_box.advance_width() + 20,
-            logical_extents.descent + logical_extents.ascent + 20,
+            -10.0,
+            -10.0,
+            root_layout.size.width + 20.0,
+            root_layout.size.height + 20.0,
         ),
     );
 
-    let mut italic_cor_group = Group::new()
-        .set("stroke", "black")
-        .set("stroke-width", 5)
-        .set("fill", "none")
-        .set("stroke-dasharray", "30,20")
-        .set("stroke-linecap", "round");
-
-    let mut top_accent_attachment_group = Group::new()
-        .set("stroke", "green")
-        .set("stroke-width", 13)
-        .set("fill", "none")
-        .set("stroke-dasharray", "140,70")
-        .set("stroke-linecap", "round");
-
+    let mut ink_group = Group::new().set("stroke", "none").set("fill", "#FFE6E6");
+    let mut logical_group = Group::new()
+        .set("stroke", "#FF0000")
+        .set("stroke-width", 2)
+        .set("fill", "none");
     let mut black_group = Group::new().set("fill", "black").set("stroke", "none");
 
-    generate_svg(&mut italic_cor_group, &math_box, &|group, math_box| {
-        draw_italic_correction(group, math_box)
-    });
-    generate_svg(
-        &mut top_accent_attachment_group,
-        &math_box,
-        &|group, math_box| draw_top_accent_attachment(group, math_box),
-    );
-    generate_svg(&mut black_group, &math_box, &|group, math_box| {
-        draw_glyph(group, math_box, font)
-    });
-    generate_svg(&mut black_group, &math_box, &|group, math_box| {
-        draw_filled(group, math_box)
-    });
-
-    if flags.show_ink_bounds {
-        let mut ink_group = Group::new().set("stroke", "none").set("fill", "#FFE6E6");
-        generate_svg(&mut ink_group, &math_box, &|group, math_box| {
-            draw_ink_rect(group, math_box)
-        });
-        document.append(ink_group);
-    }
-
-    if flags.show_logical_bounds {
-        let mut logical_group = Group::new()
-            .set("stroke", "#FF0000")
-            .set("stroke-width", 5)
-            .set("fill", "none");
-        generate_svg(&mut logical_group, &math_box, &|group, math_box| {
-            draw_logical_bounds(group, math_box)
-        });
-        document.append(logical_group);
-    }
-
-    //    document.append(italic_cor_group);
-    document.append(black_group);
-
-    if flags.show_top_accent_attachment {
-        document.append(top_accent_attachment_group);
-    }
-
-    svg::save(out_path, &document).unwrap();
-}
-
-fn generate_svg<'a, F>(node: &mut Group, math_box: &MathBox, func: &F)
-where
-    F: Fn(&mut Group, &MathBox),
-{
-    let content = math_box.content();
-    match *content {
-        MathBoxContent::Boxes(ref list) => {
-            let pt = math_box.origin;
-            if pt.x == 0 && pt.y == 0 {
-                for item in list.as_slice() {
-                    generate_svg(node, item, func);
-                }
-                return;
-            }
-            let mut group =
-                Group::new().set("transform", format!("translate({:?}, {:?})", pt.x, pt.y));
-            for item in list.as_slice() {
-                generate_svg(&mut group, item, func);
-            }
-            node.append(group);
-        }
-        _ => func(node, math_box),
-    }
-}
-
-fn draw_filled<'a, T: Node>(doc: &mut T, math_box: &MathBox) {
-    if let MathBoxContent::Drawable(Drawable::Line { vector, thickness }) = *math_box.content() {
-        let line = Line::new()
-            .set("x1", math_box.origin.x)
-            .set("y1", math_box.origin.y - math_box.extents().ascent)
-            .set("x2", vector.x + math_box.origin.x)
-            .set(
-                "y2",
-                math_box.origin.y - math_box.extents().ascent + vector.y,
-            )
-            .set("stroke-width", thickness)
-            .set("stroke", "black")
-            .set("z-index", 1);
-
-        doc.append(line);
-    }
-    if let MathBoxContent::Empty(_) = *math_box.content() {
-        let _rect = Rectangle::new()
-            .set("x", math_box.origin.x)
-            .set("y", math_box.origin.y - math_box.extents().ascent)
-            .set("width", math_box.extents().width)
-            .set("height", 100)
-            .set("stroke", "none")
-            .set("fill", "red")
-            .set("z-index", 1);
-
-        // doc.append(rect);
-    }
-}
-
-fn draw_ink_rect<'a, T: Node>(group: &mut T, math_box: &MathBox) {
-    if let MathBoxContent::Drawable(Drawable::Glyphs { .. }) = *math_box.content() {
-        let ink_rect = Rectangle::new()
-            .set(
-                "x",
-                math_box.origin.x + math_box.extents().left_side_bearing,
-            )
-            .set("y", math_box.origin.y - math_box.extents().ascent)
-            .set("width", math_box.extents().width)
-            .set("height", math_box.extents().height());
-
-        group.append(ink_rect);
-    }
-}
-
-fn draw_logical_bounds<'a, T: Node>(group: &mut T, math_box: &MathBox) {
-    if let MathBoxContent::Drawable(Drawable::Glyphs { .. }) = *math_box.content() {
-        let logical_bounds = math_box.bounds().normalize();
-
-        if logical_bounds.extents.ascent != 0 {
-            let logical_rect1 = Rectangle::new()
-                .set("x", logical_bounds.origin.x)
-                .set("y", logical_bounds.origin.y - logical_bounds.extents.ascent)
-                .set("width", math_box.advance_width())
-                .set("height", logical_bounds.extents.ascent);
-            group.append(logical_rect1);
-        }
-
-        if logical_bounds.extents.descent != 0 {
-            let logical_rect2 = Rectangle::new()
-                .set("x", logical_bounds.origin.x)
-                .set("y", logical_bounds.origin.y)
-                .set("width", math_box.advance_width())
-                .set("height", logical_bounds.extents.descent);
-            group.append(logical_rect2);
-        }
-    }
-}
-
-fn draw_italic_correction<'a, T: Node>(doc: &mut T, math_box: &MathBox) {
-    if let MathBoxContent::Drawable(Drawable::Glyphs { .. }) = *math_box.content() {
-        let ink_bounds = math_box.bounds().normalize();
-
-        if math_box.italic_correction() == 0 {
-            return;
-        }
-
-        let mut group = Group::new().set(
-            "transform",
-            format!(
-                "matrix(1 0 {:?} 1 0 0)",
-                -math_box.italic_correction() as f32 / math_box.extents().height() as f32
-            ),
-        );
-
-        let ink_rect = Rectangle::new()
-            .set(
-                "x",
-                ink_bounds.origin.x + ink_bounds.extents.left_side_bearing,
-            )
-            .set("y", ink_bounds.origin.y - ink_bounds.extents.ascent)
-            .set(
-                "width",
-                ink_bounds.extents.width - math_box.italic_correction(),
-            )
-            .set(
-                "height",
-                ink_bounds.extents.ascent + ink_bounds.extents.descent,
-            );
-
-        group.append(ink_rect);
-
-        doc.append(group);
-    }
-}
-
-fn draw_top_accent_attachment<'a, T: Node>(doc: &mut T, math_box: &MathBox) {
-    let line = Line::new()
-        .set("x1", math_box.top_accent_attachment() + math_box.origin.x)
-        .set("y1", math_box.origin.y + math_box.extents().descent + 200)
-        .set("x2", math_box.top_accent_attachment() + math_box.origin.x)
-        .set("y2", math_box.origin.y - math_box.extents().ascent - 200);
-    doc.append(line);
-}
-
-fn draw_glyph<'a, T: Node>(doc: &mut T, math_box: &MathBox, face: &FT_Face<'_>) {
-    let (glyphs, scale_x, scale_y) =
-        if let MathBoxContent::Drawable(Drawable::Glyphs { glyphs, scale }) = math_box.content() {
-            (glyphs, scale.as_scale_mult(), scale.as_scale_mult())
-        } else {
-            return;
+    let mut stack = vec![(root, Point::ZERO)];
+    while let Some((node, parent_origin)) = stack.pop() {
+        let Some(layout) = layouts.get(&node) else {
+            continue;
         };
+        let origin = parent_origin + layout.location;
+        let rect = |fill_or_stroke: Rectangle| {
+            fill_or_stroke
+                .set("x", origin.x)
+                .set("y", origin.y)
+                .set("width", layout.size.width)
+                .set("height", layout.size.height)
+        };
+        if document.node(node).element.is_token() {
+            ink_group.append(rect(Rectangle::new()));
+        }
+        logical_group.append(rect(Rectangle::new()));
 
-    let mut group = Group::new();
-    {
-        let origin = math_box.origin;
-
-        group.assign(
-            "transform",
-            format!(
-                "translate({:?}, {:?}) scale({:?}, {:?})",
-                origin.x, origin.y, scale_x, -scale_y
-            ),
-        );
-
-        let mut advance = 0;
-        for glyph in glyphs {
-            let mut glyph_group =
-                Group::new().set("transform", format!("translate({}, 0)", advance));
-            advance += glyph.advance_width();
-
-            face.load_glyph(glyph.glyph_code, face::NO_SCALE).unwrap();
-            let outline = face.glyph().outline().expect("Glyph has no outline.");
-
-            let mut data = Data::new();
-            for contour in outline.contours_iter() {
-                let Vector { x, y } = *contour.start();
-                data = data.move_to((x, y));
-                for curve in contour {
-                    match curve {
-                        Curve::Line(pt) => data = data.line_to((pt.x, pt.y)),
-                        Curve::Bezier2(pt1, pt2) => {
-                            data = data.quadratic_curve_to((pt1.x, pt1.y, pt2.x, pt2.y))
-                        }
-                        Curve::Bezier3(pt1, pt2, pt3) => {
-                            data = data.cubic_curve_to((pt1.x, pt1.y, pt2.x, pt2.y, pt3.x, pt3.y))
-                        }
+        for fragment in &layout.fragments {
+            match fragment {
+                Fragment::Glyphs {
+                    origin: run_origin,
+                    font_size,
+                    glyphs,
+                } => {
+                    let scale = font_size / units_per_em;
+                    for glyph in glyphs {
+                        let x = origin.x + run_origin.x + glyph.offset.x;
+                        let y = origin.y + run_origin.y + glyph.offset.y;
+                        black_group.append(draw_glyph(font, glyph.glyph, x, y, scale));
                     }
                 }
+                Fragment::Rule(r) => black_group.append(
+                    Rectangle::new()
+                        .set("x", origin.x + r.origin.x)
+                        .set("y", origin.y + r.origin.y)
+                        .set("width", r.size.width)
+                        .set("height", r.size.height),
+                ),
+                Fragment::DashedRule(r) => {
+                    // stroke along the longer side, through the middle of the rectangle
+                    let thickness = r.size.width.min(r.size.height);
+                    let (x1, y1, x2, y2) = if r.size.width >= r.size.height {
+                        let y = origin.y + r.origin.y + r.size.height / 2.0;
+                        (origin.x + r.origin.x, y, origin.x + r.right(), y)
+                    } else {
+                        let x = origin.x + r.origin.x + r.size.width / 2.0;
+                        (x, origin.y + r.origin.y, x, origin.y + r.bottom())
+                    };
+                    black_group.append(
+                        Line::new()
+                            .set("x1", x1)
+                            .set("y1", y1)
+                            .set("x2", x2)
+                            .set("y2", y2)
+                            .set("stroke", "black")
+                            .set("stroke-width", thickness)
+                            .set("stroke-dasharray", format!("{} {}", 3.0 * thickness, 2.0 * thickness)),
+                    )
+                }
             }
-            data = data.close();
-            let path = Path::new().set("d", data);
-            glyph_group.append(path);
-            group.append(glyph_group);
+        }
+
+        for &child in &document.node(node).children {
+            stack.push((child, origin));
         }
     }
 
-    doc.append(group);
+    if flags.show_ink_bounds {
+        svg_document.append(ink_group);
+    }
+    if flags.show_logical_bounds {
+        svg_document.append(logical_group);
+    }
+    svg_document.append(black_group);
+
+    svg::save(out_path, &svg_document).unwrap();
+}
+
+fn draw_glyph(face: &FT_Face<'_>, glyph: u32, x: f32, y: f32, scale: f32) -> Group {
+    let mut group = Group::new().set(
+        "transform",
+        format!("translate({:?}, {:?}) scale({:?}, {:?})", x, y, scale, -scale),
+    );
+
+    face.load_glyph(glyph, face::NO_SCALE).unwrap();
+    let outline = face.glyph().outline().expect("Glyph has no outline.");
+
+    let mut data = Data::new();
+    for contour in outline.contours_iter() {
+        let Vector { x, y } = *contour.start();
+        data = data.move_to((x, y));
+        for curve in contour {
+            match curve {
+                Curve::Line(pt) => data = data.line_to((pt.x, pt.y)),
+                Curve::Bezier2(pt1, pt2) => {
+                    data = data.quadratic_curve_to((pt1.x, pt1.y, pt2.x, pt2.y))
+                }
+                Curve::Bezier3(pt1, pt2, pt3) => {
+                    data = data.cubic_curve_to((pt1.x, pt1.y, pt2.x, pt2.y, pt3.x, pt3.y))
+                }
+            }
+        }
+    }
+    data = data.close();
+    group.append(Path::new().set("d", data));
+    group
 }

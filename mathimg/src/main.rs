@@ -1,6 +1,4 @@
-use freetype;
 
-use math_render;
 
 mod svg_renderer;
 
@@ -12,10 +10,12 @@ use std::path::{Path, PathBuf};
 
 use freetype::Face as FT_Face;
 
-use harfbuzz_rs::{hb, Face, Font as HbFont, HarfbuzzObject};
+use harfbuzz_rs::{sys as hb, Face, Font as HbFont, HarfbuzzObject};
 
 use math_render::mathmlparser;
+use math_render::host::MathFont;
 use math_render::shaper::HarfbuzzShaper;
+use math_render::standalone::StyleOptions;
 
 use fontconfig::{list_fonts, Pattern};
 
@@ -33,13 +33,12 @@ Subcommands:
 Options:
     -o FORMAT --output-format=FORMAT  The output format to use. [default: svg]
     -f FONT --font=FONT               Name of the font to use.
-    --show-ink-bounds                 Render the ink boxes around every glyph.
-    --show-logical-bounds             Render the logical boxes around every glyph.
-    --show-top-accent-attachment      Render a line displaying top accent attachment.
+    --show-ink-bounds                 Fill the boxes of token elements.
+    --show-logical-bounds             Outline the box of every element.
     --verbose                         Show additional information
     ";
 
-#[derive(Debug, RustcDecodable)]
+#[derive(Debug, serde::Deserialize)]
 struct Args {
     arg_input: String,
     arg_output: String,
@@ -49,10 +48,9 @@ struct Args {
     flag_verbose: bool,
     flag_show_ink_bounds: bool,
     flag_show_logical_bounds: bool,
-    flag_show_top_accent_attachment: bool,
 }
 
-#[derive(RustcDecodable, Debug, Copy, Clone)]
+#[derive(serde::Deserialize, Debug, Copy, Clone)]
 enum Format {
     Svg,
 }
@@ -139,7 +137,7 @@ fn create_shaper<'a>(font_bytes: &'a [u8]) -> Shaper<'a> {
 
 fn main() {
     let args: Args = Docopt::new(USAGE)
-        .and_then(|d| d.decode())
+        .and_then(|d| d.deserialize())
         .unwrap_or_else(|e| e.exit());
 
     let (list, output_name) = if args.arg_input == "-" {
@@ -216,19 +214,26 @@ fn main() {
 
     let shaper = create_shaper(font_bytes);
 
-    let typeset = math_render::layout(list.as_ref().unwrap(), &shaper.hb_shaper);
+    let document = list.as_ref().unwrap();
+    // A font size of one em per font unit makes px equal font units.
+    let units_per_em = shaper.hb_shaper.units_per_em() as f32;
+    let options = StyleOptions {
+        font_size: units_per_em,
+        ..Default::default()
+    };
+    let typeset = math_render::layout(document, &shaper.hb_shaper, options);
     match args.flag_output_format {
         Some(Format::Svg) => {
             let flags = svg_renderer::Flags {
                 show_ink_bounds: args.flag_show_ink_bounds,
                 show_logical_bounds: args.flag_show_logical_bounds,
-                show_top_accent_attachment: args.flag_show_top_accent_attachment,
             };
 
             svg_renderer::render(
-                typeset,
-                &shaper.hb_shaper,
+                document,
+                &typeset.layouts,
                 &shaper.ft_face,
+                units_per_em,
                 flags,
                 &out_path,
             )

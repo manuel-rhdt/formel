@@ -1,16 +1,15 @@
-#![allow(missing_docs)]
-#![allow(unknown_lints)]
+//! MathML layout for HTML/CSS engines and standalone use.
+//!
+//! - [`host`]: lay out math on behalf of a host layout engine whose CSS is the source of truth.
+//! - [`standalone`]: a minimal MathML document with a built-in user agent stylesheet.
+//! - [`mathmlparser`]: the operator dictionary and (with the `mathml_parser` feature) an XML
+//!   parser that produces a [`standalone::MathDocument`].
+//! - [`shaper`]: [`shaper::HarfbuzzShaper`], a [`host::MathFont`] based on HarfBuzz.
 
-#[macro_use]
-extern crate bitflags;
-
-mod types;
+pub mod host;
+pub mod mathmlparser;
+pub mod standalone;
 mod typesetting;
 
-#[cfg(feature = "mathml_parser")]
-extern crate quick_xml;
-
-pub mod mathmlparser;
-
-pub use crate::typesetting::{math_box, unicode_math, shaper, layout, layout_with_style};
-pub use crate::types::*;
+pub use crate::standalone::layout;
+pub use crate::typesetting::{shaper, unicode_math};

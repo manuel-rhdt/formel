@@ -1,5 +1,5 @@
-use std;
 use std::fmt;
+#[cfg(feature = "mathml_parser")]
 use std::io::prelude::*;
 
 #[cfg(feature = "mathml_parser")]

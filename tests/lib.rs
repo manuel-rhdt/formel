@@ -1,13 +1,24 @@
 #![cfg(feature = "mathml_parser")]
 
-extern crate math_render;
-extern crate freetype;
-
+use math_render::host::{Fragment, MathFont, NodeLayout, Rect};
 use math_render::mathmlparser;
-use math_render::math_box::{MathBox, MathBoxContent, MathBoxMetrics};
+use math_render::standalone::{MathDocument, StyleOptions};
 
 mod util;
 use crate::util::TEST_FONT;
+
+/// Lays out `xml` at a font size equal to the font's units per em, so that px are font units.
+fn layout_xml(xml: &str, f: impl FnOnce(&MathDocument, &dyn Fn(usize) -> NodeLayout)) {
+    TEST_FONT.with(|font| {
+        let doc = mathmlparser::parse(xml.as_bytes()).expect("valid MathML");
+        let options = StyleOptions {
+            font_size: font.units_per_em() as f32,
+            ..Default::default()
+        };
+        let result = math_render::layout(&doc, font, options);
+        f(&doc, &|id| result.layouts[&id].clone());
+    })
+}
 
 #[test]
 fn mathml_test() {
@@ -16,68 +27,71 @@ fn mathml_test() {
 }
 
 #[test]
-fn shaping_test() {
-    TEST_FONT.with(|font| {
-                       let bytes = include_bytes!("testfiles/schrödinger.xml");
-                       let list = mathmlparser::parse(&bytes[..]).expect("invalid parse");
-                       println!("{:?}", math_render::layout(&list, font));
-                   })
-}
-
-fn assume_boxes(content: &MathBoxContent) -> &[MathBox] {
-    match *content {
-        MathBoxContent::Boxes(ref list) => list,
-        _ => panic!(),
+fn all_test_files_lay_out() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/testfiles");
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|e| e != "xml") {
+            continue;
+        }
+        let xml = std::fs::read_to_string(&path).unwrap();
+        layout_xml(&xml, |doc, layout| {
+            let root = doc.root().unwrap();
+            let root_layout = layout(root);
+            assert!(
+                root_layout.size.width > 0.0 && root_layout.size.height > 0.0,
+                "{:?} has an empty layout",
+                path
+            );
+            // every node reachable from the root has a layout
+            let mut stack = vec![root];
+            while let Some(node) = stack.pop() {
+                let _ = layout(node);
+                stack.extend(&doc.node(node).children);
+            }
+        });
     }
 }
 
 #[test]
 fn no_scale_division_test() {
-    TEST_FONT.with(|font| {
-        let xml = "<mi>ab</mi>";
-        let list = mathmlparser::parse(xml.as_bytes()).unwrap();
-        println!("{:#?}", list);
-        let result = math_render::layout(&list, font);
-        println!("{:#?}", &result);
-        let content = result.content();
-        let boxes = assume_boxes(content);
-        // test that the second box has a greater x-value than the right edge of the first box
-        // with a somewhat big error margin
-        assert!(boxes[1].origin.x >
-                (boxes[0].origin.x + (boxes[0].extents().width as f32 * 0.8) as i32));
+    layout_xml("<mi>ab</mi>", |doc, layout| {
+        let mi = doc.node(doc.root().unwrap()).children[0];
+        let mi_layout = layout(mi);
+        let glyphs = match &mi_layout.fragments[..] {
+            [Fragment::Glyphs { glyphs, .. }] => glyphs.clone(),
+            other => panic!("unexpected fragments {:?}", other),
+        };
+        assert_eq!(glyphs.len(), 2);
+        // the second glyph starts after most of the first one
+        assert!(glyphs[1].offset.x > mi_layout.size.width / 2.0 * 0.8);
     })
 }
 
 #[test]
 fn fraction_centering_test() {
-    TEST_FONT.with(|font| {
-        let xml = "<mfrac><mn>1</mn><mn>2</mn></mfrac>";
-        let list = mathmlparser::parse(xml.as_bytes()).unwrap();
-        let result = math_render::layout(&list, font);
-        println!("{:?}", result);
-        let content = result.content();
-        let boxes = assume_boxes(content);
+    layout_xml("<mfrac><mn>1</mn><mn>2</mn></mfrac>", |doc, layout| {
+        let frac = doc.node(doc.root().unwrap()).children[0];
+        let frac_layout = layout(frac);
+        let rule: Rect = frac_layout
+            .fragments
+            .iter()
+            .find_map(|f| match f {
+                Fragment::Rule(rect) => Some(*rect),
+                _ => None,
+            })
+            .expect("fraction bar");
 
-        // test that the second box has a greater x-value than the right edge of the first box
-        // with a somewhat big error margin
-        let fraction_bar = &boxes[1];
-        let left_edge = fraction_bar.origin.x;
-        let width = fraction_bar.extents().width;
-
-        // test if the numerator is centered
-        let num = &boxes[0];
-        let left_space = num.origin.x - left_edge;
-        let right_space = width - num.extents().width - left_space;
-        println!("(left, right) = {:?}", (left_space, right_space));
-        // allow rounding errors
-        assert!((left_space - right_space).abs() <= 2);
-
-        // test if the denominator is centered
-        let denom = &boxes[2];
-        let left_space = denom.origin.x - left_edge;
-        let right_space = width - denom.extents().width - left_space;
-        println!("(left, right) = {:?}", (left_space, right_space));
-        // allow rounding errors
-        assert!((left_space - right_space).abs() <= 2);
+        for &part in &doc.node(frac).children {
+            let part_layout = layout(part);
+            let left_space = part_layout.location.x - rule.origin.x;
+            let right_space = rule.right() - (part_layout.location.x + part_layout.size.width);
+            // allow for differences in side bearings
+            assert!(
+                (left_space - right_space).abs() <= 30.0,
+                "(left, right) = {:?}",
+                (left_space, right_space)
+            );
+        }
     })
 }

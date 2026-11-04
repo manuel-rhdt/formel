@@ -3,7 +3,8 @@ name = "math-render"
 version = "0.1.0"
 authors = ["Manuel Reinhardt <manuel.jr16@gmail.com>"]
 build = "build.rs"
-edition = "2018"
+edition = "2024"
+rust-version = "1.85"
 
 [dependencies]
 quick-xml = { version = "0.4", optional = true }

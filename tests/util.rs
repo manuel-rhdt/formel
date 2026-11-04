@@ -1,8 +1,4 @@
-extern crate freetype;
-extern crate harfbuzz_rs;
-extern crate math_render;
-
-use self::harfbuzz_rs::{Face, Font};
+use harfbuzz_rs::{Face, Font};
 use math_render::shaper::HarfbuzzShaper;
 
 pub fn get_bytes() -> &'static [u8] {

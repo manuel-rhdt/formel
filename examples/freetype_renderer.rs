@@ -1,10 +1,5 @@
 #![allow(dead_code)]
 
-extern crate math_render;
-extern crate freetype;
-
-extern crate image;
-
 use std::path::Path;
 use std::ops::{Add, Sub, Mul, MulAssign, Div, DivAssign};
 
@@ -97,7 +92,6 @@ impl Sub<Color3f> for f32 {
         }
     }
 }
-
 
 struct Color4 {
     r: u8,
