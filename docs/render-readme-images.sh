@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Renders docs/equations/*.xml with several OpenType math fonts into docs/img/
-# (set MATHIMG=path to use a prebuilt binary)
+# (set MATHIMG=path to use a prebuilt binary, ONLY=font to render a single font)
 # (a light and a dark variant of each, for use with <picture> in the README).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -12,8 +12,10 @@ declare -A FONTS=(
   [asana]=/usr/share/fonts/opentype/asana-math/Asana-Math.otf
   [dejavu]=/usr/share/fonts/truetype/dejavu/DejaVuMathTeXGyre.ttf
   [bonum]=/usr/share/texmf/fonts/opentype/public/tex-gyre-math/texgyrebonum-math.otf
+  [stix]=/usr/share/fonts/opentype/stix-word/STIXMath-Regular.otf
 )
 
+ONLY=${ONLY:-}
 MATHIMG=${MATHIMG:-}
 if [[ -z $MATHIMG ]]; then
   cargo build --release -p mathimg
@@ -24,6 +26,7 @@ tmp=$(mktemp -d)
 for eq in docs/equations/*.xml; do
   name=$(basename "$eq" .xml)
   for font in "${!FONTS[@]}"; do
+    [[ -n $ONLY && $font != "$ONLY" ]] && continue
     # known layout glitch: overlapping subscript on the stacked integral in DejaVu
     [[ $name == stokes && $font == dejavu ]] && continue
     "$MATHIMG" -f "${FONTS[$font]}" "$eq" "$tmp/out.svg"

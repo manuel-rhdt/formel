@@ -23,6 +23,7 @@ Nested fractions shrink through script styles, and the radical's surd and rule a
 <tr><td width="150"><sub>Asana Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/quadratic-asana-dark.svg"><img alt="quadratic in Asana Math" src="docs/img/quadratic-asana-light.svg" height="110"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/quadratic-bonum-dark.svg"><img alt="quadratic in TeX Gyre Bonum Math" src="docs/img/quadratic-bonum-light.svg" height="110"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/quadratic-dejavu-dark.svg"><img alt="quadratic in TeX Gyre DejaVu Math" src="docs/img/quadratic-dejavu-light.svg" height="110"></picture></td></tr>
+<tr><td width="150"><sub>STIX Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/quadratic-stix-dark.svg"><img alt="quadratic in STIX Math" src="docs/img/quadratic-stix-light.svg" height="110"></picture></td></tr>
 </table>
 
 For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
@@ -63,6 +64,7 @@ Display-style `∑` is enlarged and gets under/over limits, while `∫` takes it
 <tr><td width="150"><sub>Asana Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/basel-asana-dark.svg"><img alt="basel in Asana Math" src="docs/img/basel-asana-light.svg" height="110"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/basel-bonum-dark.svg"><img alt="basel in TeX Gyre Bonum Math" src="docs/img/basel-bonum-light.svg" height="93"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/basel-dejavu-dark.svg"><img alt="basel in TeX Gyre DejaVu Math" src="docs/img/basel-dejavu-light.svg" height="97"></picture></td></tr>
+<tr><td width="150"><sub>STIX Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/basel-stix-dark.svg"><img alt="basel in STIX Math" src="docs/img/basel-stix-light.svg" height="110"></picture></td></tr>
 </table>
 
 For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
@@ -101,6 +103,7 @@ Contour and surface integrals with the correct glyph variants, plus bold math al
 <tr><td width="150"><sub>TeX Gyre Termes Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/stokes-termes-dark.svg"><img alt="stokes in TeX Gyre Termes Math" src="docs/img/stokes-termes-light.svg" height="82"></picture></td></tr>
 <tr><td width="150"><sub>Asana Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/stokes-asana-dark.svg"><img alt="stokes in Asana Math" src="docs/img/stokes-asana-light.svg" height="86"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/stokes-bonum-dark.svg"><img alt="stokes in TeX Gyre Bonum Math" src="docs/img/stokes-bonum-light.svg" height="75"></picture></td></tr>
+<tr><td width="150"><sub>STIX Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/stokes-stix-dark.svg"><img alt="stokes in STIX Math" src="docs/img/stokes-stix-light.svg" height="110"></picture></td></tr>
 </table>
 
 For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
@@ -135,6 +138,7 @@ $$
 <tr><td width="150"><sub>Asana Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/matrix-asana-dark.svg"><img alt="matrix in Asana Math" src="docs/img/matrix-asana-light.svg" height="110"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/matrix-bonum-dark.svg"><img alt="matrix in TeX Gyre Bonum Math" src="docs/img/matrix-bonum-light.svg" height="87"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/matrix-dejavu-dark.svg"><img alt="matrix in TeX Gyre DejaVu Math" src="docs/img/matrix-dejavu-light.svg" height="89"></picture></td></tr>
+<tr><td width="150"><sub>STIX Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/matrix-stix-dark.svg"><img alt="matrix in STIX Math" src="docs/img/matrix-stix-light.svg" height="110"></picture></td></tr>
 </table>
 
 For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
@@ -180,6 +184,7 @@ Quantum-mechanics notation: stretchy brackets and bras/kets, `ħ`, a wide-hat ac
 <tr><td width="150"><sub>Asana Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/schrodinger-asana-dark.svg"><img alt="schrodinger in Asana Math" src="docs/img/schrodinger-asana-light.svg" height="110"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/schrodinger-bonum-dark.svg"><img alt="schrodinger in TeX Gyre Bonum Math" src="docs/img/schrodinger-bonum-light.svg" height="70"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/schrodinger-dejavu-dark.svg"><img alt="schrodinger in TeX Gyre DejaVu Math" src="docs/img/schrodinger-dejavu-light.svg" height="70"></picture></td></tr>
+<tr><td width="150"><sub>STIX Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/schrodinger-stix-dark.svg"><img alt="schrodinger in STIX Math" src="docs/img/schrodinger-stix-light.svg" height="88"></picture></td></tr>
 </table>
 
 For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
@@ -221,6 +226,7 @@ Stacked pre-super/subscripts as used for isotopes and tensor indices.
 <tr><td width="150"><sub>Asana Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/nuclear-asana-dark.svg"><img alt="nuclear in Asana Math" src="docs/img/nuclear-asana-light.svg" height="51"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/nuclear-bonum-dark.svg"><img alt="nuclear in TeX Gyre Bonum Math" src="docs/img/nuclear-bonum-light.svg" height="43"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/nuclear-dejavu-dark.svg"><img alt="nuclear in TeX Gyre DejaVu Math" src="docs/img/nuclear-dejavu-light.svg" height="45"></picture></td></tr>
+<tr><td width="150"><sub>STIX Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/nuclear-stix-dark.svg"><img alt="nuclear in STIX Math" src="docs/img/nuclear-stix-light.svg" height="53"></picture></td></tr>
 </table>
 
 For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
