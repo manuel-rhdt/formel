@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  DEFAULTS, escapeXml, styleSvg, sizeSvg, viewBox, snippets, toBase64, svgDataUri,
+  DEFAULTS, escapeXml, styleSvg, mathmlForXml, sizeSvg, viewBox, snippets, toBase64, svgDataUri,
   escapeMarkdownAlt, encodeState, decodeState, htmlImage, svgInPoints, pixelsPerEm, setPngResolution,
 } from "../export.js";
 import { deflateSync, crc32 as zlibCrc32 } from "node:zlib";
@@ -227,4 +227,17 @@ test("styleSvg without MathML keeps the plain label", () => {
   const svg = styleSvg(RAW, { alt: "x" });
   assert.ok(!svg.includes("<metadata>"));
   assert.ok(!svg.includes("aria-describedby"));
+});
+
+test("embedded MathML cannot break the SVG as XML", () => {
+  const mathml = '<math><mo>&ApplyFunction;</mo><mi>a & b</mi><mo>&UnknownEntity;</mo></math>';
+  const svg = styleSvg(RAW, { alt: "x", mathml });
+  assert.ok(svg.includes("&#x2061;"), "named entity becomes a numeric reference");
+  assert.ok(!svg.includes("&ApplyFunction;"));
+  assert.ok(svg.includes("&amp;UnknownEntity;"), "unknown entities are escaped, not passed through");
+  assert.ok(!/&(?!amp;|lt;|gt;|quot;|apos;|#)/.test(svg), "no undefined entities remain");
+});
+
+test("mathmlForXml keeps numeric and predefined entities", () => {
+  assert.equal(mathmlForXml("<mi>&#x2061;&amp;&lt;</mi>"), "<mi>&#x2061;&amp;&lt;</mi>");
 });

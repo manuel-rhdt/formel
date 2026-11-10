@@ -38,6 +38,25 @@ export function oneLine(text) {
  */
 let svgIdCounter = 0;
 
+const XML_ENTITIES = new Set(["amp;", "lt;", "gt;", "quot;", "apos;"]);
+// The HTML named entities math-core emits, as codepoints. Only amp/lt/gt/quot/apos exist in XML.
+const HTML_ENTITIES = { ApplyFunction: 0x2061, InvisibleTimes: 0x2062, InvisibleComma: 0x2063, nbsp: 0xa0 };
+
+/**
+ * Makes MathML safe to embed in an XML document. math-core writes HTML named entities such as
+ * `&ApplyFunction;`, which are undefined in XML and make an SVG image fail to load; they become
+ * numeric character references. Anything unrecognised is escaped rather than left to break the file.
+ */
+export function mathmlForXml(mathml) {
+  return String(mathml).replace(/&([A-Za-z][A-Za-z0-9]+;|#x[0-9a-fA-F]+;|#\d+;)?/g, (match, entity) => {
+    if (!entity) return "&amp;";
+    if (entity[0] === "#" || XML_ENTITIES.has(entity)) return match;
+    const name = entity.slice(0, -1);
+    if (name in HTML_ENTITIES) return `&#x${HTML_ENTITIES[name].toString(16)};`;
+    return `&amp;${entity}`;
+  });
+}
+
 /**
  * Applies the chosen colors and makes an SVG produced by mathwasm self-describing.
  *
@@ -62,7 +81,7 @@ export function styleSvg(rawSvg, { fg = DEFAULTS.fg, bg = null, alt = "", mathml
   let labelled = "";
   if (mathml) {
     extra += `<desc id="${id}d">Vector rendering of a formula. The MathML it was typeset from is in the metadata element.</desc>`;
-    extra += `<metadata>${mathml.replace(/^<math\b/, '<math xmlns="http://www.w3.org/1998/Math/MathML"')}</metadata>`;
+    extra += `<metadata>${mathmlForXml(mathml).replace(/^<math\b/, '<math xmlns="http://www.w3.org/1998/Math/MathML"')}</metadata>`;
     labelled = ` aria-labelledby="${id}t" aria-describedby="${id}d"`;
   }
   if (bg) {
