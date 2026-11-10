@@ -352,13 +352,13 @@
 
 <section class="about" id="about" aria-labelledby="aboutheading">
   <h2 id="aboutheading">About</h2>
-  <p>math-render is a LaTeXiT that needs no LaTeX. LaTeXiT is a macOS utility for turning one formula
-    into an image for your slides, and it expects a full TeX distribution on the machine. math-render
-    does the same job in the browser, on any operating system. The layout follows the rules XeTeX and
-    LuaTeX use, read from the font’s OpenType MATH table, in a small Rust core compiled to WebAssembly.</p>
+  <p>Good math typesetting usually means installing a TeX distribution. math-render does it without one.
+    The layout follows the rules XeTeX and LuaTeX use, read from the font’s OpenType MATH table, in a
+    small Rust core compiled to WebAssembly.</p>
   <p>The output is a file. SVG for anything that should stay sharp when you scale it, PNG for the rest.
     That makes the formula usable where a JavaScript math library cannot go: a slide deck, a Moodle
-    course, a video editor, a PDF, a social post. Nothing has to run where the picture ends up.</p>
+    course, a video editor, a PDF, a social post. Nothing has to run where the picture ends up.
+    If you used LaTeXiT for this on a Mac: same job, no TeX installation.</p>
   <p>KaTeX and MathJax assume the destination is a web page you control, since their JavaScript has to be
     there when the page is read. That works for a blog. It does not work on a slide. The trade here is
     that the result is a picture, so it does not reflow with the text around it, and a screen reader
