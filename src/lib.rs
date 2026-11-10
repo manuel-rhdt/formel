@@ -4,7 +4,7 @@
 //! - [`standalone`]: a minimal MathML document with a built-in user agent stylesheet.
 //! - [`mathmlparser`]: the operator dictionary and (with the `mathml_parser` feature) an XML
 //!   parser that produces a [`standalone::MathDocument`].
-//! - [`shaper`]: [`shaper::HarfbuzzShaper`], a [`host::MathFont`] based on HarfBuzz.
+//! - [`shaper`]: [`shaper::Shaper`], a [`host::MathFont`] based on rustybuzz.
 
 pub mod host;
 pub mod mathmlparser;

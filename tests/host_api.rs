@@ -4,12 +4,12 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use harfbuzz_rs::{Face, Font};
+
 use math_render::host::{
     Edges, Fragment, MathComputedStyle, MathElement, MathLayoutHost, MathShift, MathStyle,
     MathTree, NodeKind, NodeLayout, Rect, axis_height, layout_math,
 };
-use math_render::shaper::HarfbuzzShaper;
+use math_render::shaper::Shaper;
 
 mod util;
 
@@ -27,14 +27,13 @@ struct Node {
 /// them.
 struct Doc {
     nodes: Vec<Node>,
-    font: Rc<HarfbuzzShaper<'static>>,
+    font: Rc<Shaper<'static>>,
     layouts: HashMap<Id, NodeLayout>,
     set_layout_calls: Vec<Id>,
 }
 
-fn test_font() -> Rc<HarfbuzzShaper<'static>> {
-    let face = Face::new(util::get_bytes(), 0);
-    Rc::new(HarfbuzzShaper::new(Font::new(face).into()))
+fn test_font() -> Rc<Shaper<'static>> {
+    Rc::new(Shaper::from_slice(util::get_bytes(), 0).expect("test font has a MATH table"))
 }
 
 impl Doc {
@@ -132,7 +131,7 @@ impl Doc {
 
 impl MathTree for Doc {
     type NodeId = Id;
-    type Font = Rc<HarfbuzzShaper<'static>>;
+    type Font = Rc<Shaper<'static>>;
 
     fn kind(&self, node: Id) -> NodeKind {
         NodeKind::Math(self.nodes[node].element)

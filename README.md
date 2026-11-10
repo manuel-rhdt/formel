@@ -1,7 +1,7 @@
 # math-render
 
 A Rust library that lays out mathematical formulas (MathML in, positioned glyphs out) using the
-**OpenType `MATH` table** of a font and [HarfBuzz](https://harfbuzz.github.io/) for shaping.
+**OpenType `MATH` table** of a font and [rustybuzz](https://github.com/harfbuzz/rustybuzz) for shaping.
 It implements the typesetting rules from the OpenType MATH specification and
 [MathML Core](https://www.w3.org/TR/mathml-core/): script and fraction placement, stretchy operators,
 radicals, tables, accents, italic corrections, math kerning and more, all driven by the metrics the font

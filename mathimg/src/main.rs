@@ -9,11 +9,10 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 
-use harfbuzz_rs::{sys as hb, Face, Font as HbFont, HarfbuzzObject};
 
 use math_render::mathmlparser;
 use math_render::host::MathFont;
-use math_render::shaper::HarfbuzzShaper;
+use math_render::shaper::Shaper;
 use math_render::standalone::StyleOptions;
 
 use fontconfig::{list_fonts, Pattern};
@@ -96,13 +95,11 @@ fn has_math_data(font: &Font) -> bool {
     let Ok(buffer) = std::fs::read(&font.path) else {
         return false;
     };
-    let face = Face::new(&buffer[..], font.face_index);
-    let result = unsafe { hb::hb_ot_math_has_data(face.as_raw()) };
-    result != 0
+    Shaper::from_slice(&buffer, font.face_index as u32).is_some()
 }
 
-fn create_shaper(font_bytes: &[u8]) -> HarfbuzzShaper<'_> {
-    HarfbuzzShaper::new(HbFont::new(Face::new(font_bytes, 0)).into())
+fn create_shaper(font_bytes: &[u8]) -> Shaper<'_> {
+    Shaper::from_slice(font_bytes, 0).expect("font must have a MATH table")
 }
 
 fn main() {
@@ -200,7 +197,7 @@ fn main() {
             svg_renderer::render(
                 document,
                 &typeset.layouts,
-                &shaper.font,
+                shaper.face(),
                 units_per_em,
                 flags,
                 &out_path,

@@ -9,10 +9,9 @@ use svg::node::Node;
 use svg::node::element::{Group, Line, Path, Rectangle};
 
 use std::fmt::Write;
-use std::sync::Mutex;
 
-use harfbuzz_rs::draw_funcs::DrawState;
-use harfbuzz_rs::{DrawFuncs, Font as HbFont};
+use rustybuzz::ttf_parser::{GlyphId, OutlineBuilder};
+use rustybuzz::Face;
 
 pub struct Flags {
     /// Fill the boxes of token elements.
@@ -26,7 +25,7 @@ pub struct Flags {
 pub fn render<T: AsRef<path::Path>>(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &HbFont<'_>,
+    font: &Face<'_>,
     units_per_em: f32,
     flags: Flags,
     out_path: T,
@@ -144,55 +143,42 @@ pub fn render<T: AsRef<path::Path>>(
     svg::save(out_path, &svg_document).unwrap();
 }
 
-/// Collects a glyph outline from HarfBuzz as SVG path data.
-///
-/// `Font::draw_glyph` hands the callbacks a pointer derived from a shared reference, so the
-/// state lives in a `Mutex` rather than in plain fields.
+/// Collects a glyph outline as SVG path data.
 #[derive(Debug, Default)]
 struct PathBuilder {
-    data: Mutex<String>,
+    data: String,
 }
 
 impl PathBuilder {
-    fn push(&self, command: std::fmt::Arguments) {
-        let mut data = self.data.lock().unwrap();
-        let _ = write!(data, "{} ", command);
+    fn push(&mut self, command: std::fmt::Arguments) {
+        let _ = write!(self.data, "{} ", command);
     }
 }
 
-impl DrawFuncs for PathBuilder {
-    fn move_to(&mut self, _: &DrawState, x: f32, y: f32) {
+impl OutlineBuilder for PathBuilder {
+    fn move_to(&mut self, x: f32, y: f32) {
         self.push(format_args!("M{} {}", x, y));
     }
-    fn line_to(&mut self, _: &DrawState, x: f32, y: f32) {
+    fn line_to(&mut self, x: f32, y: f32) {
         self.push(format_args!("L{} {}", x, y));
     }
-    fn quadratic_to(&mut self, _: &DrawState, cx: f32, cy: f32, x: f32, y: f32) {
+    fn quad_to(&mut self, cx: f32, cy: f32, x: f32, y: f32) {
         self.push(format_args!("Q{} {} {} {}", cx, cy, x, y));
     }
-    fn cubic_to(
-        &mut self,
-        _: &DrawState,
-        c1x: f32,
-        c1y: f32,
-        c2x: f32,
-        c2y: f32,
-        x: f32,
-        y: f32,
-    ) {
+    fn curve_to(&mut self, c1x: f32, c1y: f32, c2x: f32, c2y: f32, x: f32, y: f32) {
         self.push(format_args!("C{} {} {} {} {} {}", c1x, c1y, c2x, c2y, x, y));
     }
-    fn close_path(&mut self, _: &DrawState) {
+    fn close(&mut self) {
         self.push(format_args!("Z"));
     }
 }
 
-/// Draws a glyph from the HarfBuzz font. Outlines are in font units with y pointing up, so
+/// Draws a glyph from the font. Outlines are in font units with y pointing up, so
 /// they are flipped and scaled to px.
-fn draw_glyph(font: &HbFont<'_>, glyph: u32, x: f32, y: f32, scale: f32) -> Group {
-    let builder = PathBuilder::default();
-    font.draw_glyph(glyph, &builder);
-    let data = builder.data.into_inner().unwrap();
+fn draw_glyph(font: &Face<'_>, glyph: u32, x: f32, y: f32, scale: f32) -> Group {
+    let mut builder = PathBuilder::default();
+    font.outline_glyph(GlyphId(glyph as u16), &mut builder);
+    let data = builder.data;
     Group::new()
         .set(
             "transform",

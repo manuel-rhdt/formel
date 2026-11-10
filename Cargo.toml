@@ -8,7 +8,7 @@ rust-version = "1.85"
 
 [dependencies]
 quick-xml = { version = "0.42", optional = true }
-harfbuzz_rs = { version = "3.0.1", features = ["sys"] }
+rustybuzz = "0.20"
 bitflags = "2"
 
 [dev-dependencies]
