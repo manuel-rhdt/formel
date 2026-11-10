@@ -39,6 +39,8 @@
     }
   }
   * { box-sizing: border-box; }
+  /* no double-tap zoom (pinch zoom stays available); no font inflation in landscape on iOS */
+  html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   .page { max-width: 64rem; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
   button, select, input { font: inherit; color: inherit; }
@@ -108,11 +110,12 @@
   #error button { all: unset; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 
   /* ---------- preview ---------- */
-  .stage .bar { border-bottom: 1px solid var(--line); }
+  .stage > .bar { border-top: 1px solid var(--line); }
   .preview { position: relative; }
   #out {
     display: flex; align-items: center; justify-content: center; min-height: 13rem; padding: 2rem 1.5rem 2.75rem;
     overflow-x: auto; color: #000;
+    border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
   }
   /* The preview is an <img> of exactly what is exported (the SVG, or the PNG at its resolution),
      so the browser's own image drag and right-click menu act on it. */
@@ -145,9 +148,11 @@
   .fontcard svg { width: calc(var(--w, 0) * 1.6em); max-width: 100%; height: auto; }
 
   /* export */
-  .exportbar { border-top: 1px solid var(--line); }
+
   #toast { font-size: .88rem; color: var(--muted); min-height: 1.2em; }
   #toast.error { color: var(--danger); }
+  .toastaction { all: unset; cursor: pointer; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+  .toastaction:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .hint { color: var(--muted); font-size: .85rem; }
   kbd { font: .78rem var(--mono); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3rem; }
 
@@ -177,10 +182,15 @@
     font-size: 1.2rem; z-index: 10; pointer-events: none;
   }
 
+  /* iOS Safari zooms into any focused field whose text is smaller than 16 px */
+  @media (pointer: coarse) {
+    select, input, #src, #backdrop, #snippet, #textsize { font-size: 16px; }
+  }
   @media (max-width: 40rem) {
     .bar { padding: .5rem .6rem; gap: .5rem; }
     .hide-narrow { display: none; }
     #out { min-height: 10rem; padding: 1.5rem .75rem 2.75rem; }
+    .exportbar .sep, .settingsbar .spacer { display: none; }
     details.panel > summary .sub { display: none; }
   }
 </style>
@@ -224,25 +234,6 @@
 
 <!-- ============ output ============ -->
 <section class="card stage" aria-label="Rendered formula">
-  <div class="bar">
-    <label class="field"><span>Font</span>
-      <select id="font"></select>
-    </label>
-    <button id="compare" class="btn quiet" type="button" aria-pressed="false" aria-controls="fontgrid"
-      title="Render the formula in every font side by side">Compare fonts</button>
-    <span class="spacer"></span>
-    <label class="field"><span>Text</span><input id="fg" type="color" value="#000000" aria-label="Text color"></label>
-    <span class="field"><span>Background</span>
-      <fieldset class="seg" aria-label="Background">
-        <label><input type="radio" name="bgmode" value="none" checked>None</label>
-        <label><input type="radio" name="bgmode" value="color">Fill</label>
-      </fieldset>
-      <input id="bg" type="color" value="#ffffff" class="off" aria-label="Background color">
-    </span>
-    <button id="debug" class="btn quiet" type="button" aria-pressed="false"
-      title="Outline the box of every element (also in the exported image)">Boxes</button>
-  </div>
-
   <div class="preview">
     <div id="out" class="checker" aria-live="polite">
       <img id="imgout" alt="" hidden title="Drag into another app, or right-click to copy or save the image">
@@ -256,15 +247,13 @@
     </div>
   </div>
 
-  <div id="fontgrid" hidden aria-label="The formula in every font"></div>
-
   <div class="bar exportbar">
     <fieldset class="seg" aria-label="Image format" title="Format of the preview, Copy, Download, dragging, the right-click menu and the embed snippets">
-      <label title="Bitmap: works in almost any app"><input type="radio" name="format" value="png" checked>PNG</label>
-      <label title="Vector: sharp at any size; best for the web, Inkscape, Illustrator, Office"><input type="radio" name="format" value="svg">SVG</label>
+      <label title="Vector: sharp at any size; best for documents, the web, Inkscape, Illustrator, Office"><input type="radio" name="format" value="svg" checked>SVG</label>
+      <label title="Bitmap: works in almost any app"><input type="radio" name="format" value="png">PNG</label>
     </fieldset>
     <label class="field" title="The text size the formula should match. Downloaded, copied and dragged images come out at this size: SVG in pt, PNG via its resolution.">
-      <span>Text</span><input id="textsize" type="number" min="4" max="200" step="0.5" value="12" list="textsizes" aria-label="Text size in points"><span>pt</span>
+      <span>Text size</span><input id="textsize" type="number" min="4" max="200" step="0.5" value="12" list="textsizes" aria-label="Text size in points"><span>pt</span>
     </label>
     <datalist id="textsizes">
       <option value="9"></option><option value="10"></option><option value="11"></option><option value="12"></option>
@@ -277,13 +266,34 @@
       <option value="1200">1200 dpi</option>
     </select>
     <span class="sep" aria-hidden="true"></span>
-    <button id="copy" class="btn primary" type="button" disabled>Copy PNG</button>
-    <button id="download" class="btn" type="button" disabled>Download PNG</button>
+    <button id="copy" class="btn primary" type="button" disabled>Copy SVG</button>
+    <button id="download" class="btn" type="button" disabled>Download SVG</button>
     <button id="copylink" class="btn quiet" type="button" title="Copy a link that reopens this formula with these settings">Copy link</button>
     <span class="spacer"></span>
     <span id="toast" role="status"></span>
     <span class="hint hide-narrow" id="hint">or drag / right-click the formula · <kbd id="modkey">Ctrl</kbd> <kbd>Enter</kbd> copies</span>
   </div>
+  <div class="bar settingsbar">
+    <label class="field"><span>Font</span>
+      <select id="font"></select>
+    </label>
+    <button id="compare" class="btn quiet" type="button" aria-pressed="false" aria-controls="fontgrid"
+      title="Render the formula in every font side by side">Compare fonts</button>
+    <span class="spacer"></span>
+    <label class="field"><span>Color</span><input id="fg" type="color" value="#000000" aria-label="Formula color"></label>
+    <span class="field"><span>Background</span>
+      <fieldset class="seg" aria-label="Background">
+        <label><input type="radio" name="bgmode" value="none" checked>None</label>
+        <label><input type="radio" name="bgmode" value="color">Fill</label>
+      </fieldset>
+      <input id="bg" type="color" value="#ffffff" class="off" aria-label="Background color">
+    </span>
+    <button id="debug" class="btn quiet" type="button" aria-pressed="false"
+      title="Outline the box of every element (also in the exported image)">Boxes</button>
+  </div>
+
+  <div id="fontgrid" hidden aria-label="The formula in every font"></div>
+
 </section>
 
 <!-- ============ secondary ============ -->
@@ -418,12 +428,18 @@ let loadToken = 0;
 // ---------- messages ----------
 
 let toastTimer = 0;
-function toast(msg, error = false) {
+/** A short message under the preview, optionally with one action button (e.g. Undo). */
+function toast(msg, error = false, action = null) {
   $("toast").textContent = msg;
   $("toast").classList.toggle("error", error);
+  if (action) {
+    const button = Object.assign(document.createElement("button"), { type: "button", className: "toastaction", textContent: action.label });
+    button.addEventListener("click", () => { toast(""); action.run(); });
+    $("toast").append(" ", button);
+  }
   $("hint").hidden = Boolean(msg);
   clearTimeout(toastTimer);
-  if (msg && !error) toastTimer = setTimeout(() => toast(""), 4000);
+  if (msg && !error) toastTimer = setTimeout(() => toast(""), action ? 8000 : 4000);
 }
 
 /** Shows an input error under the editor and marks `range` (UTF-16 indices) in the source. */
@@ -1094,16 +1110,21 @@ function onDragStart(e) {
 // ---------- editor ----------
 
 /** Replaces the source in a way that the browser's undo can revert. */
-function replaceSource(text) {
+/**
+ * Puts an example into the editor without focusing it: on phones focus would open the keyboard
+ * over the preview you want to look at. Undo is offered in the message instead, since the
+ * browser's own undo only covers edits made while the field has focus.
+ */
+function replaceSource(text, name) {
   const src = $("src");
-  src.focus();
-  src.select();
-  if (!document.execCommand?.("insertText", false, text)) {
-    src.value = text;
+  const previous = src.value;
+  const set = (value) => {
+    src.value = value;
+    src.scrollTop = 0;
     src.dispatchEvent(new Event("input"));
-  }
-  src.setSelectionRange(text.length, text.length);
-  src.scrollTop = 0;
+  };
+  set(text);
+  toast(`Inserted “${name}”`, false, previous.trim() ? { label: "Undo", run: () => set(previous) } : null);
 }
 
 function autosize() {
@@ -1199,7 +1220,7 @@ $("examples").addEventListener("change", (e) => {
   if (!isLatex()) {
     try { text = prettyXml(latex_to_mathml(text, true)); } catch { return; }
   }
-  replaceSource(text);
+  replaceSource(text, entry[0]);
 });
 
 $("debug").addEventListener("click", () => {
@@ -1281,7 +1302,7 @@ addEventListener("keydown", (e) => {
 
 // ---------- start ----------
 
-setRadio("format", store.get("mathrender.format", "png"));
+setRadio("format", store.get("mathrender.format", "svg"));
 $("dpi").value = store.get("mathrender.dpi", "300");
 if (!$("dpi").value) $("dpi").value = "300";
 updateFormatUi();
