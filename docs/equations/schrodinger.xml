@@ -10,5 +10,5 @@
   <mi>&Psi;</mi>
   <mo>,</mo><mspace width="1em"/>
   <mi>Z</mi><mo>=</mo>
-  <mrow><mo stretchy="false">&langle;</mo><mi>&psi;</mi><mo>|</mo><msup><mi>e</mi><mrow><mo>&minus;</mo><mi>&beta;</mi><mover accent="true"><mi>H</mi><mo>&#x302;</mo></mover></mrow></msup><mo>|</mo><mi>&psi;</mi><mo stretchy="false">&rangle;</mo></mrow>
+  <mrow><mo stretchy="false">&langle;</mo><mi>&psi;</mi><mo stretchy="false">|</mo><msup><mi>e</mi><mrow><mo>&minus;</mo><mi>&beta;</mi><mover accent="true"><mi>H</mi><mo>&#x302;</mo></mover></mrow></msup><mo stretchy="false">|</mo><mi>&psi;</mi><mo stretchy="false">&rangle;</mo></mrow>
 </math>

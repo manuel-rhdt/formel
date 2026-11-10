@@ -91,6 +91,19 @@ pub fn render<T: AsRef<path::Path>>(
                         .set("width", r.size.width)
                         .set("height", r.size.height),
                 ),
+                Fragment::Line {
+                    start,
+                    end,
+                    thickness,
+                } => black_group.append(
+                    Line::new()
+                        .set("x1", origin.x + start.x)
+                        .set("y1", origin.y + start.y)
+                        .set("x2", origin.x + end.x)
+                        .set("y2", origin.y + end.y)
+                        .set("stroke", "black")
+                        .set("stroke-width", *thickness),
+                ),
                 Fragment::DashedRule(r) => {
                     // stroke along the longer side, through the middle of the rectangle
                     let thickness = r.size.width.min(r.size.height);
