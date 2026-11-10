@@ -3,8 +3,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULTS, escapeXml, styleSvg, sizeSvg, viewBox, snippets, toBase64, svgDataUri,
-  escapeMarkdownAlt, encodeState, decodeState, htmlImage,
+  escapeMarkdownAlt, encodeState, decodeState, htmlImage, svgInPoints, pixelsPerEm, setPngResolution,
 } from "../export.js";
+import { deflateSync, crc32 as zlibCrc32 } from "node:zlib";
 
 const RAW = '<svg viewBox="-10 -10 200 100" xmlns="http://www.w3.org/2000/svg">\n' +
   '<g fill="black" stroke="none"><path d="M0 0"/></g>\n</svg>';
@@ -90,7 +91,7 @@ test("state round-trips through the URL fragment", () => {
   const fonts = ["latinmodern-math.otf", "stixtwo-math.otf"];
   const state = {
     ...DEFAULTS, mode: "mathml", source: "<math>\n<mi>x</mi> & é</math>", font: "stixtwo-math.otf",
-    display: false, fg: "#FF0000", bg: "#00ff00", size: 5.5, debug: true,
+    display: false, fg: "#FF0000", bg: "#00ff00", size: 5.5, debug: true, textSize: 10.5,
   };
   const { state: back, hasSource } = decodeState("#" + encodeState(state), fonts);
   assert.equal(hasSource, true);
@@ -136,4 +137,69 @@ test("Markdown with a data URI embeds the sized SVG", () => {
   });
   assert.equal(s.markdownData, `![x](${svgDataUri(file)})`);
   assert.ok(s.img.includes(svgDataUri(RAW)), "the HTML snippet sizes the image itself");
+});
+
+test("svgInPoints sizes the SVG for the text size", () => {
+  const { svg, widthPt, heightPt } = svgInPoints(RAW, 12, 1000);
+  // viewBox 200 x 100 units, 1000 units per em, 12 pt per em
+  assert.ok(Math.abs(widthPt - 2.4) < 1e-9 && Math.abs(heightPt - 1.2) < 1e-9);
+  assert.ok(svg.includes('<svg width="2.400pt" height="1.200pt" viewBox='), svg);
+});
+
+test("pixelsPerEm converts text size and dpi", () => {
+  assert.equal(pixelsPerEm(12, 300), 50);
+  assert.equal(pixelsPerEm(72, 96), 96);
+});
+
+/** A minimal valid 1x1 PNG, optionally with a pHYs chunk already in it. */
+function tinyPng(withPhys = false) {
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4); crc.writeUInt32BE(zlibCrc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.from([0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]);
+  const phys = Buffer.from([0, 0, 0x0b, 0x13, 0, 0, 0x0b, 0x13, 1]);
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr),
+    ...(withPhys ? [chunk("pHYs", phys)] : []),
+    chunk("IDAT", deflateSync(Buffer.from([0, 0, 0, 0, 0]))), chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+function chunks(png) {
+  const b = Buffer.from(png); const out = []; let at = 8;
+  while (at < b.length) {
+    const len = b.readUInt32BE(at); const type = b.toString("ascii", at + 4, at + 8);
+    const data = b.subarray(at + 8, at + 8 + len);
+    const crcOk = b.readUInt32BE(at + 8 + len) === zlibCrc32(b.subarray(at + 4, at + 8 + len));
+    out.push({ type, data, crcOk }); at += 12 + len;
+  }
+  return out;
+}
+
+test("setPngResolution inserts a valid pHYs chunk after IHDR", () => {
+  const out = chunks(setPngResolution(tinyPng(), 300));
+  assert.deepEqual(out.map((c) => c.type), ["IHDR", "pHYs", "IDAT", "IEND"]);
+  assert.ok(out.every((c) => c.crcOk));
+  const phys = out[1].data;
+  assert.equal(phys.readUInt32BE(0), 11811);   // 300 dpi = 11811 px/m
+  assert.equal(phys.readUInt32BE(4), 11811);
+  assert.equal(phys[8], 1);
+});
+
+test("setPngResolution replaces an existing pHYs and ignores non-PNG input", () => {
+  const out = chunks(setPngResolution(tinyPng(true), 600));
+  assert.deepEqual(out.map((c) => c.type), ["IHDR", "pHYs", "IDAT", "IEND"]);
+  assert.equal(out[1].data.readUInt32BE(0), 23622);
+  const junk = new Uint8Array([1, 2, 3]);
+  assert.equal(setPngResolution(junk, 300), junk);
+});
+
+test("text size is kept in the link and clamped", () => {
+  assert.equal(encodeState({ ...DEFAULTS, source: "x" }), "m=latex&s=x");
+  assert.equal(decodeState("#t=24").state.textSize, 24);
+  assert.equal(decodeState("#t=9999").state.textSize, 200);
+  assert.equal(decodeState("#t=abc").state.textSize, 12);
 });
