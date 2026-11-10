@@ -52,6 +52,8 @@ pub(crate) enum Content<Id> {
     Rule { width: f32, thickness: f32 },
     /// A filled rectangle extending `height` above the origin and `width` to the right.
     Rect { width: f32, height: f32, dashed: bool },
+    /// A line from the origin to the origin plus `(dx, dy)` (y down).
+    Line { dx: f32, dy: f32, thickness: f32 },
     Boxes(Vec<LBox<Id>>),
 }
 
@@ -128,6 +130,11 @@ impl<Id: Copy> LBox<Id> {
                 top_accent_attachment: width / 2.0,
             },
         )
+    }
+
+    /// A line without metrics: whoever places it sets the metrics of the enclosing box.
+    pub fn line(dx: f32, dy: f32, thickness: f32) -> Self {
+        LBox::with_content(Content::Line { dx, dy, thickness }, Metrics::default())
     }
 
     pub fn glyphs(run: GlyphRun<Id>) -> Self {

@@ -1,6 +1,7 @@
 //! The layout engine behind [`crate::host::layout_math`]. It runs the MathML layout algorithms
 //! directly over a host tree.
 
+mod enclose;
 mod fraction;
 mod lbox;
 mod operator;
@@ -207,6 +208,8 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             Mmultiscripts if !children.is_empty() => {
                 self.layout_multiscripts(node, &children, style, ctx)
             }
+            Mpadded => self.layout_padded(node, &children, style, ctx),
+            Menclose => self.layout_enclose(node, &children, style, ctx),
             Semantics => self.layout_row(node, &children[..children.len().min(1)], ctx),
             Mtable => self.layout_table(node, style),
             Mprescripts | NoneElement => LBox::empty(0.0, 0.0, 0.0),
@@ -324,7 +327,18 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                     Fragment::Rule(rect)
                 });
             }
-            Content::Glyphs(_) | Content::Rule { .. } | Content::Rect { .. } => {}
+            Content::Line { dx, dy, thickness } if !suppress_paint => {
+                let start = abs - owner_origin;
+                fragments.push(Fragment::Line {
+                    start,
+                    end: Point::new(start.x + dx, start.y + dy),
+                    thickness,
+                });
+            }
+            Content::Glyphs(_)
+            | Content::Rule { .. }
+            | Content::Rect { .. }
+            | Content::Line { .. } => {}
         }
     }
 }

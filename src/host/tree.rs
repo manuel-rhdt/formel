@@ -33,6 +33,8 @@ pub enum MathElement {
     Ms,
     Mspace,
     Mpadded,
+    /// `<menclose>`: draws the lines named by its `notation` attribute around its content.
+    Menclose,
     Mphantom,
     Mstyle,
     Merror,
@@ -72,6 +74,7 @@ impl MathElement {
             "ms" => Ms,
             "mspace" => Mspace,
             "mpadded" => Mpadded,
+            "menclose" => Menclose,
             "mphantom" => Mphantom,
             "mstyle" => Mstyle,
             "merror" => Merror,

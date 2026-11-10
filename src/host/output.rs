@@ -45,6 +45,13 @@ pub enum Fragment {
     /// is the line's extent; it runs along its longer side. The dash pattern is up to the host
     /// (e.g. dashes three times as long as the line is thick).
     DashedRule(Rect),
+    /// A straight line of the given thickness between two points, e.g. a diagonal strike of
+    /// `<menclose>`. Points are relative to the node's border box.
+    Line {
+        start: Point,
+        end: Point,
+        thickness: f32,
+    },
 }
 
 /// A glyph positioned relative to the origin of its [`Fragment::Glyphs`] run.

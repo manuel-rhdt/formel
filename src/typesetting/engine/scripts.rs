@@ -37,7 +37,8 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         self.attach_scripts(node, nucleus, base_is_largeop, subscript, superscript, style)
     }
 
-    /// `<mmultiscripts>`: only the base and the first pair of postscripts are laid out for now.
+    /// `<mmultiscripts>`: the base, followed by (subscript, superscript) pairs, optionally
+    /// followed by `<mprescripts/>` and more pairs placed before the base.
     pub(crate) fn layout_multiscripts(
         &mut self,
         node: T::NodeId,
@@ -45,23 +46,36 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         style: &MathComputedStyle,
         ctx: Ctx,
     ) -> Box_<T> {
-        let script = |engine: &Self, index: usize| {
-            children.get(index).copied().filter(|&child| {
-                !matches!(
-                    engine.element(child),
-                    Some(MathElement::NoneElement | MathElement::Mprescripts)
-                )
-            })
-        };
-        let prescripts_at = children
+        let base = children[0];
+        let rest = &children[1..];
+        let split = rest
             .iter()
-            .position(|&c| self.element(c) == Some(MathElement::Mprescripts));
-        let (subscript, superscript) = if prescripts_at.is_some_and(|p| p <= 2) {
-            (None, None)
-        } else {
-            (script(self, 1), script(self, 2))
+            .position(|&c| self.element(c) == Some(MathElement::Mprescripts))
+            .unwrap_or(rest.len());
+        let (post, pre) = (&rest[..split], rest.get(split + 1..).unwrap_or(&[]));
+
+        let base_is_largeop = self
+            .embellished_properties(base, ctx.form)
+            .is_some_and(|p| p.largeop);
+        let nucleus = self.layout_node(base, Self::base_ctx(ctx));
+        let script_ctx = Ctx::plain(Form::Postfix);
+        let pairs = |engine: &mut Self, nodes: &[T::NodeId]| {
+            nodes
+                .chunks(2)
+                .map(|pair| {
+                    let mut script = |index: usize| {
+                        pair.get(index)
+                            .copied()
+                            .filter(|&c| engine.element(c) != Some(MathElement::NoneElement))
+                            .map(|c| engine.layout_node(c, script_ctx))
+                    };
+                    (script(0), script(1))
+                })
+                .collect::<Vec<_>>()
         };
-        self.layout_scripts(node, children[0], subscript, superscript, style, ctx)
+        let post = pairs(self, post);
+        let pre = pairs(self, pre);
+        self.attach_multiscripts(node, nucleus, base_is_largeop, post, pre, style)
     }
 
     fn attach_scripts(
@@ -73,7 +87,32 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         superscript: Option<Box_<T>>,
         style: &MathComputedStyle,
     ) -> Box_<T> {
-        if subscript.is_none() && superscript.is_none() {
+        self.attach_multiscripts(
+            node,
+            nucleus,
+            nucleus_is_largeop,
+            vec![(subscript, superscript)],
+            Vec::new(),
+            style,
+        )
+    }
+
+    /// Attaches any number of (subscript, superscript) pairs after and before the nucleus.
+    /// All scripts share one baseline shift for subscripts and one for superscripts, so that
+    /// the indices of a tensor line up.
+    fn attach_multiscripts(
+        &mut self,
+        node: T::NodeId,
+        mut nucleus: Box_<T>,
+        nucleus_is_largeop: bool,
+        post: Vec<(Option<Box_<T>>, Option<Box_<T>>)>,
+        pre: Vec<(Option<Box_<T>>, Option<Box_<T>>)>,
+        style: &MathComputedStyle,
+    ) -> Box_<T> {
+        let is_empty = |pairs: &Vec<(Option<Box_<T>>, Option<Box_<T>>)>| {
+            pairs.iter().all(|(sub, sup)| sub.is_none() && sup.is_none())
+        };
+        if is_empty(&post) && is_empty(&pre) {
             return LBox::boxes(vec![nucleus]);
         }
         let font = self.font(node, style);
@@ -101,8 +140,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             std_shift_down.max(min_shift_down).max(min_shift_from_baseline_drop)
         };
 
-        let mut children = Vec::with_capacity(4);
-        let (sub_shift, super_shift) = match (&subscript, &superscript) {
+        let pair_shifts = |subscript: &Option<Box_<T>>, superscript: &Option<Box_<T>>| match (subscript, superscript) {
             (Some(sub), Some(sup)) => {
                 let mut super_shift = superscript_shift_up(sup, &nucleus);
                 let mut sub_shift = subscript_shift_down(sub, &nucleus);
@@ -126,43 +164,80 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             }
             (Some(sub), None) => (subscript_shift_down(sub, &nucleus), 0.0),
             (None, Some(sup)) => (0.0, superscript_shift_up(sup, &nucleus)),
-            (None, None) => unreachable!(),
+            (None, None) => (0.0, 0.0),
         };
 
-        let mut attachments = Vec::with_capacity(2);
-        if let Some(mut sub) = subscript {
-            self.position_attachment(
-                &mut sub,
-                &nucleus,
-                nucleus_is_largeop,
-                CornerPosition::BottomRight,
-                sub_shift,
-            );
-            attachments.push(sub);
+        let (mut sub_shift, mut super_shift) = (0.0f32, 0.0f32);
+        for (sub, sup) in post.iter().chain(&pre) {
+            let (down, up) = pair_shifts(sub, sup);
+            sub_shift = sub_shift.max(down);
+            super_shift = super_shift.max(up);
         }
-        if let Some(mut sup) = superscript {
-            self.position_attachment(
-                &mut sup,
-                &nucleus,
-                nucleus_is_largeop,
-                CornerPosition::TopRight,
-                super_shift,
-            );
-            attachments.push(sup);
+        let space_after = constant(MathConstant::SpaceAfterScript);
+
+        // Prescripts, right-aligned against the base. The nucleus moves right to make room.
+        let mut children = Vec::new();
+        let mut cursor = 0.0;
+        let pre_count = pre.len();
+        for (i, (sub, sup)) in pre.into_iter().enumerate() {
+            let width = [&sub, &sup]
+                .iter()
+                .filter_map(|b| b.as_ref())
+                .map(|b| b.metrics.advance)
+                .fold(0.0, f32::max);
+            for (script, shift) in [(sub, sub_shift), (sup, -super_shift)] {
+                if let Some(mut script) = script {
+                    script.origin.x = cursor + width - script.metrics.advance;
+                    script.origin.y = nucleus.origin.y + shift;
+                    children.push(script);
+                }
+            }
+            cursor += width;
+            if i + 1 < pre_count {
+                cursor += space_after;
+            }
+        }
+        nucleus.origin.x += cursor;
+
+        // Postscripts. Only the first pair gets cut-in kerning against the nucleus.
+        let mut post_boxes = Vec::new();
+        let mut x = nucleus.origin.x + nucleus.metrics.advance;
+        for (i, (sub, sup)) in post.into_iter().enumerate() {
+            let mut placed = Vec::with_capacity(2);
+            for (script, position, shift) in [
+                (sub, CornerPosition::BottomRight, sub_shift),
+                (sup, CornerPosition::TopRight, super_shift),
+            ] {
+                let Some(mut script) = script else { continue };
+                if i == 0 {
+                    self.position_attachment(
+                        &mut script,
+                        &nucleus,
+                        nucleus_is_largeop,
+                        position,
+                        shift,
+                    );
+                } else {
+                    script.origin.x = x;
+                    script.origin.y = nucleus.origin.y + if position.is_top() { -shift } else { shift };
+                }
+                placed.push(script);
+            }
+            let right_edge = placed
+                .iter()
+                .map(|b| b.origin.x + b.metrics.advance)
+                .fold(x, f32::max);
+            let mut space = LBox::empty(space_after, 0.0, 0.0);
+            space.origin.x = right_edge;
+            x = right_edge + space_after;
+            post_boxes.extend(placed);
+            post_boxes.push(space);
         }
 
-        let right_edge = attachments
-            .iter()
-            .chain(std::iter::once(&nucleus))
-            .map(|b| b.origin.x + b.metrics.advance)
-            .fold(f32::MIN, f32::max);
-        let mut space = LBox::empty(constant(MathConstant::SpaceAfterScript), 0.0, 0.0);
-        space.origin.x = right_edge;
-
-        children.push(nucleus);
-        children.extend(attachments);
-        children.push(space);
-        LBox::boxes(children)
+        let mut result = vec![nucleus];
+        result.extend(children);
+        result.extend(post_boxes);
+        LBox::boxes(result)
     }
 
     fn position_attachment(

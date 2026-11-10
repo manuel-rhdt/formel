@@ -103,7 +103,7 @@ impl Doc {
             .iter()
             .flat_map(|f| match f {
                 Fragment::Glyphs { glyphs, .. } => glyphs.iter().map(|g| g.glyph).collect(),
-                Fragment::Rule(_) | Fragment::DashedRule(_) => vec![],
+                Fragment::Rule(_) | Fragment::DashedRule(_) | Fragment::Line { .. } => vec![],
             })
             .collect()
     }
@@ -168,7 +168,7 @@ fn assert_close(a: f32, b: f32) {
     assert!((a - b).abs() < 1e-3, "{} != {}", a, b);
 }
 
-use MathElement::{Math, Mfrac, Mi, Mn, Mo, Mrow, Msqrt, Msup, Mtable, Mtd, Mtr, Munderover};
+use MathElement::{Math, Mfrac, Mi, Mn, Mo, Mrow, Mroot, Mspace, Msqrt, Msup, Mtable, Mtd, Mtr, Munderover};
 
 #[test]
 fn padding_and_border_inflate_the_box() {
@@ -502,4 +502,255 @@ fn fences_stretch_around_tables() {
     let open_rect = doc.absolute_rect(row, open);
     assert!(open_rect.size.height >= table_rect.size.height * 0.9);
     assert!(open_rect.origin.y <= table_rect.origin.y + 1.0);
+}
+
+/// Adapted from WPT `mathml/presentation-markup/radicals/root-parameters-1.html`. The WPT uses
+/// fonts with made-up MATH constants; here the constants of the test font are used instead.
+struct Radical {
+    doc: Doc,
+    root: Id,
+    radical: Id,
+    base: Id,
+    index: Id,
+}
+
+fn space(doc: &mut Doc, width: &str, height: &str) -> Id {
+    let id = doc.el(Mspace, &[]);
+    doc.set_attr(id, "width", width);
+    doc.set_attr(id, "height", height);
+    id
+}
+
+fn radical(base_height: &str, index_width: &str, index_height: &str) -> Radical {
+    let mut doc = Doc::new();
+    let base = space(&mut doc, "3em", base_height);
+    let index = space(&mut doc, index_width, index_height);
+    let radical = doc.el(Mroot, &[base, index]);
+    let root = doc.el(Math, &[radical]);
+    doc.run(root);
+    Radical { doc, root, radical, base, index }
+}
+
+impl Radical {
+    fn rect(&self, node: Id) -> Rect {
+        self.doc.absolute_rect(self.root, node)
+    }
+    fn constant(&self, c: math_render::host::MathConstant) -> f32 {
+        use math_render::host::MathFont;
+        let scale = 20.0 / self.doc.font.units_per_em() as f32;
+        self.doc.font.math_constant(c) as f32 * scale
+    }
+}
+
+#[test]
+fn radical_kern_before_degree() {
+    use math_render::host::MathConstant::RadicalKernBeforeDegree;
+    let r = radical("1em", "3em", "1em");
+    assert_close(
+        r.rect(r.index).origin.x - r.rect(r.radical).origin.x,
+        r.constant(RadicalKernBeforeDegree),
+    );
+}
+
+#[test]
+fn radical_kern_after_degree() {
+    // the radicand moves by the width of the index, as long as the surd isn't pulled left
+    let narrow = radical("2em", "7em", "1em");
+    let wide = radical("2em", "8em", "1em");
+    assert_close(
+        wide.rect(wide.base).origin.x - narrow.rect(narrow.base).origin.x,
+        20.0,
+    );
+}
+
+#[test]
+fn radical_degree_bottom_raise_percent() {
+    use math_render::host::MathConstant::RadicalDegreeBottomRaisePercent;
+    let mut r = radical("10em", "3em", "1em");
+    // The bottom edge of the index, not its baseline, is raised: give it a depth.
+    r.doc.set_attr(r.index, "depth", "0.5em");
+    r.doc.run(r.root);
+    let radical_rect = r.rect(r.radical);
+    // The surd is the lowest thing in the radical, and its top is the top of the rule.
+    let rule_top = r
+        .doc
+        .layout(r.radical)
+        .fragments
+        .iter()
+        .find_map(|f| match f {
+            Fragment::Rule(rect) => Some(rect.origin.y),
+            _ => None,
+        })
+        .expect("the radical has a rule");
+    let surd_height = radical_rect.bottom() - (radical_rect.origin.y + rule_top);
+    let percent = r.doc.font.math_constant(RadicalDegreeBottomRaisePercent) as f32 / 100.0;
+    let raise = radical_rect.bottom() - r.rect(r.index).bottom();
+    assert_close(raise, percent * surd_height);
+}
+
+use MathElement::{Menclose, Mpadded};
+
+fn padded(attrs: &[(&str, &str)]) -> (Doc, Id, Id) {
+    let mut doc = Doc::new();
+    let content = space(&mut doc, "3em", "1em");
+    doc.set_attr(content, "depth", "0.5em");
+    let padded = doc.el(Mpadded, &[content]);
+    for (name, value) in attrs {
+        doc.set_attr(padded, name, value);
+    }
+    let root = doc.el(Math, &[padded]);
+    doc.run(root);
+    (doc, root, padded)
+}
+
+#[test]
+fn mpadded_sets_and_adjusts_dimensions() {
+    let (doc, _, p) = padded(&[("width", "5em"), ("height", "+0.5em"), ("depth", "200%")]);
+    let size = doc.layout(p).size;
+    assert_close(size.width, 100.0);
+    assert_close(size.height, 30.0 + 20.0);
+    assert_close(doc.layout(p).baseline, 30.0);
+}
+
+#[test]
+fn mpadded_pseudo_units() {
+    let (doc, _, p) = padded(&[("width", "0.5width"), ("height", "2depth")]);
+    assert_close(doc.layout(p).size.width, 30.0);
+    assert_close(doc.layout(p).baseline, 20.0);
+}
+
+#[test]
+fn mpadded_lspace_and_voffset_move_the_content() {
+    let (doc, root, p) = padded(&[("lspace", "1em"), ("voffset", "0.5em")]);
+    let plain = padded(&[]);
+    let child = doc.nodes[p].children[0];
+    let moved = doc.absolute_rect(root, child);
+    let original = plain.0.absolute_rect(plain.1, plain.0.nodes[plain.2].children[0]);
+    assert_close(moved.origin.x - original.origin.x, 20.0);
+    assert_close(original.origin.y - moved.origin.y, 10.0);
+    assert_close(doc.layout(p).size.width, 80.0);
+    // voffset doesn't change the box
+    assert_close(doc.layout(p).size.height, plain.0.layout(plain.2).size.height);
+}
+
+fn enclosed(notation: Option<&str>) -> (Doc, Id, Id) {
+    let mut doc = Doc::new();
+    let content = space(&mut doc, "3em", "1em");
+    let enclose = doc.el(Menclose, &[content]);
+    if let Some(notation) = notation {
+        doc.set_attr(enclose, "notation", notation);
+    }
+    let root = doc.el(Math, &[enclose]);
+    doc.run(root);
+    (doc, enclose, content)
+}
+
+#[test]
+fn menclose_box_draws_four_bars_around_the_content() {
+    let (doc, enclose, content) = enclosed(Some("box"));
+    let bars = doc
+        .layout(enclose)
+        .fragments
+        .iter()
+        .filter(|f| matches!(f, Fragment::Rule(_)))
+        .count();
+    assert_eq!(bars, 4);
+    let outer = doc.layout(enclose).size;
+    let inner = doc.layout(content).size;
+    assert!(outer.width > inner.width && outer.height > inner.height);
+}
+
+#[test]
+fn menclose_defaults_to_longdiv_and_strikes_add_no_space() {
+    let (doc, enclose, _) = enclosed(None);
+    assert_eq!(doc.layout(enclose).fragments.len(), 2);
+    let (doc, enclose, content) = enclosed(Some("updiagonalstrike horizontalstrike"));
+    assert_eq!(doc.layout(enclose).size, doc.layout(content).size);
+    assert!(doc
+        .layout(enclose)
+        .fragments
+        .iter()
+        .any(|f| matches!(f, Fragment::Line { .. })));
+}
+
+#[test]
+fn table_cells_span_columns() {
+    let mut doc = Doc::new();
+    let cell = |doc: &mut Doc, text| {
+        let mn = doc.tok(Mn, text);
+        doc.el(Mtd, &[mn])
+    };
+    let (a, b) = (cell(&mut doc, "1"), cell(&mut doc, "2"));
+    let row1 = doc.el(Mtr, &[a, b]);
+    // a wide cell in the second row spanning both columns
+    let wide = space(&mut doc, "10em", "1em");
+    let wide_cell = doc.el(Mtd, &[wide]);
+    doc.set_attr(wide_cell, "columnspan", "2");
+    let row2 = doc.el(Mtr, &[wide_cell]);
+    let table = doc.el(Mtable, &[row1, row2]);
+    doc.run(table);
+
+    let rect = |n| doc.absolute_rect(table, n);
+    // the columns grow to fit the spanning cell, which covers both of them
+    assert_close(rect(wide_cell).size.width, rect(b).right() - rect(a).origin.x);
+    assert!(rect(wide_cell).size.width >= 200.0);
+}
+
+#[test]
+fn table_cells_span_rows() {
+    let mut doc = Doc::new();
+    let tall = space(&mut doc, "1em", "6em");
+    let tall_cell = doc.el(Mtd, &[tall]);
+    doc.set_attr(tall_cell, "rowspan", "2");
+    let one = doc.tok(Mn, "1");
+    let one = doc.el(Mtd, &[one]);
+    let row1 = doc.el(Mtr, &[tall_cell, one]);
+    // the second row's only cell goes to the second column
+    let two = doc.tok(Mn, "2");
+    let two = doc.el(Mtd, &[two]);
+    let row2 = doc.el(Mtr, &[two]);
+    let table = doc.el(Mtable, &[row1, row2]);
+    doc.run(table);
+
+    let rect = |n| doc.absolute_rect(table, n);
+    assert_close(rect(two).origin.x, rect(one).origin.x);
+    assert!(rect(two).origin.y > rect(one).origin.y);
+    // the spanning cell is at least as tall as its content and covers both rows
+    assert!(rect(tall_cell).size.height >= 120.0);
+    assert_close(rect(tall_cell).origin.y.min(rect(one).origin.y), rect(tall_cell).origin.y);
+    assert!(rect(tall_cell).bottom() >= rect(two).bottom() - 1e-3);
+}
+
+#[test]
+fn table_lines_stop_at_spanning_cells() {
+    let mut doc = Doc::new();
+    let cell = |doc: &mut Doc, text| {
+        let mn = doc.tok(Mn, text);
+        doc.el(Mtd, &[mn])
+    };
+    let (a, b, c) = (cell(&mut doc, "1"), cell(&mut doc, "2"), cell(&mut doc, "3"));
+    let row1 = doc.el(Mtr, &[a, b]);
+    let wide = cell(&mut doc, "4");
+    doc.set_attr(wide, "columnspan", "2");
+    let row2 = doc.el(Mtr, &[wide]);
+    let row3 = doc.el(Mtr, &[c]);
+    let table = doc.el(Mtable, &[row1, row2, row3]);
+    doc.set_attr(table, "columnlines", "solid");
+    doc.run(table);
+
+    let lines: Vec<Rect> = doc
+        .layout(table)
+        .fragments
+        .iter()
+        .filter_map(|f| match f {
+            Fragment::Rule(rect) => Some(*rect),
+            _ => None,
+        })
+        .collect();
+    // the line between the columns is interrupted by the spanning cell in the second row
+    assert_eq!(lines.len(), 2);
+    let spanning = doc.absolute_rect(table, wide);
+    for line in lines {
+        assert!(line.bottom() <= spanning.origin.y + 1e-3 || line.origin.y >= spanning.bottom() - 1e-3);
+    }
 }

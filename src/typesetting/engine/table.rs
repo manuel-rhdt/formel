@@ -3,7 +3,8 @@
 //!
 //! The layout follows the MathML 3 table attributes: `columnalign`, `rowalign`,
 //! `columnspacing`, `rowspacing`, `columnlines`, `rowlines`, `frame`, `framespacing` and
-//! `align`. List-valued attributes repeat their last value. Cell spanning is not supported.
+//! `align`. List-valued attributes repeat their last value. Cells may span rows and columns with
+//! `rowspan` and `columnspan`; table lines stop at the cells that span them.
 
 use super::lbox::{Content, LBox, Metrics};
 use super::{Box_, Ctx, Engine};
@@ -78,11 +79,15 @@ struct Cell<B> {
     lbox: B,
     column_align: ColumnAlign,
     row_align: RowAlign,
+    /// The grid position of the cell's top left corner.
+    row: usize,
+    column: usize,
+    row_span: usize,
+    column_span: usize,
 }
 
-struct Row<Id, B> {
+struct Row<Id> {
     node: Option<Id>,
-    cells: Vec<Cell<B>>,
     ascent: f32,
     descent: f32,
 }
@@ -129,7 +134,10 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
 
         // Lay out the cells. Children that aren't rows form a row of their own; children of a
         // row that aren't cells are cells themselves.
-        let mut rows: Vec<Row<T::NodeId, Box_<T>>> = Vec::new();
+        let mut rows: Vec<Row<T::NodeId>> = Vec::new();
+        let mut cells: Vec<Cell<Box_<T>>> = Vec::new();
+        // grid slots taken by cells that span several rows or columns
+        let mut occupied = std::collections::HashSet::new();
         for (i, child) in self.children(node).into_iter().enumerate() {
             let (row_node, cell_nodes) = match self.element(child) {
                 Some(MathElement::Mtr) => (Some(child), self.children(child)),
@@ -145,41 +153,66 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 .and_then(|r| self.list_attribute(r, "rowalign", RowAlign::parse).first().copied())
                 .unwrap_or(nth(&row_aligns, i, RowAlign::Baseline));
 
-            let mut cells = Vec::with_capacity(cell_nodes.len());
-            for (j, cell_node) in cell_nodes.into_iter().enumerate() {
+            let mut column = 0;
+            for cell_node in cell_nodes {
+                while occupied.contains(&(i, column)) {
+                    column += 1;
+                }
                 let column_align = self
                     .list_attribute(cell_node, "columnalign", ColumnAlign::parse)
                     .first()
                     .copied()
-                    .or(row_column_aligns.get(j).or(row_column_aligns.last()).copied())
-                    .unwrap_or(nth(&column_aligns, j, ColumnAlign::Center));
+                    .or(row_column_aligns.get(column).or(row_column_aligns.last()).copied())
+                    .unwrap_or(nth(&column_aligns, column, ColumnAlign::Center));
                 let row_align = self
                     .list_attribute(cell_node, "rowalign", RowAlign::parse)
                     .first()
                     .copied()
                     .unwrap_or(row_row_align);
+                let span = |name| {
+                    self.tree
+                        .attribute(cell_node, name)
+                        .and_then(|value| value.trim().parse::<usize>().ok())
+                        .filter(|&n| n > 0)
+                        .unwrap_or(1)
+                };
+                let (row_span, column_span) = (span("rowspan"), span("columnspan"));
+                for r in i..i + row_span {
+                    for c in column..column + column_span {
+                        occupied.insert((r, c));
+                    }
+                }
                 let lbox = self.layout_node(cell_node, Ctx::plain(Form::Infix));
                 cells.push(Cell {
                     lbox,
                     column_align,
                     row_align,
+                    row: i,
+                    column,
+                    row_span,
+                    column_span,
                 });
+                column += column_span;
             }
             rows.push(Row {
                 node: row_node,
-                cells,
                 ascent: 0.0,
                 descent: 0.0,
             });
         }
+        // spans can't reach past the last row
+        for cell in &mut cells {
+            cell.row_span = cell.row_span.min(rows.len() - cell.row);
+        }
 
         // row heights: baseline-aligned cells share the baseline; the others only need room
-        for row in &mut rows {
-            for cell in row.cells.iter().filter(|c| c.row_align == RowAlign::Baseline) {
+        for (i, row) in rows.iter_mut().enumerate() {
+            let in_row = || cells.iter().filter(|c| c.row == i && c.row_span == 1);
+            for cell in in_row().filter(|c| c.row_align == RowAlign::Baseline) {
                 row.ascent = row.ascent.max(cell.lbox.metrics.ascent);
                 row.descent = row.descent.max(cell.lbox.metrics.descent);
             }
-            for cell in row.cells.iter().filter(|c| c.row_align != RowAlign::Baseline) {
+            for cell in in_row().filter(|c| c.row_align != RowAlign::Baseline) {
                 let missing = cell.lbox.metrics.height() - (row.ascent + row.descent);
                 if missing > 0.0 {
                     if row.ascent + row.descent == 0.0 {
@@ -192,12 +225,41 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 }
             }
         }
+        // Cells spanning rows: the rows they cover share any missing height.
+        let mut spanning: Vec<&Cell<Box_<T>>> = cells.iter().filter(|c| c.row_span > 1).collect();
+        spanning.sort_by_key(|c| c.row_span);
+        for cell in spanning {
+            let covered = cell.row..cell.row + cell.row_span;
+            let available: f32 = covered.clone().map(|r| rows[r].ascent + rows[r].descent).sum::<f32>()
+                + covered.clone().take(cell.row_span - 1).map(|r| nth(&row_spacing, r, 0.0)).sum::<f32>();
+            let missing = cell.lbox.metrics.height() - available;
+            if missing > 0.0 {
+                for r in covered {
+                    rows[r].descent += missing / cell.row_span as f32;
+                }
+            }
+        }
 
-        let column_count = rows.iter().map(|r| r.cells.len()).max().unwrap_or(0);
+        let column_count = cells.iter().map(|c| c.column + c.column_span).max().unwrap_or(0);
         let mut column_widths = vec![0.0f32; column_count];
-        for row in &rows {
-            for (j, cell) in row.cells.iter().enumerate() {
-                column_widths[j] = column_widths[j].max(cell.lbox.metrics.advance);
+        for cell in cells.iter().filter(|c| c.column_span == 1) {
+            column_widths[cell.column] = column_widths[cell.column].max(cell.lbox.metrics.advance);
+        }
+        let mut spanning: Vec<&Cell<Box_<T>>> = cells.iter().filter(|c| c.column_span > 1).collect();
+        spanning.sort_by_key(|c| c.column_span);
+        for cell in spanning {
+            let covered = cell.column..cell.column + cell.column_span;
+            let available: f32 = covered.clone().map(|c| column_widths[c]).sum::<f32>()
+                + covered
+                    .clone()
+                    .take(cell.column_span - 1)
+                    .map(|c| nth(&column_spacing, c, 0.0))
+                    .sum::<f32>();
+            let missing = cell.lbox.metrics.advance - available;
+            if missing > 0.0 {
+                for c in covered {
+                    column_widths[c] += missing / cell.column_span as f32;
+                }
             }
         }
 
@@ -258,59 +320,126 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         };
         let inner_top = frame_thickness;
         let inner_height = height - 2.0 * frame_thickness;
+        let inner_left = frame_thickness;
+        let inner_width = width - 2.0 * frame_thickness;
+        // The bands of the table that rows and columns occupy, from the middle of the gap above
+        // (left of) each to the middle of the gap below (right of) it. They tile the inner area.
+        let row_bands: Vec<(f32, f32)> = (0..rows.len())
+            .map(|i| {
+                let top = if i == 0 {
+                    inner_top
+                } else {
+                    row_baselines[i] - rows[i].ascent - nth(&row_spacing, i - 1, 0.0) / 2.0
+                };
+                let bottom = if i + 1 == rows.len() {
+                    inner_top + inner_height
+                } else {
+                    row_baselines[i] + rows[i].descent + nth(&row_spacing, i, 0.0) / 2.0
+                };
+                (top, bottom)
+            })
+            .collect();
+        let column_bands: Vec<(f32, f32)> = (0..column_count)
+            .map(|j| {
+                let left = if j == 0 {
+                    inner_left
+                } else {
+                    column_x[j] - nth(&column_spacing, j - 1, 0.0) / 2.0
+                };
+                let right = if j + 1 == column_count {
+                    inner_left + inner_width
+                } else {
+                    column_x[j] + column_widths[j] + nth(&column_spacing, j, 0.0) / 2.0
+                };
+                (left, right)
+            })
+            .collect();
+        // Merges the bands that aren't blocked into runs `(start, end)`.
+        let runs = |bands: &[(f32, f32)], blocked: &dyn Fn(usize) -> bool| {
+            let mut runs: Vec<(f32, f32)> = Vec::new();
+            let mut open = false;
+            for (k, &(start, end)) in bands.iter().enumerate() {
+                if blocked(k) {
+                    open = false;
+                } else if open {
+                    runs.last_mut().expect("a run is open").1 = end;
+                } else {
+                    runs.push((start, end));
+                    open = true;
+                }
+            }
+            runs
+        };
+        // Lines don't cross cells that span them.
         for j in 0..column_count.saturating_sub(1) {
             let gap = nth(&column_spacing, j, 0.0);
             let line_x = column_x[j] + column_widths[j] + gap / 2.0 - thickness / 2.0;
-            push_line(
-                line_x,
-                inner_top,
-                thickness,
-                inner_height,
-                nth(&column_lines, j, LineStyle::None),
-            );
+            let line_style = nth(&column_lines, j, LineStyle::None);
+            let blocked = |i: usize| {
+                cells.iter().any(|c| {
+                    c.column <= j
+                        && j + 1 < c.column + c.column_span
+                        && (c.row..c.row + c.row_span).contains(&i)
+                })
+            };
+            for (start, end) in runs(&row_bands, &blocked) {
+                push_line(line_x, start, thickness, end - start, line_style);
+            }
         }
-        let inner_left = frame_thickness;
-        let inner_width = width - 2.0 * frame_thickness;
         for i in 0..rows.len().saturating_sub(1) {
             let gap = nth(&row_spacing, i, 0.0);
             let row_bottom = row_baselines[i] + rows[i].descent;
-            push_line(
-                inner_left,
-                row_bottom + gap / 2.0 - thickness / 2.0,
-                inner_width,
-                thickness,
-                nth(&row_lines, i, LineStyle::None),
-            );
+            let line_y = row_bottom + gap / 2.0 - thickness / 2.0;
+            let line_style = nth(&row_lines, i, LineStyle::None);
+            let blocked = |j: usize| {
+                cells.iter().any(|c| {
+                    c.row <= i
+                        && i + 1 < c.row + c.row_span
+                        && (c.column..c.column + c.column_span).contains(&j)
+                })
+            };
+            for (start, end) in runs(&column_bands, &blocked) {
+                push_line(start, line_y, end - start, thickness, line_style);
+            }
         }
         push_line(0.0, 0.0, width, thickness, frame);
         push_line(0.0, height - thickness, width, thickness, frame);
         push_line(0.0, 0.0, thickness, height, frame);
         push_line(width - thickness, 0.0, thickness, height, frame);
 
-        // Rows span the table; cells fill their column and row.
-        for (row, baseline) in rows.into_iter().zip(row_baselines) {
-            let cells = row
-                .cells
+        // Rows span the table; cells fill their grid area. A cell belongs to the row it starts
+        // in.
+        let mut row_cells: Vec<Vec<Cell<Box_<T>>>> = (0..rows.len()).map(|_| Vec::new()).collect();
+        for cell in cells {
+            row_cells[cell.row].push(cell);
+        }
+        for (i, (row, cells)) in rows.iter().zip(row_cells).enumerate() {
+            let baseline = row_baselines[i];
+            let cells = cells
                 .into_iter()
-                .enumerate()
-                .map(|(j, cell)| {
+                .map(|cell| {
+                    let last_column = cell.column + cell.column_span - 1;
+                    let last_row = i + cell.row_span - 1;
+                    let area_width =
+                        column_x[last_column] + column_widths[last_column] - column_x[cell.column];
+                    let area_descent = row_baselines[last_row] + rows[last_row].descent - baseline;
                     let m = cell.lbox.metrics;
                     let dx = match cell.column_align {
                         ColumnAlign::Left => 0.0,
-                        ColumnAlign::Center => (column_widths[j] - m.advance) / 2.0,
-                        ColumnAlign::Right => column_widths[j] - m.advance,
+                        ColumnAlign::Center => (area_width - m.advance) / 2.0,
+                        ColumnAlign::Right => area_width - m.advance,
                     };
                     let dy = match cell.row_align {
                         RowAlign::Baseline => 0.0,
                         RowAlign::Top => -row.ascent + m.ascent,
-                        RowAlign::Bottom => row.descent - m.descent,
+                        RowAlign::Bottom => area_descent - m.descent,
                         RowAlign::Center => {
-                            (row.descent - row.ascent) / 2.0 - (m.descent - m.ascent) / 2.0
+                            (area_descent - row.ascent) / 2.0 - (m.descent - m.ascent) / 2.0
                         }
                     };
                     let mut cell_box =
-                        fill_cell(cell.lbox, column_widths[j], row.ascent, row.descent, dx, dy);
-                    cell_box.origin = Point::new(column_x[j], 0.0);
+                        fill_cell(cell.lbox, area_width, row.ascent, area_descent, dx, dy);
+                    cell_box.origin = Point::new(column_x[cell.column], 0.0);
                     cell_box
                 })
                 .collect();

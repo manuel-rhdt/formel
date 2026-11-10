@@ -211,7 +211,8 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 - surd.metrics.height() * raise_percent;
 
             let mut degree = self.layout_node(index, Ctx::plain(Form::Infix));
-            degree.origin.y += degree_bottom;
+            // `degree_bottom` is where the degree's bottom edge goes, not its baseline.
+            degree.origin.y += degree_bottom - degree.metrics.descent;
             degree.origin.x += kern_before;
 
             let surd_kern = (kern_before + degree.metrics.advance + kern_after).max(0.0);
