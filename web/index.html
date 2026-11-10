@@ -295,6 +295,20 @@
 </section>
 
 <!-- ============ secondary ============ -->
+<details class="card panel" id="why">
+  <summary>How this differs from KaTeX and MathJax <span class="sub">they set the formula into the page; this makes a picture of it</span></summary>
+  <div class="panelbody">
+    <p>KaTeX and MathJax set a formula <em>into the page</em>. They bring their own fonts, lay it out as
+      HTML and CSS, and what you get is live web text that reflows with the paragraph around it.</p>
+    <p>This sets the formula <em>with a font you choose</em> and hands you an image of it. The result is
+      paths, not elements: the SVG needs no stylesheet, no webfont and no engine at read time. It goes
+      wherever a picture goes — a slide, a paper, an email, a vector file for print — and it looks like
+      the text around it if you pick a matching font.</p>
+    <p>That is also the limit. A picture does not reflow, cannot be selected or copied as an expression,
+      and a screen reader gets the alt text instead. For math inside running text, KaTeX is the better
+      tool; this is for math that ends up in a document.</p>
+  </div>
+</details>
 <details class="card panel" id="embed">
   <summary>Embed in a web page or Markdown <span class="sub">self-contained snippet, aligned to the text baseline; uses the PNG/SVG choice</span></summary>
   <div class="panelbody">
@@ -339,7 +353,7 @@
 </main>
 
 <footer>
-  Layout by Rust compiled to WebAssembly. Upload any OpenType font with a MATH table via the font menu,
+  Layout by Rust compiled to WebAssembly<span id="wasmsize" hidden></span>. Upload any OpenType font with a MATH table via the font menu,
   or drop the file onto the page. Bundled fonts are under the
   <a href="fonts/LICENSES.md">OFL and GUST font licenses</a>.
 </footer>
@@ -1380,7 +1394,28 @@ $("dpi").value = store.get("mathrender.dpi", "300");
 if (!$("dpi").value) $("dpi").value = "300";
 updateFormatUi();
 
+/**
+ * Prints the module's size in the footer, measured from the response instead of hard-coded, so it
+ * stays true when the build changes. Stays hidden when resource timing does not report the sizes
+ * (some browsers withhold them across origins or when the response came from a private cache).
+ */
+function showDownloadSize() {
+  const apply = () => {
+    const entry = performance.getEntriesByType("resource").find((r) => r.name.endsWith("mathwasm_bg.wasm"));
+    if (!entry?.decodedBodySize) return;
+    const size = (n) => n >= 1e6
+      ? `${(Math.floor(n / 1e5) / 10).toFixed(1)} MB`
+      : `${Math.round(n / 1e3)} KB`;
+    const sent = entry.encodedBodySize ? ` (${size(entry.encodedBodySize)} compressed)` : "";
+    $("wasmsize").textContent = ` — a ${size(entry.decodedBodySize)} module${sent}`;
+    $("wasmsize").hidden = false;
+  };
+  apply();
+  if ($("wasmsize").hidden) setTimeout(apply, 800);   // the entry can land just after init() resolves
+}
+
 await init();
+showDownloadSize();
 const { state, hasSource } = decodeState(location.hash, FONTS.map((f) => f.file));
 applyState(state, hasSource);
 updateBgUi();
