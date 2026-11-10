@@ -1,0 +1,71 @@
+<mmultiscripts>
+    <mi>R</mi>
+    <none/>
+    <mi>&rho;</mi>
+    <mi>&sigma;</mi>
+    <none/>
+    <mi>&mu;</mi>
+    <none/>
+    <mi>&nu;</mi>
+    <none/>
+</mmultiscripts>
+<mo>=</mo>
+<msub><mo>&part;</mo><mi>&mu;</mi></msub>
+<mmultiscripts>
+    <mi>&Gamma;</mi>
+    <none/>
+    <mi>&rho;</mi>
+    <mi>&nu;</mi>
+    <none/>
+    <mi>&sigma;</mi>
+    <none/>
+</mmultiscripts>
+<mo>&minus;</mo>
+<msub><mo>&part;</mo><mi>&nu;</mi></msub>
+<mmultiscripts>
+    <mi>&Gamma;</mi>
+    <none/>
+    <mi>&rho;</mi>
+    <mi>&mu;</mi>
+    <none/>
+    <mi>&sigma;</mi>
+    <none/>
+</mmultiscripts>
+<mo>+</mo>
+<mmultiscripts>
+    <mi>&Gamma;</mi>
+    <none/>
+    <mi>&rho;</mi>
+    <mi>&mu;</mi>
+    <none/>
+    <mi>&lambda;</mi>
+    <none/>
+</mmultiscripts>
+<mmultiscripts>
+    <mi>&Gamma;</mi>
+    <none/>
+    <mi>&lambda;</mi>
+    <mi>&nu;</mi>
+    <none/>
+    <mi>&sigma;</mi>
+    <none/>
+</mmultiscripts>
+<mo>&minus;</mo>
+<mmultiscripts>
+    <mi>&Gamma;</mi>
+    <none/>
+    <mi>&rho;</mi>
+    <mi>&nu;</mi>
+    <none/>
+    <mi>&lambda;</mi>
+    <none/>
+</mmultiscripts>
+<mmultiscripts>
+    <mi>&Gamma;</mi>
+    <none/>
+    <mi>&lambda;</mi>
+    <mi>&mu;</mi>
+    <none/>
+    <mi>&sigma;</mi>
+    <none/>
+</mmultiscripts>

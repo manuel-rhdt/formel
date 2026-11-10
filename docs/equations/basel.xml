@@ -1,0 +1,12 @@
+<math display="block">
+  <munderover><mo>&Sum;</mo><mrow><mi>n</mi><mo>=</mo><mn>1</mn></mrow><mi>&infin;</mi></munderover>
+  <mfrac><mn>1</mn><msup><mi>n</mi><mn>2</mn></msup></mfrac>
+  <mo>=</mo>
+  <mfrac><msup><mi>&pi;</mi><mn>2</mn></msup><mn>6</mn></mfrac>
+  <mo>,</mo><mspace width="1em"/>
+  <msubsup><mo>&int;</mo><mrow><mo>&minus;</mo><mi>&infin;</mi></mrow><mi>&infin;</mi></msubsup>
+  <msup><mi>e</mi><mrow><mo>&minus;</mo><msup><mi>x</mi><mn>2</mn></msup></mrow></msup>
+  <mi>d</mi><mi>x</mi>
+  <mo>=</mo>
+  <msqrt><mi>&pi;</mi></msqrt>
+</math>
