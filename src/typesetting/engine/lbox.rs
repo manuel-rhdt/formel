@@ -137,6 +137,16 @@ impl<Id: Copy> LBox<Id> {
         LBox::with_content(Content::Line { dx, dy, thickness }, Metrics::default())
     }
 
+    /// Whether this box is a single glyph (possibly wrapped in single-child boxes): TeX's
+    /// "character nucleus", whose scripts are not constrained by the glyph's height or depth.
+    pub fn is_single_glyph(&self) -> bool {
+        match &self.content {
+            Content::Glyphs(run) => run.glyphs.len() == 1,
+            Content::Boxes(children) => matches!(children.as_slice(), [only] if only.is_single_glyph()),
+            _ => false,
+        }
+    }
+
     pub fn glyphs(run: GlyphRun<Id>) -> Self {
         let s = run.scale;
         let mut advance = 0;

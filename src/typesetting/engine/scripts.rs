@@ -127,13 +127,22 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             });
             let min_shift_up =
                 superscript.metrics.descent + constant(MathConstant::SuperscriptBottomMin);
-            let min_shift_from_baseline_drop =
-                nucleus.metrics.ascent - constant(MathConstant::SuperscriptBaselineDropMax);
+            // As in TeX, a single-character nucleus doesn't constrain the shift by its height.
+            let min_shift_from_baseline_drop = if nucleus.is_single_glyph() {
+                0.0
+            } else {
+                nucleus.metrics.ascent - constant(MathConstant::SuperscriptBaselineDropMax)
+            };
             std_shift_up.max(min_shift_up).max(min_shift_from_baseline_drop)
         };
         let subscript_shift_down = |subscript: &Box_<T>, nucleus: &Box_<T>| {
-            let min_shift_from_baseline_drop =
-                nucleus.metrics.descent + constant(MathConstant::SubscriptBaselineDropMin);
+            // As in TeX, a single-character nucleus doesn't constrain the shift by its depth
+            // (otherwise the subscript of μ would sit lower than that of ε).
+            let min_shift_from_baseline_drop = if nucleus.is_single_glyph() {
+                0.0
+            } else {
+                nucleus.metrics.descent + constant(MathConstant::SubscriptBaselineDropMin)
+            };
             let std_shift_down = constant(MathConstant::SubscriptShiftDown);
             let min_shift_down =
                 subscript.metrics.ascent - constant(MathConstant::SubscriptTopMax);
