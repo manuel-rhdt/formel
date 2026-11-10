@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ctext x=%2216%22 y=%2225%22 font-size=%2226%22 text-anchor=%22middle%22 font-family=%22serif%22 font-style=%22italic%22%3E%E2%88%91%3C/text%3E%3C/svg%3E">
 <title>math-render · LaTeX and MathML to SVG and PNG</title>
-<meta name="description" content="Typeset LaTeX or MathML with a font's OpenType MATH table and export SVG or PNG. Runs entirely in your browser.">
+<meta name="description" content="Turn LaTeX or MathML into an SVG or PNG image for a paper, slide deck or website. Runs entirely in your browser.">
 <style>
   :root {
     color-scheme: light dark;
@@ -334,10 +334,8 @@
     <div class="bar">
       <button id="copyhtml" class="btn" type="button" disabled>Copy as HTML (PNG)</button>
     </div>
-    <p>With SVG selected, <em>Copy SVG</em> puts the SVG and a PNG on the clipboard, and the app you paste into
-      takes the best it understands; apps without SVG support get the PNG. Only Chromium-based browsers
-      (Chrome, Edge, Opera) can put SVG on the clipboard; Firefox and Safari copy the PNG only.
-      With PNG selected, only the PNG is copied.</p>
+    <p>With SVG selected, <em>Copy SVG</em> copies the SVG source code as text, ready to paste into a
+      file or an editor. With PNG selected, <em>Copy PNG</em> copies the image itself.</p>
   </div>
 </details>
 </main>
@@ -1023,30 +1021,24 @@ function needClipboard() {
   }
 }
 
-const canCopySvg = () => typeof ClipboardItem !== "undefined"
-  && typeof ClipboardItem.supports === "function" && ClipboardItem.supports("image/svg+xml");
-
 /**
- * PNG mode: the PNG only. SVG mode: one clipboard item with the SVG and a PNG, so that the app
- * you paste into takes the best format it understands and apps without SVG support still get an
- * image. Only Chromium (124+) can write SVG; elsewhere this copies the PNG and says so. No text
- * flavor: apps like LibreOffice Writer would prefer it and paste the SVG source code.
+ * SVG mode copies the SVG source as text: it goes into a file, an editor or a CMS without any
+ * browser-specific clipboard format getting in the way. PNG mode copies the image, which is what
+ * an app expects from a PNG.
  */
 const copyImage = () => valid && guarded("Copy", async () => {
-  needClipboard();
-  const wantSvg = format() === "svg";
-  const withSvg = wantSvg && canCopySvg();
-  // Passing the promise (not the blob) keeps Safari happy: the write must start inside the click.
-  const item = { "image/png": pngBlob(pxPerEm()) };
-  if (withSvg) {
-    // without the XML declaration, which Chromium's sanitizer would turn into a comment
-    const svg = fileSvg().svg.replace(/^<\?xml[^>]*\?>\s*/, "");
-    item["image/svg+xml"] = new Blob([svg], { type: "image/svg+xml" });
+  if (format() === "svg") {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error("the clipboard API is not available (it needs https or localhost)");
+    }
+    await navigator.clipboard.writeText(fileSvg().svg);
+    toast("Copied the SVG source; paste it into a file or an editor");
+    return;
   }
-  await navigator.clipboard.write([new ClipboardItem(item)]);
-  if (withSvg) toast("Copied the SVG, with a PNG for apps that cannot paste SVG");
-  else if (wantSvg) toast("This browser can only put PNG on the clipboard; copied the PNG. For SVG, use Download or Chrome/Edge.", true);
-  else toast("Copied the PNG");
+  needClipboard();
+  // Passing the promise (not the blob) keeps Safari happy: the write must start inside the click.
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob(pxPerEm()) })]);
+  toast("Copied the PNG");
 });
 
 /** `<img>` HTML for the SVG (vector) or the PNG (raster) of the current rendering. */
@@ -1096,7 +1088,7 @@ function updateFormatUi() {
   $("download").textContent = `Download ${f}`;
   $("copyhtml").textContent = `Copy as HTML (${f})`;
   $("copy").title = format() === "svg"
-    ? `Copy the SVG, plus a PNG for apps without SVG support (${modKey}+Enter)`
+    ? `Copy the SVG source code (${modKey}+Enter)`
     : `Copy the PNG (${modKey}+Enter)`;
 }
 
