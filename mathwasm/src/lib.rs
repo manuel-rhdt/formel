@@ -14,6 +14,46 @@ use math_render::standalone::StyleOptions;
 use math_render::svg_renderer;
 use wasm_bindgen::prelude::*;
 
+/// The result of [`MathRenderer::render`]: the SVG and where the baseline is in it.
+///
+/// All lengths are in font design units (see [`MathRenderer::units_per_em`]) and describe the
+/// SVG's `viewBox`, margin included. Dividing by `units_per_em` gives em of the font, which is
+/// what you need to size an inline image next to text and align it on the baseline.
+#[wasm_bindgen]
+pub struct Rendering {
+    svg: String,
+    width: f32,
+    height: f32,
+    baseline: f32,
+}
+
+#[wasm_bindgen]
+impl Rendering {
+    /// The SVG document.
+    #[wasm_bindgen(getter)]
+    pub fn svg(&self) -> String {
+        self.svg.clone()
+    }
+
+    /// Width of the SVG's `viewBox`.
+    #[wasm_bindgen(getter)]
+    pub fn width(&self) -> f32 {
+        self.width
+    }
+
+    /// Height of the SVG's `viewBox`.
+    #[wasm_bindgen(getter)]
+    pub fn height(&self) -> f32 {
+        self.height
+    }
+
+    /// Distance from the top of the SVG's `viewBox` to the formula's alphabetic baseline.
+    #[wasm_bindgen(getter)]
+    pub fn baseline(&self) -> f32 {
+        self.baseline
+    }
+}
+
 /// A math font that can render MathML to SVG.
 ///
 /// The font bytes are copied once on construction and reused for every call.
@@ -44,17 +84,25 @@ impl MathRenderer {
     /// Renders a MathML string (a `<math>` element or a fragment with one root) to an SVG
     /// string. The SVG is sized in font design units, so scale it with CSS (`height: 2em`).
     pub fn render_svg(&self, mathml: &str) -> Result<String, JsError> {
-        self.render(mathml, false)
+        Ok(self.render_inner(mathml, false)?.svg)
     }
 
     /// Like [`render_svg`](Self::render_svg) but also outlines the box of every element.
     pub fn render_svg_debug(&self, mathml: &str) -> Result<String, JsError> {
-        self.render(mathml, true)
+        Ok(self.render_inner(mathml, true)?.svg)
+    }
+
+    /// Renders MathML to SVG together with its size and baseline position.
+    ///
+    /// With `debug` set, the box of every element is outlined. Call `free()` on the result
+    /// after reading it.
+    pub fn render(&self, mathml: &str, debug: bool) -> Result<Rendering, JsError> {
+        self.render_inner(mathml, debug)
     }
 }
 
 impl MathRenderer {
-    fn render(&self, mathml: &str, debug: bool) -> Result<String, JsError> {
+    fn render_inner(&self, mathml: &str, debug: bool) -> Result<Rendering, JsError> {
         use math_render::host::MathFont;
 
         let document = mathmlparser::parse(mathml.as_bytes())
@@ -74,13 +122,22 @@ impl MathRenderer {
             show_logical_bounds: debug,
             ..Default::default()
         };
-        Ok(svg_renderer::render_to_string(
+        let root = document.root().expect("checked above");
+        let root_layout = &typeset.layouts[&root];
+        let margin = svg_renderer::MARGIN;
+        let svg = svg_renderer::render_to_string(
             &document,
             &typeset.layouts,
             self.shaper.face(),
             units_per_em,
             flags,
-        ))
+        );
+        Ok(Rendering {
+            svg,
+            width: root_layout.size.width + 2.0 * margin,
+            height: root_layout.size.height + 2.0 * margin,
+            baseline: root_layout.baseline + margin,
+        })
     }
 }
 
@@ -116,12 +173,28 @@ mod tests {
             let font = std::fs::read(&path).unwrap();
             let renderer = MathRenderer::new(&font).unwrap_or_else(|_| panic!("{name}: no MATH table"));
             let svg = convert_latex(r"\sum_{i=0}^n \frac{x_i}{\sqrt{2}} \left(a+b\right)", true)
-                .and_then(|m| renderer.render(&m, false).map_err(|_| "render failed".into()))
+                .and_then(|m| renderer.render_svg(&m).map_err(|_| "render failed".to_string()))
                 .unwrap_or_else(|e| panic!("{name}: {e}"));
             assert!(svg.contains("<path"), "{name}");
             count += 1;
         }
         assert!(count >= 5, "expected the demo fonts, found {count}");
+    }
+
+    #[test]
+    fn rendering_reports_size_and_baseline() {
+        let r = renderer();
+        let result = r
+            .render("<math><mfrac><mi>x</mi><mn>2</mn></mfrac></math>", false)
+            .unwrap_or_else(|_| panic!());
+        let svg = result.svg();
+        let (w, h) = (result.width(), result.height());
+        assert!(svg.contains(&format!("{} {}", w, h)), "viewBox should match: {svg}");
+        // the baseline is inside the box, and a fraction has stuff below it
+        assert!(result.baseline() > 0.0 && result.baseline() < h);
+        // a lone `x` sits on the baseline, so there is hardly anything below it
+        let x = r.render("<math><mi>x</mi></math>", false).unwrap_or_else(|_| panic!());
+        assert!(x.height() - x.baseline() < 0.3 * r.units_per_em() as f32);
     }
 
     #[test]

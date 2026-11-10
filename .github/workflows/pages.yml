@@ -35,6 +35,9 @@ jobs:
       - name: Run tests
         run: cargo test --workspace --exclude mathimg
 
+      - name: Test the demo's JavaScript helpers
+        run: node --test web/test/export.test.mjs
+
       - name: Build the demo
         run: web/build.sh
 

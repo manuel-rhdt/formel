@@ -13,6 +13,9 @@ use std::fmt::Write;
 use rustybuzz::ttf_parser::{GlyphId, OutlineBuilder};
 use rustybuzz::Face;
 
+/// Space added around the layout on every side, in px.
+pub const MARGIN: f32 = 10.0;
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Flags {
     /// Fill the boxes of token elements.
@@ -60,10 +63,10 @@ fn build_document(
     svg_document.assign(
         "viewBox",
         (
-            -10.0,
-            -10.0,
-            root_layout.size.width + 20.0,
-            root_layout.size.height + 20.0,
+            -MARGIN,
+            -MARGIN,
+            root_layout.size.width + 2.0 * MARGIN,
+            root_layout.size.height + 2.0 * MARGIN,
         ),
     );
 

@@ -8,27 +8,36 @@
   :root { color-scheme: light dark; --gap: 1rem; --border: color-mix(in srgb, CanvasText 30%, transparent); }
   body { font: 16px/1.5 system-ui, sans-serif; max-width: 60rem; margin: 0 auto; padding: var(--gap); }
   h1 { font-size: 1.4rem; margin-bottom: .25rem; }
-  textarea { width: 100%; height: 12rem; font: 14px/1.4 ui-monospace, monospace; box-sizing: border-box; }
-  .row { display: flex; gap: .5rem var(--gap); flex-wrap: wrap; align-items: center; margin: var(--gap) 0; }
+  textarea { width: 100%; box-sizing: border-box; font: 14px/1.4 ui-monospace, monospace; }
+  #src { height: 11rem; }
+  .row { display: flex; gap: .5rem var(--gap); flex-wrap: wrap; align-items: center; margin: .75rem 0; }
   .row label { display: inline-flex; gap: .4rem; align-items: center; }
+  .group { display: inline-flex; gap: .25rem; }
   button, select { font: inherit; }
-  #out { padding: var(--gap); border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; min-height: 4rem; }
+  input[type=color] { width: 2.4rem; height: 2rem; padding: 0; }
+  #out { padding: var(--gap); border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; min-height: 4rem; cursor: grab; }
   #out svg { height: var(--size, 3em); width: auto; display: block; }
-  /* the SVG hard-codes black; follow the page colors instead (the download keeps black) */
-  #out svg [fill="black"] { fill: currentColor; }
-  #out svg [stroke="black"] { stroke: currentColor; }
+  /* checkerboard: the background is transparent */
+  #out.transparent {
+    background-color: #e4e4e4;
+    background-image: linear-gradient(45deg, #cfcfcf 25%, transparent 25%, transparent 75%, #cfcfcf 75%),
+                      linear-gradient(45deg, #cfcfcf 25%, transparent 25%, transparent 75%, #cfcfcf 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
+  }
+  .chip { display: inline-block; padding: .15rem .6rem; border: 1px dashed var(--border); border-radius: 999px; cursor: grab; user-select: none; font-size: .9rem; }
   #status { color: GrayText; }
   #status.error { color: crimson; }
   details { margin: var(--gap) 0; }
-  #mathml { max-height: 14rem; overflow: auto; background: color-mix(in srgb, CanvasText 6%, transparent);
-            padding: .5rem; border-radius: 4px; font: 13px/1.4 ui-monospace, monospace; white-space: pre-wrap; }
-  .group { display: inline-flex; gap: .25rem; }
+  pre, #snippet { max-height: 14rem; overflow: auto; background: color-mix(in srgb, CanvasText 6%, transparent);
+                  padding: .5rem; border-radius: 4px; font: 13px/1.4 ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; }
+  #snippet { height: 7rem; word-break: break-all; }
   .hint { color: GrayText; font-size: .9rem; }
 </style>
 </head>
 <body>
 <h1>math-render in the browser</h1>
-<p class="hint">LaTeX or MathML in, SVG out. Laid out by Rust compiled to WebAssembly, using the font's OpenType MATH table.</p>
+<p class="hint">LaTeX or MathML in, SVG or PNG out. Laid out by Rust compiled to WebAssembly, using the font's OpenType MATH table.</p>
 
 <div class="row">
   <label>Input:
@@ -47,21 +56,54 @@
     <select id="font"></select>
   </label>
   <input id="fontfile" type="file" accept=".otf,.ttf" hidden>
-  <label>Size: <input id="size" type="range" min="1" max="8" step="0.25" value="3"></label>
+  <label>Text: <input id="fg" type="color" value="#000000"></label>
+  <label>Background: <input id="bg" type="color" value="#ffffff" disabled></label>
+  <label><input id="transparent" type="checkbox" checked> transparent</label>
+  <label>Preview size: <input id="size" type="range" min="1" max="8" step="0.25" value="3"></label>
   <label><input id="debug" type="checkbox"> show boxes</label>
-  <button id="download" type="button" disabled>Download SVG</button>
+</div>
+
+<div class="row">
   <span class="group">
-    <button id="downloadpng" type="button" disabled>Download PNG</button>
-    <select id="pngscale" aria-label="PNG resolution">
-      <option value="1">1× (48 px/em)</option>
-      <option value="2" selected>2× (96 px/em)</option>
-      <option value="4">4× (192 px/em)</option>
-    </select>
+    <button id="copypng" type="button" disabled>Copy PNG</button>
+    <button id="copysvg" type="button" disabled>Copy SVG</button>
   </span>
+  <span class="group">
+    <button id="download" type="button" disabled>Download SVG</button>
+    <button id="downloadpng" type="button" disabled>Download PNG</button>
+  </span>
+  <select id="pngscale" aria-label="PNG resolution">
+    <option value="1">PNG 1× (48 px/em)</option>
+    <option value="2" selected>PNG 2× (96 px/em)</option>
+    <option value="4">PNG 4× (192 px/em)</option>
+  </select>
+  <button id="copylink" type="button">Copy link</button>
   <span id="status" role="status">loading…</span>
 </div>
 
-<div id="out" aria-live="polite"></div>
+<div id="out" class="transparent" draggable="true" aria-live="polite" title="Drag this into a document"></div>
+<div class="row">
+  <span class="hint">Drag into another app:</span>
+  <span id="dragsvg" class="chip" draggable="true">⠿ SVG (vector)</span>
+  <span id="dragpng" class="chip" draggable="true">⠿ PNG</span>
+  <span class="hint">(dragging out files works in Chromium browsers)</span>
+</div>
+
+<details id="embed" open>
+  <summary>Embed in a web page or Markdown</summary>
+  <div class="row">
+    <label>Snippet:
+      <select id="snippetkind">
+        <option value="img">HTML &lt;img&gt; (data URI, aligned to the text baseline)</option>
+        <option value="svg">Inline &lt;svg&gt;</option>
+        <option value="markdownFile">Markdown image (save the SVG as formula.svg)</option>
+        <option value="markdownData">Markdown image (data URI)</option>
+      </select>
+    </label>
+    <button id="copysnippet" type="button">Copy snippet</button>
+  </div>
+  <textarea id="snippet" readonly spellcheck="false" aria-label="Embed snippet"></textarea>
+</details>
 
 <details id="mathmldetails">
   <summary>Generated MathML</summary>
@@ -70,6 +112,7 @@
 
 <script type="module">
 import init, { MathRenderer, latex_to_mathml } from "./pkg/mathwasm.js";
+import { styleSvg, sizeSvg, snippets, encodeState, decodeState, oneLine } from "./export.js";
 
 const FONTS = [
   { file: "latinmodern-math.otf", name: "Latin Modern Math" },
@@ -100,18 +143,87 @@ const saved = { latex: EXAMPLES.latex, mathml: EXAMPLES.mathml };
 const $ = (id) => document.getElementById(id);
 const renderers = new Map();   // font file -> MathRenderer
 let renderer = null;           // the one in use
+let fontFile = FONTS[0].file;  // CUSTOM for an uploaded font
 let fontName = "";
-let currentSvg = "";
+let rendering = null;          // { svg, width, height, baseline, mathml, alt, display }
 let loadToken = 0;
+let urls = { svg: null, png: null };   // blob: URLs used for dragging files out
+let exportToken = 0;
 
 function status(msg, error = false) {
   $("status").textContent = msg;
   $("status").classList.toggle("error", error);
 }
 
+// ---------- state in the URL ----------
+
+function currentState() {
+  return {
+    mode: $("mode").value,
+    source: $("src").value,
+    font: fontFile,
+    display: $("display").checked,
+    fg: $("fg").value,
+    bg: $("transparent").checked ? null : $("bg").value,
+    size: Number($("size").value),
+    debug: $("debug").checked,
+  };
+}
+
+let hashTimer = 0;
+function scheduleHashUpdate() {
+  clearTimeout(hashTimer);
+  hashTimer = setTimeout(() => {
+    try {
+      history.replaceState(null, "", `#${encodeState(currentState())}`);
+    } catch { /* e.g. sandboxed iframes */ }
+  }, 300);
+}
+
+function applyState(state, hasSource) {
+  $("mode").value = state.mode;
+  if (hasSource) saved[state.mode] = state.source;
+  $("display").checked = state.display;
+  $("fg").value = state.fg;
+  $("transparent").checked = state.bg === null;
+  if (state.bg) $("bg").value = state.bg;
+  $("bg").disabled = state.bg === null;
+  $("size").value = state.size;
+  document.documentElement.style.setProperty("--size", `${state.size}em`);
+  $("debug").checked = state.debug;
+  fontFile = state.font;
+  $("font").value = state.font;
+}
+
+// ---------- rendering ----------
+
 function toMathML(source) {
   if ($("mode").value === "mathml") return source;
   return latex_to_mathml(source, $("display").checked);
+}
+
+/** Alternative text: the LaTeX source, or the text content of the MathML. */
+function altText(source, mathml) {
+  if ($("mode").value === "latex") return oneLine(source);
+  try {
+    const text = new DOMParser().parseFromString(mathml, "text/xml").documentElement.textContent;
+    return oneLine(text) || "formula";
+  } catch {
+    return "formula";
+  }
+}
+
+function isDisplay(source, mathml) {
+  return $("mode").value === "latex" ? $("display").checked : /display\s*=\s*["']block["']/.test(mathml);
+}
+
+function colors() {
+  return { fg: $("fg").value, bg: $("transparent").checked ? null : $("bg").value };
+}
+
+/** The SVG with the chosen colors and alt text. */
+function styled() {
+  return styleSvg(rendering.svg, { ...colors(), alt: rendering.alt });
 }
 
 function render() {
@@ -120,18 +232,54 @@ function render() {
   try {
     const t0 = performance.now();
     const mathml = toMathML(source);
+    const r = renderer.render(mathml, $("debug").checked);
+    rendering = {
+      svg: r.svg, width: r.width, height: r.height, baseline: r.baseline,
+      mathml, alt: altText(source, mathml), display: isDisplay(source, mathml),
+    };
+    r.free();
     $("mathml").textContent = mathml;
-    currentSvg = $("debug").checked ? renderer.render_svg_debug(mathml) : renderer.render_svg(mathml);
-    $("out").innerHTML = currentSvg;
-    $("download").disabled = false;
-    $("downloadpng").disabled = false;
     status(`${fontName} · rendered in ${(performance.now() - t0).toFixed(1)} ms`);
+    refreshOutput();
   } catch (e) {
-    $("download").disabled = true;
-    $("downloadpng").disabled = true;
+    rendering = null;
+    setExportEnabled(false);
     status(String(e?.message ?? e), true);
   }
+  scheduleHashUpdate();
 }
+
+function setExportEnabled(on) {
+  for (const id of ["copypng", "copysvg", "download", "downloadpng"]) $(id).disabled = !on;
+}
+
+/** Everything that depends on the rendering or the colors. */
+function refreshOutput() {
+  if (!rendering) return;
+  const svg = styled();
+  $("out").innerHTML = svg;
+  $("out").classList.toggle("transparent", !colors().bg);
+  $("out").style.backgroundColor = colors().bg ?? "";
+  setExportEnabled(true);
+  updateSnippet();
+  scheduleDragFiles();
+}
+
+function updateSnippet() {
+  if (!rendering) return;
+  const s = snippets({
+    svg: styled(),
+    alt: rendering.alt,
+    display: rendering.display,
+    width: rendering.width,
+    height: rendering.height,
+    baseline: rendering.baseline,
+    unitsPerEm: renderer.units_per_em(),
+  });
+  $("snippet").value = s[$("snippetkind").value];
+}
+
+// ---------- fonts ----------
 
 async function selectFont(file) {
   const token = ++loadToken;
@@ -146,6 +294,7 @@ async function selectFont(file) {
     }
     if (token !== loadToken) return;           // a newer selection won
     renderer = r;
+    fontFile = file;
     fontName = FONTS.find((f) => f.file === file)?.name ?? file;
     render();
   } catch (e) {
@@ -157,6 +306,7 @@ function setCustomFont(bytes, name) {
   ++loadToken;
   try {
     renderer = new MathRenderer(new Uint8Array(bytes));
+    fontFile = CUSTOM;
     fontName = name;
     render();
   } catch (e) {
@@ -164,45 +314,24 @@ function setCustomFont(bytes, name) {
   }
 }
 
-// Wraps the rendered SVG so it can be used on its own: an absolute size and the XML
-// declaration, instead of the unsized viewBox-only SVG that scales with the page.
-// `pxPerEm` sets the scale; the SVG is in font units.
-function standaloneSvg(pxPerEm = 48) {
-  const m = currentSvg.match(/viewBox="([^"]+)"/);
-  if (!m) return { svg: currentSvg, width: 0, height: 0 };
-  const [, , w, h] = m[1].split(/\s+/).map(Number);
-  const scale = pxPerEm / renderer.units_per_em();
-  const width = w * scale, height = h * scale;
-  const sized = currentSvg.replace(
-    "<svg ",
-    `<svg width="${width.toFixed(2)}" height="${height.toFixed(2)}" `);
-  return { svg: `<?xml version="1.0" encoding="UTF-8"?>\n${sized}\n`, width, height };
+// ---------- export ----------
+
+function pxPerEm() {
+  return 48 * Number($("pngscale").value);
 }
 
-function saveBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+/** The SVG with an absolute size, for use outside of this page. */
+function sized(pxPerEmValue = 48) {
+  return sizeSvg(styled(), pxPerEmValue, renderer.units_per_em());
 }
 
-function download() {
-  const { svg } = standaloneSvg();
-  saveBlob(new Blob([svg], { type: "image/svg+xml" }), "formula.svg");
-}
-
-// Rasterizes the SVG with the browser: draw it onto a canvas, then export the canvas.
-// The background stays transparent.
-async function downloadPng() {
+async function pngBlob(pxPerEmValue) {
   const MAX_SIDE = 16000;                       // browsers refuse larger canvases
-  let pxPerEm = 48 * Number($("pngscale").value);
-  let { svg, width, height } = standaloneSvg(pxPerEm);
+  let { svg, width, height } = sized(pxPerEmValue);
   if (Math.max(width, height) > MAX_SIDE) {
-    pxPerEm *= MAX_SIDE / Math.max(width, height);
-    ({ svg, width, height } = standaloneSvg(pxPerEm));
+    ({ svg, width, height } = sized(pxPerEmValue * MAX_SIDE / Math.max(width, height)));
   }
+  // The browser rasterizes the SVG: draw it onto a canvas, then export the canvas.
   const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
   try {
     const image = new Image();
@@ -215,13 +344,96 @@ async function downloadPng() {
     canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
     const png = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
     if (!png) throw new Error("the browser could not encode the PNG");
-    saveBlob(png, "formula.png");
-  } catch (e) {
-    status(`PNG export failed: ${e?.message ?? e}`, true);
+    return png;
   } finally {
     URL.revokeObjectURL(url);
   }
 }
+
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function guarded(what, action) {
+  try {
+    await action();
+  } catch (e) {
+    status(`${what} failed: ${e?.message ?? e}`, true);
+  }
+}
+
+const copyPng = () => guarded("Copy PNG", async () => {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+    throw new Error("the clipboard API is not available (it needs https or localhost)");
+  }
+  // Passing the promise (not the blob) keeps Safari happy: it must start inside the click.
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob(pxPerEm()) })]);
+  status("Copied PNG to the clipboard");
+});
+
+const copySvg = () => guarded("Copy SVG", async () => {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+    throw new Error("the clipboard API is not available (it needs https or localhost)");
+  }
+  const { svg } = sized();
+  const items = { "text/plain": new Blob([svg], { type: "text/plain" }) };
+  // Where the browser can put real SVG on the clipboard, do that too, so that apps can paste
+  // it as a vector image. Everywhere else the SVG source goes on as text.
+  if (ClipboardItem.supports?.("image/svg+xml")) {
+    items["image/svg+xml"] = new Blob([svg], { type: "image/svg+xml" });
+  }
+  await navigator.clipboard.write([new ClipboardItem(items)]);
+  status(items["image/svg+xml"] ? "Copied SVG (image and source)" : "Copied SVG source as text");
+});
+
+const downloadSvg = () => saveBlob(new Blob([sized().svg], { type: "image/svg+xml" }), "formula.svg");
+const downloadPng = () => guarded("PNG export", async () => saveBlob(await pngBlob(pxPerEm()), "formula.png"));
+
+// ---------- dragging files out ----------
+
+/**
+ * Keeps blob: URLs ready, because `dragstart` handlers must provide data synchronously. The
+ * PNG is rasterized, so wait until the input has settled.
+ */
+let dragTimer = 0;
+function scheduleDragFiles() {
+  clearTimeout(dragTimer);
+  dragTimer = setTimeout(prepareDragFiles, 250);
+}
+
+function prepareDragFiles() {
+  if (!rendering) return;
+  const token = ++exportToken;
+  for (const key of ["svg", "png"]) {
+    if (urls[key]) URL.revokeObjectURL(urls[key]);
+    urls[key] = null;
+  }
+  urls.svg = URL.createObjectURL(new Blob([sized().svg], { type: "image/svg+xml" }));
+  pngBlob(pxPerEm()).then((png) => {
+    if (token === exportToken) urls.png = URL.createObjectURL(png);
+  }).catch(() => { /* dragging a PNG is simply unavailable */ });
+}
+
+function onDragStart(kind) {
+  return (e) => {
+    if (!rendering) return e.preventDefault();
+    const url = urls[kind];
+    e.dataTransfer.effectAllowed = "copy";
+    if (url) {
+      // Chromium turns this into a file when dropped on the desktop or into other apps.
+      const [type, name] = kind === "svg" ? ["image/svg+xml", "formula.svg"] : ["image/png", "formula.png"];
+      e.dataTransfer.setData("DownloadURL", `${type}:${name}:${url}`);
+    }
+    e.dataTransfer.setData("text/plain", kind === "svg" ? sized().svg : (rendering.alt || "formula"));
+  };
+}
+
+// ---------- wiring ----------
 
 function updateMode(previous) {
   const mode = $("mode").value;
@@ -231,7 +443,6 @@ function updateMode(previous) {
   $("mathmldetails").hidden = mode !== "latex";
 }
 
-// --- wiring ---
 for (const f of FONTS) $("font").add(new Option(f.name, f.file));
 const uploadOption = new Option("Upload font file…", CUSTOM);
 $("font").add(uploadOption);
@@ -257,7 +468,6 @@ $("fontfile").addEventListener("change", async (e) => {
   }
   e.target.value = "";
 });
-
 // closing the file dialog without a choice fires `cancel` (and no `change`) in current browsers
 $("fontfile").addEventListener("cancel", () => { $("font").value = lastFont; });
 
@@ -266,14 +476,47 @@ $("mode").addEventListener("change", () => { updateMode(currentMode); currentMod
 $("src").addEventListener("input", render);
 $("display").addEventListener("change", render);
 $("debug").addEventListener("change", render);
-$("download").addEventListener("click", download);
+$("fg").addEventListener("input", () => { refreshOutput(); scheduleHashUpdate(); });
+$("bg").addEventListener("input", () => { refreshOutput(); scheduleHashUpdate(); });
+$("transparent").addEventListener("change", () => {
+  $("bg").disabled = $("transparent").checked;
+  refreshOutput();
+  scheduleHashUpdate();
+});
+$("size").addEventListener("input", (e) => {
+  document.documentElement.style.setProperty("--size", `${e.target.value}em`);
+  scheduleHashUpdate();
+});
+$("pngscale").addEventListener("change", scheduleDragFiles);
+$("snippetkind").addEventListener("change", updateSnippet);
+
+$("copypng").addEventListener("click", copyPng);
+$("copysvg").addEventListener("click", copySvg);
+$("download").addEventListener("click", downloadSvg);
 $("downloadpng").addEventListener("click", downloadPng);
-$("size").addEventListener("input", (e) =>
-  document.documentElement.style.setProperty("--size", `${e.target.value}em`));
+$("copylink").addEventListener("click", () => guarded("Copy link", async () => {
+  history.replaceState(null, "", `#${encodeState(currentState())}`);
+  await navigator.clipboard.writeText(location.href);
+  status("Copied link");
+}));
+$("copysnippet").addEventListener("click", () => guarded("Copy snippet", async () => {
+  await navigator.clipboard.writeText($("snippet").value);
+  status("Copied snippet");
+}));
+
+$("out").addEventListener("dragstart", onDragStart("svg"));
+$("dragsvg").addEventListener("dragstart", onDragStart("svg"));
+$("dragpng").addEventListener("dragstart", onDragStart("png"));
+
+// ---------- start ----------
 
 await init();
+const { state, hasSource } = decodeState(location.hash, FONTS.map((f) => f.file));
+applyState(state, hasSource);
+currentMode = $("mode").value;
+lastFont = state.font;
 updateMode(null);
-selectFont(FONTS[0].file);
+selectFont(state.font);
 </script>
 </body>
 </html>
