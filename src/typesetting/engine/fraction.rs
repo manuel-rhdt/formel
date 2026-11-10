@@ -179,7 +179,6 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                     glyph.glyph_code,
                     false,
                     font.units(needed_surd_height),
-                    false,
                     options,
                 );
                 LBox::glyphs(font.run(node, parts))

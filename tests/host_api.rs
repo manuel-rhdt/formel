@@ -1209,3 +1209,127 @@ fn alignment_groups_work_inside_padded_cells() {
     assert_close(cell_width(rows[0]), 40.0 + 10.0);
     assert_close(cell_width(rows[1]), 40.0 + 10.0);
 }
+
+use MathElement::Mover;
+
+/// An `<mover>` of `base` with an accent `<mo>` of the given text. Returns the mover, the
+/// `mo` and the root.
+fn accent_over(doc: &mut Doc, base: Id, accent: &str, is_accent: bool) -> (Id, Id) {
+    let mo = doc.tok(Mo, accent);
+    let mover = doc.el(Mover, &[base, mo]);
+    if is_accent {
+        doc.set_attr(mover, "accent", "true");
+    }
+    let root = doc.el(Math, &[mover]);
+    doc.run(root);
+    (mover, mo)
+}
+
+#[test]
+fn ascii_accents_are_replaced_by_combining_accents() {
+    for plain in ["^", "~", "\u{2192}", "\u{2190}"] {
+        let drawn = |is_accent: bool| {
+            let mut doc = Doc::new();
+            let base = doc.tok(Mi, "x");
+            let (_, mo) = accent_over(&mut doc, base, plain, is_accent);
+            doc.glyph_ids(mo)
+        };
+        // without `accent`, the character is an ordinary operator and is left alone
+        assert_ne!(drawn(true), drawn(false), "{plain:?} is replaced in accent position");
+    }
+    // `^` is stretchy like U+0302 and is drawn exactly like it
+    let drawn = |text: &str| {
+        let mut doc = Doc::new();
+        let base = doc.tok(Mi, "x");
+        let (_, mo) = accent_over(&mut doc, base, text, true);
+        doc.glyph_ids(mo)
+    };
+    assert_eq!(drawn("^"), drawn("\u{302}"));
+}
+
+#[test]
+fn accents_under_a_base_are_not_replaced() {
+    let mut doc = Doc::new();
+    let base = doc.tok(Mi, "x");
+    let mo = doc.tok(Mo, "~");
+    let munder = doc.el(MathElement::Munder, &[base, mo]);
+    doc.set_attr(munder, "accentunder", "true");
+    let root = doc.el(Math, &[munder]);
+    doc.run(root);
+    let mut other = Doc::new();
+    let base = other.tok(Mi, "x");
+    let mo2 = other.tok(Mo, "\u{303}");
+    let munder = other.el(MathElement::Munder, &[base, mo2]);
+    other.set_attr(munder, "accentunder", "true");
+    let root = other.el(Math, &[munder]);
+    other.run(root);
+    assert_ne!(doc.glyph_ids(mo), other.glyph_ids(mo2));
+}
+
+#[test]
+fn wide_accents_stretch_to_the_width_of_the_base() {
+    let mut doc = Doc::new();
+    let letters: Vec<Id> = "abcdef".chars().map(|c| doc.tok(Mi, &c.to_string())).collect();
+    let base = doc.el(Mrow, &letters);
+    let (mover, hat) = accent_over(&mut doc, base, "^", true);
+    let (base_width, hat_width) = (doc.layout(base).size.width, doc.layout(hat).size.width);
+    // wider than for a single letter; the accent doesn't make the element wider
+    assert!(hat_width > 0.6 * base_width, "{hat_width} is most of {base_width}");
+    assert_close(doc.layout(mover).size.width, base_width);
+
+    let mut narrow = Doc::new();
+    let x = narrow.tok(Mi, "x");
+    let (_, small_hat) = accent_over(&mut narrow, x, "^", true);
+    assert!(narrow.layout(small_hat).size.width < hat_width);
+}
+
+/// MathML Core 5.3.2: a stretchy glyph is the first size variant that is at least as large as
+/// the target, so a wide accent is not narrower than a base it can cover.
+#[test]
+fn stretching_picks_the_first_variant_that_is_large_enough() {
+    let mut doc = Doc::new();
+    let h = doc.tok(Mi, "H");
+    let (_, hat) = accent_over(&mut doc, h, "^", true);
+    let base_width = doc.layout(h).size.width;
+    let hat_width = doc.layout(hat).size.width;
+    assert!(hat_width >= base_width, "{hat_width} covers {base_width}");
+    // but it is the smallest such variant: not wider than twice the base
+    assert!(hat_width < 2.0 * base_width);
+}
+
+/// Row `sin <op> <next>`; returns (sin, next, root) after layout.
+fn function_row(op: &str, next: impl FnOnce(&mut Doc) -> Id) -> (Doc, Id, Id) {
+    let mut doc = Doc::new();
+    let sin = doc.tok(Mi, "sin");
+    let op = doc.tok(Mo, op);
+    let next = next(&mut doc);
+    let row = doc.el(Mrow, &[sin, op, next]);
+    let root = doc.el(Math, &[row]);
+    doc.run(root);
+    (doc, sin, next)
+}
+
+fn gap(doc: &Doc, left: Id, right: Id) -> f32 {
+    let root = doc.nodes.len() - 1;
+    doc.absolute_rect(root, right).origin.x - doc.absolute_rect(root, left).right()
+}
+
+#[test]
+fn function_application_adds_a_thin_space() {
+    let x = |doc: &mut Doc| doc.tok(Mi, "x");
+    let (apply, sin, a) = function_row("\u{2061}", x);
+    // invisible times is the same invisible character without the space
+    let (times, sin2, b) = function_row("\u{2062}", x);
+    assert_close(gap(&apply, sin, a) - gap(&times, sin2, b), 20.0 * 3.0 / 18.0);
+}
+
+#[test]
+fn function_application_adds_no_space_before_a_fence() {
+    let fenced = |doc: &mut Doc| {
+        let (open, x, close) = (doc.tok(Mo, "("), doc.tok(Mi, "x"), doc.tok(Mo, ")"));
+        doc.el(Mrow, &[open, x, close])
+    };
+    let (apply, sin, a) = function_row("\u{2061}", fenced);
+    let (times, sin2, b) = function_row("\u{2062}", fenced);
+    assert_close(gap(&apply, sin, a), gap(&times, sin2, b));
+}

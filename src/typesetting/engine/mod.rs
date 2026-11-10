@@ -61,8 +61,8 @@ pub(crate) struct StretchSize {
 pub(crate) struct Ctx {
     /// Target size if the node is (or embellishes) a stretchy operator.
     pub stretch: Option<StretchSize>,
-    /// The node is an accent of an `<mover>`/`<munder>`.
-    pub as_accent: bool,
+    /// The node is the accent of an `<mover>` (not of an `<munder>`).
+    pub accent_over: bool,
     /// Use flattened accent glyphs.
     pub flat_accent: bool,
     /// Default operator form, from the node's position among its siblings.
@@ -73,7 +73,7 @@ impl Default for Ctx {
     fn default() -> Self {
         Ctx {
             stretch: None,
-            as_accent: false,
+            accent_over: false,
             flat_accent: false,
             form: Form::Infix,
         }

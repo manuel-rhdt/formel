@@ -1,12 +1,18 @@
 //! Rows (`<mrow>` and mrow-like elements), tokens, operators and spaces.
 
-use super::lbox::LBox;
+use super::lbox::{LBox, ScaledFont};
 use super::operator::OperatorProperties;
 use super::{Box_, Ctx, Engine, StretchSize};
 use crate::host::{
-    Form, MathComputedStyle, MathConstant, MathFont, MathLayoutHost, MathStyle,
+    Form, MathComputedStyle, MathConstant, MathElement, MathFont, MathLayoutHost, MathStyle,
     parse_math_length,
 };
+use crate::mathmlparser::Flags;
+use crate::mathmlparser::operator_dict;
+
+/// The space after a function application, as a fraction of the font size (3/18 em, TeX's
+/// thin space).
+const THIN_SPACE: f32 = 3.0 / 18.0;
 
 impl<'t, T: MathLayoutHost> Engine<'t, T> {
     /// Lays out `children` of `node` horizontally (MathML Core 3.3.1), with operator spacing and
@@ -74,10 +80,20 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let mut row = Vec::with_capacity(children.len());
         for (i, child_box) in boxes.into_iter().enumerate() {
             let mut child_box = child_box.expect("every child was laid out");
-            let (lspace, rspace) = match properties[i] {
+            let (lspace, mut rspace) = match properties[i] {
                 Some(p) if self.applies_operator_spacing(children[i]) => (p.lspace, p.rspace),
                 _ => (0.0, 0.0),
             };
+            if self.is_function_application(children[i])
+                && self.applies_operator_spacing(children[i])
+                && children.get(i + 1).is_some_and(|&next| !self.starts_with_fence(next))
+            {
+                // `sin x`: a thin space after the function, but none before an opening fence
+                // as in `sin(x)`. An explicit `rspace` wins.
+                if self.tree.operator_overrides(children[i]).rspace.is_none() {
+                    rspace = rspace.max(THIN_SPACE * self.tree.style(children[i]).font_size);
+                }
+            }
             cursor += lspace;
             // apply italic correction if the current box is upright
             if child_box.metrics.italic_correction == 0.0 {
@@ -96,6 +112,35 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let mut row_box = LBox::boxes(row);
         row_box.metrics.advance = row_box.metrics.advance.max(cursor);
         row_box
+    }
+
+    /// Whether `node` is the invisible function application operator U+2061.
+    fn is_function_application(&self, node: T::NodeId) -> bool {
+        self.element(node) == Some(MathElement::Mo)
+            && self.tree.text(node).is_some_and(|text| text == "\u{2061}")
+    }
+
+    /// Whether the first thing drawn by `node` is an opening fence, looking through rows and
+    /// similar wrappers.
+    fn starts_with_fence(&self, node: T::NodeId) -> bool {
+        use MathElement::*;
+        match self.element(node) {
+            Some(Mo) => {
+                let mut chars = self.tree.text(node).unwrap_or_default().chars().collect::<Vec<_>>();
+                match (chars.pop(), chars.is_empty()) {
+                    (Some(c), true) => operator_dict::find_entry(c, Form::Prefix).is_some_and(
+                        |entry| entry.form == Form::Prefix && entry.flags.contains(Flags::FENCE),
+                    ),
+                    _ => false,
+                }
+            }
+            Some(Mrow | Mstyle | Mpadded | Mphantom | Semantics) => self
+                .tree
+                .children(node)
+                .find(|&child| !self.is_space_like(child))
+                .is_some_and(|first| self.starts_with_fence(first)),
+            _ => false,
+        }
     }
 
     /// Operators get their lspace/rspace except in scripts (`math-depth` > 0), as in TeX.
@@ -134,6 +179,11 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let properties = self.operator_properties(node, ctx.form);
         let text = self.tree.text(node).unwrap_or_default().into_owned();
         let font = self.font(node, style);
+        let text = if ctx.accent_over {
+            self.accent_text(&font, &text, style, ctx)
+        } else {
+            text
+        };
         let axis_height = font.constant(MathConstant::AxisHeight);
 
         match ctx.stretch {
@@ -184,6 +234,34 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         }
     }
 
+    /// The text to draw for an accent over a base. Fonts draw ASCII characters and arrows in
+    /// their normal position on the line, not as accents above a base, so `^`, `~` and the arrows
+    /// are replaced by their combining accents, which have the right shapes and the wide
+    /// variants for stretching. Characters the font doesn't have are kept.
+    fn accent_text(
+        &self,
+        font: &ScaledFont<T::Font>,
+        text: &str,
+        style: &MathComputedStyle,
+        ctx: Ctx,
+    ) -> String {
+        let mut chars = text.chars();
+        let replacement = match (chars.next(), chars.next()) {
+            (Some('^' | '\u{2C6}'), None) => '\u{302}', // circumflex
+            (Some('~' | '\u{2DC}'), None) => '\u{303}', // tilde
+            (Some('\u{2192}'), None) => '\u{20D7}',     // right arrow
+            (Some('\u{2190}'), None) => '\u{20D6}',     // left arrow
+            (Some('\u{2194}'), None) => '\u{20E1}',     // left right arrow
+            _ => return text.to_owned(),
+        };
+        let replacement = replacement.to_string();
+        let glyphs = font.font.shape(&replacement, Self::shape_options(style, ctx));
+        match glyphs.as_slice() {
+            [glyph] if glyph.glyph_code != 0 => replacement,
+            _ => text.to_owned(),
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn layout_stretchy(
         &mut self,
@@ -209,7 +287,6 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 base_glyph,
                 true,
                 font.units(needed_width),
-                ctx.as_accent,
                 options,
             );
             return LBox::glyphs(font.run(node, parts));
@@ -220,7 +297,6 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 base_glyph,
                 false,
                 font.units(needed_height),
-                ctx.as_accent,
                 options,
             );
             let stretched = LBox::glyphs(font.run(node, parts));

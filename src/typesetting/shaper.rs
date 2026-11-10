@@ -139,14 +139,18 @@ impl<'a> HarfbuzzShaper<'a> {
         glyph: u32,
         horizontal: bool,
         target_size: i32,
-        as_accent: bool,
         options: ShapeOptions,
     ) -> Stretched {
+        // MathML Core 5.3.2: the base glyph if it is big enough, else the first variant that
+        // is, else an assembly, else the last thing that was tried (the largest variant).
         try_base_glyph(self, glyph, horizontal, target_size, options)
-            .or_else(|| try_variant(self, glyph, horizontal, target_size, as_accent, options))
+            .or_else(|| try_variant(self, glyph, horizontal, target_size, options))
             .map(Stretched::Single)
             .or_else(|| {
                 try_assembly(self, glyph, horizontal, target_size, options).map(Stretched::Assembly)
+            })
+            .or_else(|| {
+                largest_variant(self, glyph, horizontal, options).map(Stretched::Single)
             })
             .unwrap_or_else(|| Stretched::Single(self.glyphs_from_index(glyph, options)))
     }
@@ -228,10 +232,9 @@ impl<'a> MathFont for HarfbuzzShaper<'a> {
         glyph: GlyphCode,
         horizontal: bool,
         target_size: i32,
-        as_accent: bool,
         options: ShapeOptions,
     ) -> Vec<(Vector<i32>, MathGlyph)> {
-        match self.stretch_parts(glyph, horizontal, target_size, as_accent, options) {
+        match self.stretch_parts(glyph, horizontal, target_size, options) {
             Stretched::Single(glyphs) => glyphs
                 .into_iter()
                 .scan(0, |advance, glyph| {
@@ -274,7 +277,7 @@ fn try_base_glyph(
     let glyph = shaper.glyphs_from_index(glyph, options)[0];
 
     let advance = if horizontal {
-        glyph.extents.width
+        glyph.advance_width
     } else {
         -glyph.extents.height()
     };
@@ -336,31 +339,38 @@ impl<'a> Iterator for VariantIterator<'a> {
 
 impl<'a> ExactSizeIterator for VariantIterator<'a> {}
 
+/// The first size variant that is at least `target_size` long.
 fn try_variant(
     shaper: &HarfbuzzShaper,
     glyph: u32,
     horizontal: bool,
     target_size: i32,
-    as_accent: bool,
     options: ShapeOptions,
 ) -> Option<Vec<MathGlyph>> {
-    let iter = VariantIterator {
+    let mut variants = VariantIterator {
         shaper,
         glyph,
         direction: direction(horizontal),
         index: 0,
     };
+    let variant = variants.find(|variant| variant.advance >= target_size)?;
+    Some(shaper.glyphs_from_index(variant.glyph, options))
+}
 
-    let variant = if as_accent {
-        // return the largest variant that is smaller than the target size
-        iter.filter(|&variant| variant.advance <= target_size)
-            .max_by_key(|&variant| variant.advance)
-    } else {
-        // return the smallest variant that is larger than the target size
-        iter.filter(|&variant| variant.advance >= target_size)
-            .min_by_key(|&variant| variant.advance)
-    }?;
-
+/// The last size variant of the glyph, which is the largest one.
+fn largest_variant(
+    shaper: &HarfbuzzShaper,
+    glyph: u32,
+    horizontal: bool,
+    options: ShapeOptions,
+) -> Option<Vec<MathGlyph>> {
+    let variants = VariantIterator {
+        shaper,
+        glyph,
+        direction: direction(horizontal),
+        index: 0,
+    };
+    let variant = variants.last()?;
     Some(shaper.glyphs_from_index(variant.glyph, options))
 }
 

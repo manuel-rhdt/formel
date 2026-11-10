@@ -243,15 +243,15 @@ pub trait MathFont {
     fn is_stretchable(&self, glyph: GlyphCode, horizontal: bool) -> bool;
 
     /// Returns a variant or assembly of `glyph` that covers `target_size` font units in the
-    /// given direction, as glyphs with offsets relative to the first one. For accents
-    /// (`as_accent`), returns the largest variant that does not exceed the target. Falls back
-    /// to the base glyph, so the result is never empty.
+    /// given direction, as glyphs with offsets relative to the first one, following the
+    /// algorithm to shape a stretchy glyph of MathML Core (5.3.2): the base glyph if its advance
+    /// is at least the target, else the first size variant that is, else a glyph assembly, else
+    /// the largest variant. Falls back to the base glyph, so the result is never empty.
     fn stretch(
         &self,
         glyph: GlyphCode,
         horizontal: bool,
         target_size: i32,
-        as_accent: bool,
         options: ShapeOptions,
     ) -> Vec<(Vector<i32>, MathGlyph)>;
 
@@ -283,10 +283,9 @@ macro_rules! forward_math_font {
                 glyph: GlyphCode,
                 horizontal: bool,
                 target_size: i32,
-                as_accent: bool,
                 options: ShapeOptions,
             ) -> Vec<(Vector<i32>, MathGlyph)> {
-                (**self).stretch(glyph, horizontal, target_size, as_accent, options)
+                (**self).stretch(glyph, horizontal, target_size, options)
             }
             fn math_kerning(
                 &self,

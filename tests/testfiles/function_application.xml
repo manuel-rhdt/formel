@@ -1,0 +1,9 @@
+<math display="block">
+  <mi>sin</mi><mi>x</mi><mspace width="2em"/>
+  <mi>sin</mi><mo>&#x2061;</mo><mi>x</mi><mspace width="2em"/>
+  <mi>sin</mi><mo>&#x2061;</mo><mrow><mo>(</mo><mi>x</mi><mo>+</mo><mi>y</mi><mo>)</mo></mrow><mspace width="2em"/>
+  <mi>f</mi><mo>&#x2061;</mo><mrow><mo>(</mo><mi>x</mi><mo>)</mo></mrow><mspace width="2em"/>
+  <mi>lim</mi><mi>x</mi><mspace width="2em"/>
+  <mi>a</mi><mo>&#x2062;</mo><mi>b</mi><mspace width="2em"/>
+  <mi>a</mi><mi>b</mi>
+</math>

@@ -1110,66 +1110,29 @@ pub static DICTIONARY: [_Entry<u8>; 1043] = [
     _Entry { character: '\u{1EEF1}', form: Form::Prefix, lspace: 0, rspace: 0, flags: STRETCHY },
 ];
 
-fn try_entry_at_offset(index: usize, offset: isize, requested_form: Form) -> Option<Entry> {
-    if (offset >= 0 && index < (DICTIONARY.len() - offset as usize)) ||
-       (offset < 0 && index >= (-offset) as usize) {
-        let next_entry = DICTIONARY[(index as isize + offset) as usize];
-        if next_entry == DICTIONARY[index] && next_entry.form == requested_form {
-            Some(next_entry.into())
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
+/// The entry for `character` in `preferred_form`. If the dictionary has none for that form, the
+/// first entry found in the order infix, postfix, prefix (MathML Core 3.2.4.2).
 pub fn find_entry(character: char, preferred_form: Form) -> Option<Entry> {
-    let entry = _Entry {
-        character: character,
+    let probe = _Entry {
+        character,
         ..std::default::Default::default()
     };
-    let (result, index) = match DICTIONARY.binary_search(&entry) {
-        Ok(index) => (DICTIONARY[index], index),
-        Err(_) => return None,
-    };
-    let result: Entry = result.into();
-    if result.form == preferred_form {
-        return Some(result);
+    // the entries of one character are next to each other, in no particular form order
+    let found = DICTIONARY.binary_search(&probe).ok()?;
+    let mut start = found;
+    while start > 0 && DICTIONARY[start - 1].character == character {
+        start -= 1;
     }
-    match (result.form, preferred_form) {
-        (Form::Infix, Form::Prefix) => {
-            try_entry_at_offset(index, 1, preferred_form).or(Some(result))
-        }
-        (Form::Infix, Form::Postfix) => {
-            try_entry_at_offset(index, 1, preferred_form)
-                .or(try_entry_at_offset(index, 2, preferred_form))
-                .or(Some(result))
-        }
-        (Form::Prefix, Form::Infix) => {
-            try_entry_at_offset(index, -1, preferred_form).or(Some(result))
-        }
-        (Form::Prefix, Form::Postfix) => {
-            try_entry_at_offset(index, 1, preferred_form)
-                .or(try_entry_at_offset(index, -1, Form::Infix))
-                .or(Some(result))
-        }
-        (Form::Postfix, Form::Prefix) => {
-            try_entry_at_offset(index, -1, preferred_form)
-                .or(try_entry_at_offset(index, -2, Form::Infix))
-                .or(Some(result))
-        }
-        (Form::Postfix, Form::Infix) => {
-            try_entry_at_offset(index, -1, preferred_form)
-                .or(try_entry_at_offset(index, -2, preferred_form))
-                .or(try_entry_at_offset(index, -1, Form::Prefix))
-                .or(Some(result))
-        }
-        _ => unreachable!(),
+    let mut end = found + 1;
+    while end < DICTIONARY.len() && DICTIONARY[end].character == character {
+        end += 1;
     }
+    let entries = &DICTIONARY[start..end];
+    [preferred_form, Form::Infix, Form::Postfix, Form::Prefix]
+        .iter()
+        .find_map(|&form| entries.iter().find(|entry| entry.form == form))
+        .map(|&entry| entry.into())
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -1181,6 +1144,11 @@ mod tests {
         assert_eq!(find_entry('+', Form::Infix).unwrap().form, Form::Infix);
         assert_eq!(find_entry('+', Form::Prefix).unwrap().form, Form::Prefix);
         assert_eq!(find_entry('+', Form::Postfix).unwrap().form, Form::Infix);
+        // the entries of a character are not sorted by form
+        let hat = find_entry('^', Form::Postfix).unwrap();
+        assert_eq!(hat.form, Form::Postfix);
+        assert!(hat.flags.contains(Flags::STRETCHY));
+        assert_eq!(find_entry('^', Form::Infix).unwrap().form, Form::Infix);
         assert!(find_entry('\u{2211}', Form::Postfix)
                     .unwrap()
                     .flags

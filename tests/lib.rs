@@ -120,3 +120,17 @@ fn table_cells_have_default_padding() {
         },
     );
 }
+
+#[test]
+fn function_application_respects_an_explicit_rspace() {
+    let width = |xml: &str| {
+        let mut width = 0.0;
+        layout_xml(xml, |doc, layout| width = layout(doc.root().unwrap()).size.width);
+        width
+    };
+    let default = width("<mi>sin</mi><mo>&#x2061;</mo><mi>x</mi>");
+    let zero = width(r#"<mi>sin</mi><mo rspace="0">&#x2061;</mo><mi>x</mi>"#);
+    let times = width("<mi>sin</mi><mo>&#x2062;</mo><mi>x</mi>");
+    assert!(default > zero + 1.0);
+    assert!((zero - times).abs() < 1e-2);
+}

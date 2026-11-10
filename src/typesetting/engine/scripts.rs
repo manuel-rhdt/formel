@@ -333,9 +333,13 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
 
         let script_ctx = Ctx::plain(Form::Postfix);
         // (node, context, is accent)
+        let over_ctx = Ctx {
+            accent_over: over_is_accent,
+            ..script_ctx
+        };
         let slots = [
             (Some(base), Self::base_ctx(ctx), false),
-            (over, script_ctx, over_is_accent),
+            (over, over_ctx, over_is_accent),
             (under, script_ctx, under_is_accent),
         ];
         let is_stretchy = |engine: &Self, slot: &(Option<T::NodeId>, Ctx, bool)| {
@@ -353,10 +357,11 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 boxes[i] = slot.0.map(|n| self.layout_node(n, slot.1));
             }
         }
+        // MathML Core 3.4.2.2: the target is the largest inline size of the margin boxes.
         let mut max_width = boxes
             .iter()
             .flatten()
-            .map(|b| b.metrics.ink_width)
+            .map(|b| b.metrics.advance)
             .fold(0.0, f32::max);
         if let Some(stretch) = ctx.stretch {
             max_width = max_width.max(stretch.width);
@@ -367,7 +372,6 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             stretch.width = max_width;
             stretch_ctxs[i] = Ctx {
                 stretch: Some(stretch),
-                as_accent: slot.2,
                 ..slot.1
             };
             if is_stretchy(self, slot) {
