@@ -593,11 +593,10 @@ function showPlaceholder(text) {
 function refreshOutput() {
   if (!rendering) return;
   // the standalone file, as downloaded; the preview's CSS size overrides its width and height
-  setImage("svg", new Blob([sized().svg], { type: "image/svg+xml" }));
+  renderSeq++;
+  setSvgImage(sized().svg);
   $("imgsvg").alt = rendering.alt;
   $("imgpng").alt = rendering.alt;
-  $("imgpng").hidden = true;          // stale until the new PNG is ready
-  images.png.ready = false;
   $("stack").hidden = false;
   $("placeholder").hidden = true;
   $("out").classList.toggle("stale", !valid);
@@ -900,46 +899,72 @@ function updateFormatUi() {
  * its right-click menu work in every browser. Their blob: URLs stay alive while shown, because
  * dragging and "Save Image As" fetch them again.
  */
-const images = { svg: { url: null }, png: { url: null, ready: false } };
+const images = {
+  svg: { url: null },
+  // `seq` says which rendering (formula and colours) the PNG shows; see `renderSeq`
+  png: { url: null, seq: -1 },
+};
+let renderSeq = 0;   // bumped whenever the image content changes; not by the PNG resolution
 
-function setImage(kind, blob) {
+/** Shows `url` in the <img> once it has loaded, then frees the URL it replaces. */
+function showImage(kind, url) {
   const img = $(`img${kind}`);
-  const old = images[kind].url;
-  const url = URL.createObjectURL(blob);
-  images[kind].url = url;
-  img.src = url;   // the old image stays on screen until the new one has loaded
-  if (old) {
-    const release = () => URL.revokeObjectURL(old);
-    img.decode().then(release, release);
-  }
+  return new Promise((resolve, reject) => {
+    // `load` rather than `decode()`: decode() on an image that is display:none is unreliable
+    img.addEventListener("load", resolve, { once: true });
+    img.addEventListener("error", () => reject(new Error(`could not load the ${kind.toUpperCase()}`)), { once: true });
+    img.src = url;   // the old image stays on screen until the new one has loaded
+  }).then(() => {
+    const old = images[kind].url;
+    images[kind].url = url;
+    if (old && old !== url) URL.revokeObjectURL(old);
+  });
 }
 
-/** The PNG is rasterized, so wait until the input has settled. Only needed in PNG mode. */
+function setSvgImage(svg) {
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  showImage("svg", url).catch((e) => console.warn("preview:", e));
+}
+
+/**
+ * Keeps an invisible PNG of the formula over the preview, so that dragging it or using the
+ * right-click menu gives the PNG. The previous PNG stays in place until the next one is ready.
+ * Rasterizing takes a moment, so wait briefly for the input to settle.
+ */
 let pngTimer = 0;
 let pngToken = 0;
 function schedulePng() {
   clearTimeout(pngTimer);
   const token = ++pngToken;
-  images.png.ready = false;
-  $("imgpng").hidden = true;
-  if (format() !== "png" || !valid) return;
+  if (format() !== "png" || !rendering) {
+    $("imgpng").hidden = true;
+    return;
+  }
+  if (images.png.url) $("imgpng").hidden = false;
+  if (!valid) return;
+  const seq = renderSeq;
   pngTimer = setTimeout(async () => {
+    let url = null;
     try {
       const png = await pngBlob(pxPerEm());
       if (token !== pngToken) return;
-      setImage("png", png);
-      await $("imgpng").decode();
-      if (token !== pngToken) return;
-      images.png.ready = true;
-      $("imgpng").hidden = false;
-    } catch { /* dragging falls back to a message */ }
-  }, 250);
+      url = URL.createObjectURL(png);
+      await showImage("png", url);
+      images.png.seq = seq;
+      if (format() === "png") $("imgpng").hidden = false;
+    } catch (e) {
+      if (url && images.png.url !== url) URL.revokeObjectURL(url);
+      console.warn("preparing the PNG failed:", e);
+    }
+  }, 100);
 }
 
 function onDragStart(e) {
   const kind = format();
   const fromPng = e.target.id === "imgpng";
-  if (!valid || (kind === "png" && !fromPng)) {
+  // In PNG mode the drag must come from a PNG of the current formula. Only right after an
+  // edit (about 0.1 s plus the rasterizing) is it not ready yet.
+  if (!valid || (kind === "png" && (!fromPng || images.png.seq !== renderSeq))) {
     e.preventDefault();
     if (valid) toast("The PNG is still being prepared; try again in a moment", true);
     return;
