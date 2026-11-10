@@ -180,6 +180,8 @@
   .about h2 { font: 600 .95rem/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: .02em; text-transform: uppercase; margin: 0 0 .4rem; color: var(--text); }
   .about p { margin: .55rem 0 0; }
 
+  .moduleinfo { margin: .35rem 0 0; color: var(--muted); font-size: .85rem; }
+
   /* drop target for font files */
   body.dropping::after {
     content: "Drop the font file to use it"; position: fixed; inset: .75rem; display: grid; place-items: center;
@@ -208,6 +210,7 @@
     <h1>math-render</h1>
     <p class="tagline">Turn LaTeX or MathML into an SVG or PNG image you can drop into a paper,
       slide deck or website. Everything runs in your browser; nothing is uploaded.</p>
+    <p class="moduleinfo" id="moduleinfo">…</p>
   </div>
   <a class="ghlink" href="https://github.com/manuel-rhdt/mlayout">Source on GitHub ↗</a>
 </header>
@@ -344,20 +347,20 @@
 
 <section class="about" id="about" aria-labelledby="aboutheading">
   <h2 id="aboutheading">About</h2>
-  <p>Typesetting a formula properly has always meant installing a TeX distribution. math-render reads the
-    font’s own OpenType MATH table — the one XeTeX and LuaTeX read — and lays the formula out in the
-    browser, so the quality is there without a TeX installation behind it.</p>
-  <p>What comes out is a file, not a live widget: SVG where vector is wanted, PNG where it is not. That is
-    what lets it go where a JavaScript math library cannot — a slide deck, a Moodle course, a video
-    editor, a PDF, a post — with nothing to install or run at the far end.</p>
-  <p>KaTeX and MathJax are built for a different job: they set math into a web page, so they need
-    JavaScript running in that page. That is a good trade for a blog you control, and no help at all on a
-    slide or a timeline. The price of this approach is that the result is a picture — it does not reflow
-    with the text around it, and a screen reader gets the alt text rather than an expression.</p>
+  <p>Good math typesetting usually means installing a TeX distribution. math-render does it without one.
+    It reads the OpenType MATH table of the font you choose, the same table XeTeX and LuaTeX read, and
+    lays the formula out in your browser.</p>
+  <p>The output is a file. SVG for anything that should stay sharp when you scale it, PNG for the rest.
+    That makes the formula usable where a JavaScript math library cannot go: a slide deck, a Moodle
+    course, a video editor, a PDF, a social post. Nothing has to run where the picture ends up.</p>
+  <p>KaTeX and MathJax assume the destination is a web page you control, since their JavaScript has to be
+    there when the page is read. That works for a blog. It does not work on a slide. The trade here is
+    that the result is a picture, so it does not reflow with the text around it, and a screen reader only
+    gets the alt text.</p>
 </section>
 
 <footer>
-  Layout by Rust compiled to WebAssembly<span id="wasmsize" hidden></span>. Upload any OpenType font with a MATH table via the font menu,
+  Layout by Rust compiled to WebAssembly. Upload any OpenType font with a MATH table via the font menu,
   or drop the file onto the page. Bundled fonts are under the
   <a href="fonts/LICENSES.md">OFL and GUST font licenses</a>.
 </footer>
@@ -1417,28 +1420,7 @@ $("dpi").value = store.get("mathrender.dpi", "300");
 if (!$("dpi").value) $("dpi").value = "300";
 updateFormatUi();
 
-/**
- * Prints the module's size in the footer, measured from the response instead of hard-coded, so it
- * stays true when the build changes. Stays hidden when resource timing does not report the sizes
- * (some browsers withhold them across origins or when the response came from a private cache).
- */
-function showDownloadSize() {
-  const apply = () => {
-    const entry = performance.getEntriesByType("resource").find((r) => r.name.endsWith("mathwasm_bg.wasm"));
-    if (!entry?.decodedBodySize) return;
-    const size = (n) => n >= 1e6
-      ? `${(Math.floor(n / 1e5) / 10).toFixed(1)} MB`
-      : `${Math.round(n / 1e3)} KB`;
-    const sent = entry.encodedBodySize ? ` (${size(entry.encodedBodySize)} compressed)` : "";
-    $("wasmsize").textContent = ` — a ${size(entry.decodedBodySize)} module${sent}`;
-    $("wasmsize").hidden = false;
-  };
-  apply();
-  if ($("wasmsize").hidden) setTimeout(apply, 800);   // the entry can land just after init() resolves
-}
-
 await init();
-showDownloadSize();
 const { state, hasSource } = decodeState(location.hash, FONTS.map((f) => f.file));
 applyState(state, hasSource);
 updateBgUi();
