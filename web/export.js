@@ -9,7 +9,11 @@ export const DEFAULTS = Object.freeze({
   bg: null, // null = transparent
   size: 3,
   debug: false,
+  textSize: 12, // pt: the formula's em matches text of this size
 });
+
+/** Text sizes that may be chosen, in pt. */
+export const TEXT_SIZE_RANGE = Object.freeze({ min: 4, max: 200 });
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
@@ -72,6 +76,81 @@ export function sizeSvg(svg, pxPerEm, unitsPerEm) {
   const height = box.height * scale;
   const sized = svg.replace("<svg ", `<svg width="${width.toFixed(2)}" height="${height.toFixed(2)}" `);
   return { svg: `<?xml version="1.0" encoding="UTF-8"?>\n${sized}\n`, width, height };
+}
+
+/**
+ * The SVG as a standalone file whose width and height are in pt, so that a formula for
+ * `textSize`-pt text is inserted at exactly that size by apps that honor SVG units. pt rather
+ * than px: px is 1/96 in in CSS, but some apps take it as 1/72 in.
+ */
+export function svgInPoints(svg, textSize, unitsPerEm) {
+  const box = viewBox(svg);
+  if (!box) return { svg, widthPt: 0, heightPt: 0 };
+  const scale = textSize / unitsPerEm;
+  const widthPt = box.width * scale;
+  const heightPt = box.height * scale;
+  const sized = svg.replace("<svg ", `<svg width="${widthPt.toFixed(3)}pt" height="${heightPt.toFixed(3)}pt" `);
+  return { svg: `<?xml version="1.0" encoding="UTF-8"?>\n${sized}\n`, widthPt, heightPt };
+}
+
+/** Pixels per em for a PNG of a formula for `textSize`-pt text at `dpi`. */
+export function pixelsPerEm(textSize, dpi) {
+  return (textSize / 72) * dpi;
+}
+
+let crcTable = null;
+function crc32(bytes) {
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      crcTable[n] = c >>> 0;
+    }
+  }
+  let c = 0xffffffff;
+  for (const b of bytes) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+/**
+ * Tags PNG bytes with a resolution (a `pHYs` chunk right after `IHDR`, replacing any existing
+ * one), so that apps which read it insert the image at its intended physical size. Canvas
+ * encoders write no resolution. Returns the input unchanged if it is not a PNG.
+ */
+export function setPngResolution(png, dpi) {
+  const bytes = png instanceof Uint8Array ? png : new Uint8Array(png);
+  const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 33 || SIGNATURE.some((b, i) => bytes[i] !== b)) return bytes;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const type = (at) => String.fromCharCode(...bytes.subarray(at + 4, at + 8));
+  if (type(8) !== "IHDR") return bytes;
+
+  const ppm = Math.round(dpi / 0.0254);   // pixels per metre
+  const chunk = new Uint8Array(21);
+  const cv = new DataView(chunk.buffer);
+  cv.setUint32(0, 9);
+  chunk.set([0x70, 0x48, 0x59, 0x73], 4);   // "pHYs"
+  cv.setUint32(8, ppm);
+  cv.setUint32(12, ppm);
+  chunk[16] = 1;                             // unit: metre
+  cv.setUint32(17, crc32(chunk.subarray(4, 17)));
+
+  // copy the chunks, dropping any existing pHYs and inserting ours after IHDR
+  const parts = [bytes.subarray(0, 8)];
+  let at = 8;
+  while (at + 12 <= bytes.length) {
+    const length = view.getUint32(at);
+    const end = at + 12 + length;
+    if (end > bytes.length) return bytes;    // damaged; leave it alone
+    if (type(at) !== "pHYs") parts.push(bytes.subarray(at, end));
+    if (type(at) === "IHDR") parts.push(chunk);
+    at = end;
+  }
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let offset = 0;
+  for (const p of parts) { out.set(p, offset); offset += p.length; }
+  return out;
 }
 
 /** Base64 of the UTF-8 encoding of `text`. */
@@ -150,6 +229,7 @@ export function encodeState(state) {
   if (s.bg) p.set("b", s.bg.slice(1).toLowerCase());
   if (s.size !== DEFAULTS.size) p.set("z", String(s.size));
   if (s.debug) p.set("x", "1");
+  if (s.textSize !== DEFAULTS.textSize) p.set("t", String(s.textSize));
   return p.toString();
 }
 
@@ -184,6 +264,11 @@ export function decodeState(hash, knownFonts = []) {
   if (p.has("z") && Number.isFinite(size)) state.size = Math.min(8, Math.max(1, size));
 
   state.debug = p.get("x") === "1";
+
+  const textSize = Number(p.get("t"));
+  if (p.has("t") && Number.isFinite(textSize) && textSize > 0) {
+    state.textSize = Math.min(TEXT_SIZE_RANGE.max, Math.max(TEXT_SIZE_RANGE.min, textSize));
+  }
   return { state, hasSource };
 }
 

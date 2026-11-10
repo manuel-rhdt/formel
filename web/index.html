@@ -84,6 +84,7 @@
 
   input[type=color] { width: 2rem; height: 2rem; padding: 2px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); cursor: pointer; }
   input[type=color].off { opacity: .4; }
+  #textsize { width: 4.2rem; height: 2rem; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); padding: 0 .3rem 0 .5rem; }
 
   /* ---------- editor ---------- */
   .editor .bar { border-bottom: 1px solid var(--line); }
@@ -262,11 +263,18 @@
       <label title="Bitmap: works in almost any app"><input type="radio" name="format" value="png" checked>PNG</label>
       <label title="Vector: sharp at any size; best for the web, Inkscape, Illustrator, Office"><input type="radio" name="format" value="svg">SVG</label>
     </fieldset>
-    <select id="pngscale" aria-label="PNG resolution" title="PNG resolution, shown as the size of the image you get. 1× is 48 pixels per font size, which for a formula printed at 12 pt is about 300 dpi; 2× about 600 dpi. Many apps paste a PNG at its pixel size, so higher resolutions come in larger: scale it down there and it stays sharp.">
-      <option value="1">1×</option>
-      <option value="2" selected>2×</option>
-      <option value="4">4×</option>
-      <option value="8">8×</option>
+    <label class="field" title="The text size the formula should match. Downloaded, copied and dragged images come out at this size: SVG in pt, PNG via its resolution.">
+      <span>Text</span><input id="textsize" type="number" min="4" max="200" step="0.5" value="12" list="textsizes" aria-label="Text size in points"><span>pt</span>
+    </label>
+    <datalist id="textsizes">
+      <option value="9"></option><option value="10"></option><option value="11"></option><option value="12"></option>
+      <option value="14"></option><option value="18"></option><option value="24"></option><option value="32"></option>
+    </datalist>
+    <select id="dpi" aria-label="PNG resolution" title="PNG resolution, with the size of the image it gives. PNG files carry this resolution, so apps that read it insert them at the text size. A PNG copied from Chrome or Edge loses it (the browser re-encodes the image), so it pastes at the app's default resolution: the higher the dpi, the larger. To paste at the right size, use SVG.">
+      <option value="150">150 dpi</option>
+      <option value="300" selected>300 dpi</option>
+      <option value="600">600 dpi</option>
+      <option value="1200">1200 dpi</option>
     </select>
     <span class="sep" aria-hidden="true"></span>
     <button id="copy" class="btn primary" type="button" disabled>Copy PNG</button>
@@ -337,6 +345,7 @@
 import init, { MathRenderer, latex_to_mathml, latex_error_range } from "./pkg/mathwasm.js";
 import {
   styleSvg, sizeSvg, snippets, encodeState, decodeState, oneLine, svgDataUri, htmlImage, escapeXml,
+  svgInPoints, pixelsPerEm, setPngResolution, TEXT_SIZE_RANGE,
 } from "./export.js";
 
 const FONTS = [
@@ -465,6 +474,7 @@ function currentState() {
     bg: radio("bgmode") === "none" ? null : $("bg").value,
     size: zoom,
     debug: $("debug").getAttribute("aria-pressed") === "true",
+    textSize: textSize(),
   };
 }
 
@@ -487,6 +497,8 @@ function applyState(state, hasSource) {
   if (state.bg) $("bg").value = state.bg;
   setZoom(state.size);
   $("debug").setAttribute("aria-pressed", String(state.debug));
+  $("textsize").value = state.textSize;
+  lastTextSize = state.textSize;
   fontFile = state.font;
   $("font").value = state.font;
 }
@@ -592,7 +604,7 @@ function refreshOutput() {
   if (!rendering) return;
   renderSeq++;
   // the standalone file, as downloaded; the preview's CSS size overrides its width and height
-  setSvg(sized().svg);
+  setSvg(fileSvg().svg);
   $("imgout").alt = rendering.alt;
   $("imgout").hidden = false;
   $("placeholder").hidden = true;
@@ -620,7 +632,7 @@ function updateSnippet() {
   if (kind.startsWith("markdown")) {
     hint += png
       ? `Markdown shows a PNG at its pixel size (here ${pngPixelSize()}), so it does not follow the text size; the HTML snippet does.`
-      : "Markdown shows the image at its own size, 48 px per em; the HTML snippet follows the text size.";
+      : `Markdown shows the image at its own size, here for ${textSize()} pt text; the HTML snippet follows the surrounding text.`;
     if (kind === "markdownData") hint += " Some renderers, such as GitHub's, do not show data: URIs.";
   }
   $("snippethint").textContent = hint;
@@ -633,7 +645,7 @@ function updateSnippet() {
   }
   const s = snippets({
     svg: styled(),
-    svgFile: sized().svg,
+    svgFile: fileSvg().svg,
     png: png ? images.png.dataUri : null,
     alt: rendering.alt,
     display: rendering.display,
@@ -648,9 +660,8 @@ function updateSnippet() {
 
 /** Labels the PNG resolutions with the pixel size they give for the current formula. */
 function updateScaleLabels() {
-  for (const option of $("pngscale").options) {
-    const scale = Number(option.value);
-    option.textContent = `${scale}× · ${pngPixelSize(48 * scale)}`;
+  for (const option of $("dpi").options) {
+    option.textContent = `${option.value} dpi · ${pngPixelSize(pixelsPerEm(textSize(), Number(option.value)))}`;
   }
 }
 
@@ -812,8 +823,34 @@ async function renderFontGrid() {
 
 // ---------- export ----------
 
+let lastTextSize = 12;   // the last usable entry, kept while the field is being edited
+function textSize() {
+  const raw = $("textsize").value;
+  const v = Number(raw);
+  if (raw !== "" && Number.isFinite(v) && v > 0) {
+    lastTextSize = Math.min(TEXT_SIZE_RANGE.max, Math.max(TEXT_SIZE_RANGE.min, v));
+  }
+  return lastTextSize;
+}
+
+function dpi() {
+  return Number($("dpi").value) || 300;
+}
+
+/** Pixels per em of the PNG: the text size at the chosen resolution. */
 function pxPerEm() {
-  return 48 * Number($("pngscale").value);
+  return pixelsPerEm(textSize(), dpi());
+}
+
+/** The SVG file: sized in pt for the text size, as downloaded, copied and dragged. */
+function fileSvg() {
+  return svgInPoints(styled(), textSize(), rendering.unitsPerEm);
+}
+
+/** CSS px (1/96 in) of the file's nominal size, for <img width height> in rich text. */
+function nominalPx() {
+  const { widthPt, heightPt } = fileSvg();
+  return { width: widthPt * 96 / 72, height: heightPt * 96 / 72 };
 }
 
 /** The SVG with an absolute size, for use outside of this page. */
@@ -821,11 +858,14 @@ function sized(pxPerEmValue = 48) {
   return sizeSvg(styled(), pxPerEmValue, rendering.unitsPerEm);
 }
 
-async function pngBlob(pxPerEmValue) {
+async function pngBlob(pxPerEmValue = pxPerEm()) {
   const MAX_SIDE = 16000;                       // browsers refuse larger canvases
   let { svg, width, height } = sized(pxPerEmValue);
+  let resolution = dpi() * pxPerEmValue / pxPerEm();
   if (Math.max(width, height) > MAX_SIDE) {
-    ({ svg, width, height } = sized(pxPerEmValue * MAX_SIDE / Math.max(width, height)));
+    const shrink = MAX_SIDE / Math.max(width, height);
+    ({ svg, width, height } = sized(pxPerEmValue * shrink));
+    resolution *= shrink;
   }
   // The browser rasterizes the SVG: draw it onto a canvas, then export the canvas.
   const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
@@ -840,7 +880,9 @@ async function pngBlob(pxPerEmValue) {
     canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
     const png = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
     if (!png) throw new Error("the browser could not encode the PNG");
-    return png;
+    // canvas writes no resolution; with one, apps insert the PNG at the text size
+    const tagged = setPngResolution(new Uint8Array(await png.arrayBuffer()), resolution);
+    return new Blob([tagged], { type: "image/png" });
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -886,7 +928,7 @@ const copyImage = () => valid && guarded("Copy", async () => {
   const item = { "image/png": pngBlob(pxPerEm()) };
   if (withSvg) {
     // without the XML declaration, which Chromium's sanitizer would turn into a comment
-    const svg = sized().svg.replace(/^<\?xml[^>]*\?>\s*/, "");
+    const svg = fileSvg().svg.replace(/^<\?xml[^>]*\?>\s*/, "");
     item["image/svg+xml"] = new Blob([svg], { type: "image/svg+xml" });
   }
   await navigator.clipboard.write([new ClipboardItem(item)]);
@@ -897,9 +939,9 @@ const copyImage = () => valid && guarded("Copy", async () => {
 
 /** `<img>` HTML for the SVG (vector) or the PNG (raster) of the current rendering. */
 async function imageHtml(kind) {
-  const { svg, width, height } = sized();
+  const { width, height } = nominalPx();
   if (kind === "svg") {
-    return htmlImage({ src: svgDataUri(svg), alt: rendering.alt, width, height });
+    return htmlImage({ src: svgDataUri(fileSvg().svg), alt: rendering.alt, width, height });
   }
   const png = await pngBlob(pxPerEm());
   // the image is larger than its nominal size, so it stays sharp when scaled down
@@ -923,7 +965,7 @@ const copyHtml = () => guarded("Copy as HTML", async () => {
   toast(`Copied as HTML (${kind.toUpperCase()}); paste it into the other app`);
 });
 
-const downloadSvg = () => saveBlob(new Blob([sized().svg], { type: "image/svg+xml" }), "formula.svg");
+const downloadSvg = () => saveBlob(new Blob([fileSvg().svg], { type: "image/svg+xml" }), "formula.svg");
 const downloadPng = () => guarded("PNG export", async () => saveBlob(await pngBlob(pxPerEm()), "formula.png"));
 
 const format = () => radio("format");
@@ -937,7 +979,7 @@ function downloadImage() {
 function updateFormatUi() {
   const f = format().toUpperCase();
   store.set("mathrender.format", format());
-  $("pngscale").hidden = format() !== "png";
+  $("dpi").hidden = format() !== "png";
   $("copy").textContent = `Copy ${f}`;
   $("download").textContent = `Download ${f}`;
   $("copyhtml").textContent = `Copy as HTML (${f})`;
@@ -1182,8 +1224,18 @@ $("zoomval").addEventListener("click", () => { setZoom(3); scheduleHashUpdate();
 for (const input of document.querySelectorAll("input[name=format]")) {
   input.addEventListener("change", () => { updateFormatUi(); schedulePng(); updateDisplay(); updateSnippet(); });
 }
-$("pngscale").addEventListener("change", () => {
-  store.set("mathrender.pngscale", $("pngscale").value);
+$("textsize").addEventListener("input", () => {
+  if (!$("textsize").validity.valid || !$("textsize").value) return;   // wait for a usable number
+  refreshOutput();
+  scheduleHashUpdate();
+});
+$("textsize").addEventListener("change", () => {
+  $("textsize").value = textSize();
+  refreshOutput();
+  scheduleHashUpdate();
+});
+$("dpi").addEventListener("change", () => {
+  store.set("mathrender.dpi", $("dpi").value);
   schedulePng();
   updateSnippet();
 });
@@ -1230,8 +1282,8 @@ addEventListener("keydown", (e) => {
 // ---------- start ----------
 
 setRadio("format", store.get("mathrender.format", "png"));
-$("pngscale").value = store.get("mathrender.pngscale", "2");
-if (!$("pngscale").value) $("pngscale").value = "2";
+$("dpi").value = store.get("mathrender.dpi", "300");
+if (!$("dpi").value) $("dpi").value = "300";
 updateFormatUi();
 
 await init();
