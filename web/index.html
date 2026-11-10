@@ -288,8 +288,6 @@
       </fieldset>
       <input id="bg" type="color" value="#ffffff" class="off" aria-label="Background color">
     </span>
-    <button id="debug" class="btn quiet" type="button" aria-pressed="false"
-      title="Outline the box of every element (also in the exported image)">Boxes</button>
   </div>
 
   <div id="fontgrid" hidden aria-label="The formula in every font"></div>
@@ -583,7 +581,6 @@ function currentState() {
     fg: $("fg").value,
     bg: radio("bgmode") === "none" ? null : $("bg").value,
     size: zoom,
-    debug: $("debug").getAttribute("aria-pressed") === "true",
     textSize: textSize(),
   };
 }
@@ -606,7 +603,6 @@ function applyState(state, hasSource) {
   setRadio("bgmode", state.bg ? "color" : "none");
   if (state.bg) $("bg").value = state.bg;
   setZoom(state.size);
-  $("debug").setAttribute("aria-pressed", String(state.debug));
   $("textsize").value = state.textSize;
   lastTextSize = state.textSize;
   fontFile = state.font;
@@ -668,7 +664,7 @@ function render() {
     return fail(e, range ? [range[0], range[1]] : null);
   }
   try {
-    const r = renderer.render(mathml, $("debug").getAttribute("aria-pressed") === "true");
+    const r = renderer.render(mathml, false);
     rendering = {
       svg: r.svg, width: r.width, height: r.height, baseline: r.baseline, unitsPerEm: renderer.units_per_em(),
       mathml, alt: altText(source, mathml), display: isDisplay(mathml),
@@ -913,14 +909,13 @@ function scheduleFontGrid() {
 async function renderFontGrid() {
   if (!valid || !rendering) return;
   const mathml = rendering.mathml;
-  const debug = $("debug").getAttribute("aria-pressed") === "true";
   for (const card of $("fontgrid").children) {
     const file = card.dataset.file;
     const slot = card.querySelector(".img");
     try {
       const r = file === CUSTOM ? customRenderer.renderer : await loadRenderer(file);
       if (!valid || rendering.mathml !== mathml) return;   // input changed meanwhile
-      const out = r.render(mathml, debug);
+      const out = r.render(mathml, false);
       slot.innerHTML = styleSvg(out.svg, { fg: "#000000", alt: rendering.alt });
       slot.style.setProperty("--w", out.width / r.units_per_em());
       out.free();
@@ -1316,12 +1311,6 @@ $("examples").addEventListener("change", (e) => {
     try { text = prettyXml(latex_to_mathml(text, true)); } catch { return; }
   }
   replaceSource(text, name);
-});
-
-$("debug").addEventListener("click", () => {
-  const on = $("debug").getAttribute("aria-pressed") !== "true";
-  $("debug").setAttribute("aria-pressed", String(on));
-  render();
 });
 
 const recolor = () => { refreshOutput(); scheduleHashUpdate(); };

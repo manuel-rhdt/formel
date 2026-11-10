@@ -8,7 +8,6 @@ export const DEFAULTS = Object.freeze({
   fg: "#000000",
   bg: null, // null = transparent
   size: 3,
-  debug: false,
   textSize: 12, // pt: the formula's em matches text of this size
 });
 
@@ -228,7 +227,6 @@ export function encodeState(state) {
   if (s.fg.toLowerCase() !== DEFAULTS.fg) p.set("c", s.fg.slice(1).toLowerCase());
   if (s.bg) p.set("b", s.bg.slice(1).toLowerCase());
   if (s.size !== DEFAULTS.size) p.set("z", String(s.size));
-  if (s.debug) p.set("x", "1");
   if (s.textSize !== DEFAULTS.textSize) p.set("t", String(s.textSize));
   return p.toString();
 }
@@ -262,8 +260,6 @@ export function decodeState(hash, knownFonts = []) {
 
   const size = Number(p.get("z"));
   if (p.has("z") && Number.isFinite(size)) state.size = Math.min(8, Math.max(1, size));
-
-  state.debug = p.get("x") === "1";
 
   const textSize = Number(p.get("t"));
   if (p.has("t") && Number.isFinite(textSize) && textSize > 0) {
