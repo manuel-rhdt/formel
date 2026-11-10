@@ -599,12 +599,17 @@ function currentState() {
   };
 }
 
+// The URL mirrors the formula, so a copied address bar is always a working link. `replaceState`
+// rewrites the current history entry instead of adding one: no entries pile up, back still leaves
+// the page the way it arrived.
 let hashTimer = 0;
 function scheduleHashUpdate() {
   clearTimeout(hashTimer);
   hashTimer = setTimeout(() => {
+    const hash = `#${encodeState(currentState())}`;
+    if (hash === location.hash) return;   // unchanged: skip the call (Safari throttles history calls)
     try {
-      history.replaceState(null, "", `#${encodeState(currentState())}`);
+      history.replaceState(null, "", hash);
     } catch { /* e.g. sandboxed iframes */ }
   }, 300);
 }
