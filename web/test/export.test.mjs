@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULTS, escapeXml, styleSvg, sizeSvg, viewBox, snippets, toBase64, svgDataUri,
-  escapeMarkdownAlt, encodeState, decodeState,
+  escapeMarkdownAlt, encodeState, decodeState, htmlImage,
 } from "../export.js";
 
 const RAW = '<svg viewBox="-10 -10 200 100" xmlns="http://www.w3.org/2000/svg">\n' +
@@ -108,4 +108,12 @@ test("invalid fragments fall back to defaults", () => {
   assert.deepEqual(state, { ...DEFAULTS, source: "" });
   assert.equal(decodeState("#z=99").state.size, 8);
   assert.equal(decodeState("#z=0").state.size, 1);
+});
+
+test("htmlImage sets the pixel size and escapes the alt text", () => {
+  assert.equal(
+    htmlImage({ src: "data:image/png;base64,AA==", alt: 'a "b" <c>', width: 100.4, height: 20.6 }),
+    '<img src="data:image/png;base64,AA==" alt="a &quot;b&quot; &lt;c&gt;" width="100" height="21">',
+  );
+  assert.equal(htmlImage({ src: "x" }), '<img src="x" alt="">');
 });

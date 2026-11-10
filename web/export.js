@@ -181,3 +181,12 @@ export function decodeState(hash, knownFonts = []) {
   state.debug = p.get("x") === "1";
   return { state, hasSource };
 }
+
+/**
+ * An HTML `<img>` for transferring an image to rich-text apps (drag and drop, clipboard).
+ * `width` and `height` are in CSS px and set the size the image gets when inserted.
+ */
+export function htmlImage({ src, alt = "", width, height }) {
+  const size = width && height ? ` width="${Math.round(width)}" height="${Math.round(height)}"` : "";
+  return `<img src="${src}" alt="${escapeXml(oneLine(alt))}"${size}>`;
+}

@@ -15,7 +15,7 @@
   .group { display: inline-flex; gap: .25rem; }
   button, select { font: inherit; }
   input[type=color] { width: 2.4rem; height: 2rem; padding: 0; }
-  #out { padding: var(--gap); border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; min-height: 4rem; cursor: grab; }
+  #out { padding: var(--gap); border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; min-height: 4rem; }
   #out svg { height: var(--size, 3em); width: auto; display: block; }
   /* checkerboard: the background is transparent */
   #out.transparent {
@@ -81,13 +81,25 @@
   <span id="status" role="status">loading…</span>
 </div>
 
-<div id="out" class="transparent" draggable="true" aria-live="polite" title="Drag this into a document"></div>
-<div class="row">
-  <span class="hint">Drag into another app:</span>
-  <span id="dragsvg" class="chip" draggable="true">⠿ SVG (vector)</span>
-  <span id="dragpng" class="chip" draggable="true">⠿ PNG</span>
-  <span class="hint">(works in Chromium browsers; if an app pastes nothing or code, use Download SVG or Copy PNG)</span>
-</div>
+<div id="out" class="transparent" aria-live="polite"></div>
+
+<details id="experimental" open>
+  <summary>Experimental: moving the image into other apps</summary>
+  <p class="hint">
+    Browsers cannot hand files to other apps, so these send the image as <em>rich text</em> (HTML with an
+    embedded image). Whether the target keeps it as a vector image, a bitmap or ignores it depends on the app.
+    If they do not work for you, use <em>Copy PNG</em>, or <em>Download SVG</em> and insert the file.
+  </p>
+  <div class="row">
+    <button id="copyhtmlsvg" type="button" disabled>Copy as HTML (SVG)</button>
+    <button id="copyhtmlpng" type="button" disabled>Copy as HTML (PNG)</button>
+  </div>
+  <div class="row">
+    <span class="hint">Drag into an app:</span>
+    <span id="dragsvg" class="chip" draggable="true">⠿ SVG (vector)</span>
+    <span id="dragpng" class="chip" draggable="true">⠿ PNG (raster)</span>
+  </div>
+</details>
 
 <details id="embed" open>
   <summary>Embed in a web page or Markdown</summary>
@@ -112,7 +124,9 @@
 
 <script type="module">
 import init, { MathRenderer, latex_to_mathml } from "./pkg/mathwasm.js";
-import { styleSvg, sizeSvg, snippets, encodeState, decodeState, oneLine } from "./export.js";
+import {
+  styleSvg, sizeSvg, snippets, encodeState, decodeState, oneLine, svgDataUri, htmlImage,
+} from "./export.js";
 
 const FONTS = [
   { file: "latinmodern-math.otf", name: "Latin Modern Math" },
@@ -147,7 +161,7 @@ let fontFile = FONTS[0].file;  // CUSTOM for an uploaded font
 let fontName = "";
 let rendering = null;          // { svg, width, height, baseline, mathml, alt, display }
 let loadToken = 0;
-let urls = { svg: null, png: null };   // blob: URLs used for dragging files out
+let drag = { svgUrl: null, pngUrl: null, svgHtml: null, pngHtml: null };   // payloads for dragging out
 let exportToken = 0;
 
 function status(msg, error = false) {
@@ -250,7 +264,7 @@ function render() {
 }
 
 function setExportEnabled(on) {
-  for (const id of ["copypng", "copysvg", "download", "downloadpng"]) $(id).disabled = !on;
+  for (const id of ["copypng", "copysvg", "download", "downloadpng", "copyhtmlsvg", "copyhtmlpng"]) $(id).disabled = !on;
 }
 
 /** Everything that depends on the rendering or the colors. */
@@ -392,6 +406,35 @@ const copySvg = () => guarded("Copy SVG", async () => {
   status(asImage ? "Copied SVG as an image" : "This browser can only copy the SVG source as text; use Download SVG or Copy PNG to get an image");
 });
 
+/** `<img>` HTML for the SVG (vector) or the PNG (raster) of the current rendering. */
+async function imageHtml(kind) {
+  const { svg, width, height } = sized();
+  if (kind === "svg") {
+    return htmlImage({ src: svgDataUri(svg), alt: rendering.alt, width, height });
+  }
+  const png = await pngBlob(pxPerEm());
+  // the image is larger than its nominal size, so it stays sharp when scaled down
+  return htmlImage({ src: await blobToDataUrl(png), alt: rendering.alt, width, height });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+const copyHtml = (kind) => () => guarded("Copy as HTML", async () => {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+    throw new Error("the clipboard API is not available (it needs https or localhost)");
+  }
+  const html = imageHtml(kind).then((h) => new Blob([h], { type: "text/html" }));
+  await navigator.clipboard.write([new ClipboardItem({ "text/html": html })]);
+  status(`Copied as HTML (${kind.toUpperCase()}); paste it into the other app`);
+});
+
 const downloadSvg = () => saveBlob(new Blob([sized().svg], { type: "image/svg+xml" }), "formula.svg");
 const downloadPng = () => guarded("PNG export", async () => saveBlob(await pngBlob(pxPerEm()), "formula.png"));
 
@@ -410,30 +453,40 @@ function scheduleDragFiles() {
 function prepareDragFiles() {
   if (!rendering) return;
   const token = ++exportToken;
-  for (const key of ["svg", "png"]) {
-    if (urls[key]) URL.revokeObjectURL(urls[key]);
-    urls[key] = null;
+  for (const key of ["svgUrl", "pngUrl"]) {
+    if (drag[key]) URL.revokeObjectURL(drag[key]);
   }
-  urls.svg = URL.createObjectURL(new Blob([sized().svg], { type: "image/svg+xml" }));
-  pngBlob(pxPerEm()).then((png) => {
-    if (token === exportToken) urls.png = URL.createObjectURL(png);
+  drag = { svgUrl: null, pngUrl: null, svgHtml: null, pngHtml: null };
+
+  const { svg, width, height } = sized();
+  drag.svgUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  drag.svgHtml = htmlImage({ src: svgDataUri(svg), alt: rendering.alt, width, height });
+  pngBlob(pxPerEm()).then(async (png) => {
+    const dataUrl = await blobToDataUrl(png);
+    if (token !== exportToken) return;
+    drag.pngUrl = URL.createObjectURL(png);
+    drag.pngHtml = htmlImage({ src: dataUrl, alt: rendering.alt, width, height });
   }).catch(() => { /* dragging a PNG is simply unavailable */ });
 }
 
 function onDragStart(kind) {
   return (e) => {
-    const url = rendering && urls[kind];
-    // Only offer the file. Any text flavor (say, the SVG source) would be preferred by apps like
-    // LibreOffice Writer, which would then insert the code instead of the image.
-    if (!url) {
+    const url = rendering && drag[`${kind}Url`];
+    const html = rendering && drag[`${kind}Html`];
+    if (!url && !html) {
       e.preventDefault();
       status(kind === "png" ? "The PNG is still being prepared; try again in a moment" : "Nothing to drag yet", true);
       return;
     }
     e.dataTransfer.effectAllowed = "copy";
-    const [type, name] = kind === "svg" ? ["image/svg+xml", "formula.svg"] : ["image/png", "formula.png"];
-    // Chromium turns this into a file when dropped on the desktop or into other apps.
-    e.dataTransfer.setData("DownloadURL", `${type}:${name}:${url}`);
+    // Rich-text apps read the HTML. Do not add a text flavor: apps like LibreOffice Writer
+    // would then prefer it and insert the source code instead of the image.
+    if (html) e.dataTransfer.setData("text/html", html);
+    if (url) {
+      // Chromium turns this into a file when dropped on the desktop or in a file manager.
+      const [type, name] = kind === "svg" ? ["image/svg+xml", "formula.svg"] : ["image/png", "formula.png"];
+      e.dataTransfer.setData("DownloadURL", `${type}:${name}:${url}`);
+    }
   };
 }
 
@@ -496,6 +549,8 @@ $("snippetkind").addEventListener("change", updateSnippet);
 
 $("copypng").addEventListener("click", copyPng);
 $("copysvg").addEventListener("click", copySvg);
+$("copyhtmlsvg").addEventListener("click", copyHtml("svg"));
+$("copyhtmlpng").addEventListener("click", copyHtml("png"));
 $("download").addEventListener("click", downloadSvg);
 $("downloadpng").addEventListener("click", downloadPng);
 $("copylink").addEventListener("click", () => guarded("Copy link", async () => {
@@ -508,7 +563,6 @@ $("copysnippet").addEventListener("click", () => guarded("Copy snippet", async (
   status("Copied snippet");
 }));
 
-$("out").addEventListener("dragstart", onDragStart("svg"));
 $("dragsvg").addEventListener("dragstart", onDragStart("svg"));
 $("dragpng").addEventListener("dragstart", onDragStart("png"));
 
