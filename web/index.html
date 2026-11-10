@@ -22,6 +22,7 @@
   details { margin: var(--gap) 0; }
   #mathml { max-height: 14rem; overflow: auto; background: color-mix(in srgb, CanvasText 6%, transparent);
             padding: .5rem; border-radius: 4px; font: 13px/1.4 ui-monospace, monospace; white-space: pre-wrap; }
+  .group { display: inline-flex; gap: .25rem; }
   .hint { color: GrayText; font-size: .9rem; }
 </style>
 </head>
@@ -49,6 +50,14 @@
   <label>Size: <input id="size" type="range" min="1" max="8" step="0.25" value="3"></label>
   <label><input id="debug" type="checkbox"> show boxes</label>
   <button id="download" type="button" disabled>Download SVG</button>
+  <span class="group">
+    <button id="downloadpng" type="button" disabled>Download PNG</button>
+    <select id="pngscale" aria-label="PNG resolution">
+      <option value="1">1× (48 px/em)</option>
+      <option value="2" selected>2× (96 px/em)</option>
+      <option value="4">4× (192 px/em)</option>
+    </select>
+  </span>
   <span id="status" role="status">loading…</span>
 </div>
 
@@ -115,9 +124,11 @@ function render() {
     currentSvg = $("debug").checked ? renderer.render_svg_debug(mathml) : renderer.render_svg(mathml);
     $("out").innerHTML = currentSvg;
     $("download").disabled = false;
+    $("downloadpng").disabled = false;
     status(`${fontName} · rendered in ${(performance.now() - t0).toFixed(1)} ms`);
   } catch (e) {
     $("download").disabled = true;
+    $("downloadpng").disabled = true;
     status(String(e?.message ?? e), true);
   }
 }
@@ -153,27 +164,63 @@ function setCustomFont(bytes, name) {
   }
 }
 
-// Wraps the rendered SVG so it can be used on its own: an absolute size (1 em = 48 px) and the
-// XML declaration, instead of the unsized viewBox-only SVG that scales with the page.
-function standaloneSvg() {
+// Wraps the rendered SVG so it can be used on its own: an absolute size and the XML
+// declaration, instead of the unsized viewBox-only SVG that scales with the page.
+// `pxPerEm` sets the scale; the SVG is in font units.
+function standaloneSvg(pxPerEm = 48) {
   const m = currentSvg.match(/viewBox="([^"]+)"/);
-  if (!m) return currentSvg;
+  if (!m) return { svg: currentSvg, width: 0, height: 0 };
   const [, , w, h] = m[1].split(/\s+/).map(Number);
-  const scale = 48 / renderer.units_per_em();
+  const scale = pxPerEm / renderer.units_per_em();
+  const width = w * scale, height = h * scale;
   const sized = currentSvg.replace(
     "<svg ",
-    `<svg width="${(w * scale).toFixed(2)}" height="${(h * scale).toFixed(2)}" `);
-  return `<?xml version="1.0" encoding="UTF-8"?>\n${sized}\n`;
+    `<svg width="${width.toFixed(2)}" height="${height.toFixed(2)}" `);
+  return { svg: `<?xml version="1.0" encoding="UTF-8"?>\n${sized}\n`, width, height };
 }
 
-function download() {
-  const blob = new Blob([standaloneSvg()], { type: "image/svg+xml" });
+function saveBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement("a"), { href: url, download: "formula.svg" });
+  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function download() {
+  const { svg } = standaloneSvg();
+  saveBlob(new Blob([svg], { type: "image/svg+xml" }), "formula.svg");
+}
+
+// Rasterizes the SVG with the browser: draw it onto a canvas, then export the canvas.
+// The background stays transparent.
+async function downloadPng() {
+  const MAX_SIDE = 16000;                       // browsers refuse larger canvases
+  let pxPerEm = 48 * Number($("pngscale").value);
+  let { svg, width, height } = standaloneSvg(pxPerEm);
+  if (Math.max(width, height) > MAX_SIDE) {
+    pxPerEm *= MAX_SIDE / Math.max(width, height);
+    ({ svg, width, height } = standaloneSvg(pxPerEm));
+  }
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const canvas = Object.assign(document.createElement("canvas"), {
+      width: Math.max(1, Math.ceil(width)),
+      height: Math.max(1, Math.ceil(height)),
+    });
+    canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+    const png = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!png) throw new Error("the browser could not encode the PNG");
+    saveBlob(png, "formula.png");
+  } catch (e) {
+    status(`PNG export failed: ${e?.message ?? e}`, true);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 function updateMode(previous) {
@@ -220,6 +267,7 @@ $("src").addEventListener("input", render);
 $("display").addEventListener("change", render);
 $("debug").addEventListener("change", render);
 $("download").addEventListener("click", download);
+$("downloadpng").addEventListener("click", downloadPng);
 $("size").addEventListener("input", (e) =>
   document.documentElement.style.setProperty("--size", `${e.target.value}em`));
 
