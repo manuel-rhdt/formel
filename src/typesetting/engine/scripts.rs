@@ -119,6 +119,8 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let constant = |c| font.constant(c);
         let cramped = style.math_shift == MathShift::Compact;
 
+        // A large operator (e.g. a display-style ∫) is not a character nucleus in TeX: its
+        // scripts are placed relative to its height and depth.
         let superscript_shift_up = |superscript: &Box_<T>, nucleus: &Box_<T>| {
             let std_shift_up = constant(if cramped {
                 MathConstant::SuperscriptShiftUpCramped
@@ -128,7 +130,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             let min_shift_up =
                 superscript.metrics.descent + constant(MathConstant::SuperscriptBottomMin);
             // As in TeX, a single-character nucleus doesn't constrain the shift by its height.
-            let min_shift_from_baseline_drop = if nucleus.is_single_glyph() {
+            let min_shift_from_baseline_drop = if nucleus.is_single_glyph() && !nucleus_is_largeop {
                 0.0
             } else {
                 nucleus.metrics.ascent - constant(MathConstant::SuperscriptBaselineDropMax)
@@ -138,7 +140,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let subscript_shift_down = |subscript: &Box_<T>, nucleus: &Box_<T>| {
             // As in TeX, a single-character nucleus doesn't constrain the shift by its depth
             // (otherwise the subscript of μ would sit lower than that of ε).
-            let min_shift_from_baseline_drop = if nucleus.is_single_glyph() {
+            let min_shift_from_baseline_drop = if nucleus.is_single_glyph() && !nucleus_is_largeop {
                 0.0
             } else {
                 nucleus.metrics.descent + constant(MathConstant::SubscriptBaselineDropMin)
