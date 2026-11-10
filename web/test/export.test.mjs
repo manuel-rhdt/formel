@@ -117,3 +117,23 @@ test("htmlImage sets the pixel size and escapes the alt text", () => {
   );
   assert.equal(htmlImage({ src: "x" }), '<img src="x" alt="">');
 });
+
+test("PNG snippets use the PNG and have no inline SVG", () => {
+  const png = "data:image/png;base64,AAAA";
+  const s = snippets({
+    svg: RAW, png, alt: "x", display: false, width: 2000, height: 1000, baseline: 800, unitsPerEm: 1000,
+  });
+  assert.ok(s.img.startsWith(`<img src="${png}" alt="x" style="height:1em;vertical-align:-0.2em`), s.img);
+  assert.equal(s.svg, null);
+  assert.equal(s.markdownFile, "![x](formula.png)");
+  assert.equal(s.markdownData, `![x](${png})`);
+});
+
+test("Markdown with a data URI embeds the sized SVG", () => {
+  const file = sizeSvg(RAW, 48, 1000).svg;
+  const s = snippets({
+    svg: RAW, svgFile: file, alt: "x", display: true, width: 200, height: 100, baseline: 80, unitsPerEm: 1000,
+  });
+  assert.equal(s.markdownData, `![x](${svgDataUri(file)})`);
+  assert.ok(s.img.includes(svgDataUri(RAW)), "the HTML snippet sizes the image itself");
+});

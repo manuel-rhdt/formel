@@ -104,6 +104,10 @@ export function escapeMarkdownAlt(text) {
  *
  * @param {object} p
  * @param {string} p.svg        styled SVG (see `styleSvg`)
+ * @param {string} [p.svgFile]  the SVG with an absolute size (see `sizeSvg`), for Markdown, which
+ *                              shows images at their own size; defaults to `svg`
+ * @param {string} [p.png]      data: URI of a PNG of the same image; if given, the snippets use
+ *                              it instead of the SVG, and there is no inline-SVG snippet
  * @param {string} p.alt        alternative text, e.g. the LaTeX source
  * @param {boolean} p.display   block formula (centered) rather than inline
  * @param {number} p.width      viewBox width in font units
@@ -114,22 +118,23 @@ export function escapeMarkdownAlt(text) {
  * Sizes are in em, so the formula is as big as the surrounding text. For inline formulas the
  * image is shifted down by the part of the box below the baseline, so it lines up with the text.
  */
-export function snippets({ svg, alt, display, width, height, baseline, unitsPerEm }) {
+export function snippets({ svg, svgFile = svg, png = null, alt, display, width, height, baseline, unitsPerEm }) {
   const w = em(width / unitsPerEm);
   const h = em(height / unitsPerEm);
   const below = em((height - baseline) / unitsPerEm);
   const attrAlt = escapeXml(oneLine(alt));
   const position = display ? "display:block;margin:1em auto" : `vertical-align:-${below}`;
-  const uri = svgDataUri(svg);
+  const uri = png ?? svgDataUri(svg);
+  const file = png ? "formula.png" : "formula.svg";
 
   // inline <svg> needs explicit sizes, otherwise browsers default to 300x150
-  const inlineSvg = svg.replace("<svg ", `<svg width="${w}" height="${h}" style="${position}" `);
+  const inlineSvg = png ? null : svg.replace("<svg ", `<svg width="${w}" height="${h}" style="${position}" `);
 
   return {
     img: `<img src="${uri}" alt="${attrAlt}" style="height:${h};${position}">`,
     svg: inlineSvg,
-    markdownFile: `![${escapeMarkdownAlt(alt)}](formula.svg)`,
-    markdownData: `![${escapeMarkdownAlt(alt)}](${uri})`,
+    markdownFile: `![${escapeMarkdownAlt(alt)}](${file})`,
+    markdownData: `![${escapeMarkdownAlt(alt)}](${png ?? svgDataUri(svgFile)})`,
   };
 }
 

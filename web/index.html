@@ -113,14 +113,12 @@
     display: flex; align-items: center; justify-content: center; min-height: 13rem; padding: 2rem 1.5rem 2.75rem;
     overflow-x: auto; color: #000;
   }
-  /* The preview is an <img> of the SVG (crisp at any zoom), so the browser's own image drag and
-     right-click menu work. In PNG mode an invisible <img> of the PNG lies on top of it, so those
-     act on the PNG instead. */
-  .stack { position: relative; display: block; flex: none; max-width: 100%; }
-  #imgsvg { display: block; width: calc(var(--w, 0) * var(--size, 3) * 1em); max-width: 100%; height: auto; }
-  #imgpng { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
-  #out.ready .stack { cursor: grab; }
-  #out.stale .stack { opacity: .3; }
+  /* The preview is an <img> of exactly what is exported (the SVG, or the PNG at its resolution),
+     so the browser's own image drag and right-click menu act on it. */
+  #imgout { display: block; flex: none; width: calc(var(--w, 0) * var(--size, 3) * 1em); max-width: 100%; height: auto; }
+  #out.ready #imgout { cursor: grab; }
+  #out.stale #imgout { opacity: .3; }
+  #pxinfo:not(:empty)::before { content: " · "; }
   .exportbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 .1rem; }
   .checker {
     background-color: #ececec;
@@ -167,6 +165,7 @@
     padding: .6rem .7rem; border-radius: 6px; font: 13px/1.45 var(--mono); white-space: pre-wrap; word-break: break-all;
   }
   #snippet { width: 100%; height: 7.5rem; resize: vertical; color: var(--text); }
+  .snippethint { margin: .4rem 0 0; }
   .panelbody p { margin: 0 0 .6rem; color: var(--muted); font-size: .9rem; max-width: 46rem; }
 
   footer { margin-top: 2rem; color: var(--muted); font-size: .82rem; }
@@ -246,12 +245,10 @@
 
   <div class="preview">
     <div id="out" class="checker" aria-live="polite">
-      <span class="stack" id="stack" hidden title="Drag into another app, or right-click to copy or save the image">
-        <img id="imgsvg" alt=""><img id="imgpng" alt="" hidden>
-      </span>
+      <img id="imgout" alt="" hidden title="Drag into another app, or right-click to copy or save the image">
       <span class="placeholder" id="placeholder">Loading…</span>
     </div>
-    <div class="meta" id="meta"></div>
+    <div class="meta"><span id="meta"></span><span id="pxinfo"></span></div>
     <div class="zoom" aria-label="Preview zoom">
       <button id="zoomout" class="btn icon" type="button" aria-label="Zoom out">−</button>
       <output id="zoomval" title="Reset zoom">3×</output>
@@ -262,20 +259,19 @@
   <div id="fontgrid" hidden aria-label="The formula in every font"></div>
 
   <div class="bar exportbar">
-    <button id="copy" class="btn primary" type="button" disabled
-      title="Puts the formula on the clipboard as PNG, and also as SVG where the browser can; each app takes the best it understands">Copy image</button>
-    <select id="pngscale" aria-label="PNG resolution" title="PNG resolution, for copying and saving. Many apps size a pasted PNG by its pixel count, so higher resolutions paste larger.">
-      <option value="1">PNG 1× · 48 px/em</option>
-      <option value="2" selected>PNG 2× · 96 px/em</option>
-      <option value="4">PNG 4× · 192 px/em</option>
-      <option value="8">PNG 8× · 384 px/em</option>
-    </select>
-    <span class="sep" aria-hidden="true"></span>
-    <fieldset class="seg" aria-label="Format for download, drag and right-click" title="Format for Download, dragging the formula and the right-click menu">
+    <fieldset class="seg" aria-label="Image format" title="Format of the preview, Copy, Download, dragging, the right-click menu and the embed snippets">
       <label title="Bitmap: works in almost any app"><input type="radio" name="format" value="png" checked>PNG</label>
       <label title="Vector: sharp at any size; best for the web, Inkscape, Illustrator, Office"><input type="radio" name="format" value="svg">SVG</label>
     </fieldset>
-    <button id="download" class="btn" type="button" disabled>Download</button>
+    <select id="pngscale" aria-label="PNG resolution" title="PNG resolution. Many apps size a pasted PNG by its pixel count, so higher resolutions paste larger.">
+      <option value="1">1× · 48 px/em</option>
+      <option value="2" selected>2× · 96 px/em</option>
+      <option value="4">4× · 192 px/em</option>
+      <option value="8">8× · 384 px/em</option>
+    </select>
+    <span class="sep" aria-hidden="true"></span>
+    <button id="copy" class="btn primary" type="button" disabled>Copy PNG</button>
+    <button id="download" class="btn" type="button" disabled>Download PNG</button>
     <button id="copylink" class="btn quiet" type="button" title="Copy a link that reopens this formula with these settings">Copy link</button>
     <span class="spacer"></span>
     <span id="toast" role="status"></span>
@@ -285,18 +281,19 @@
 
 <!-- ============ secondary ============ -->
 <details class="card panel" id="embed">
-  <summary>Embed in a web page or Markdown <span class="sub">self-contained snippet, aligned to the text baseline</span></summary>
+  <summary>Embed in a web page or Markdown <span class="sub">self-contained snippet, aligned to the text baseline; uses the PNG/SVG choice</span></summary>
   <div class="panelbody">
     <div class="bar">
       <select id="snippetkind" aria-label="Snippet type">
         <option value="img">HTML &lt;img&gt; with data URI</option>
         <option value="svg">Inline &lt;svg&gt;</option>
-        <option value="markdownFile">Markdown, linking formula.svg</option>
+        <option value="markdownFile">Markdown, linking the downloaded file</option>
         <option value="markdownData">Markdown with data URI</option>
       </select>
       <button id="copysnippet" class="btn" type="button">Copy snippet</button>
     </div>
-    <textarea id="snippet" readonly spellcheck="false" aria-label="Embed snippet"></textarea>
+    <textarea id="snippet" readonly spellcheck="false" aria-label="Embed snippet" aria-describedby="snippethint"></textarea>
+    <p class="hint snippethint" id="snippethint"></p>
   </div>
 </details>
 
@@ -314,16 +311,16 @@
 <details class="card panel" id="experimental">
   <summary>More ways to move the image <span class="sub">experimental, app-dependent</span></summary>
   <div class="panelbody">
-    <p>If <em>Copy image</em> or dragging does not work with an app, these put the image on the clipboard as
+    <p>If <em>Copy</em> or dragging does not work with an app, these put the image on the clipboard as
       <em>rich text</em> instead: HTML with the image embedded. Whether the target app keeps it as a vector image,
       converts it to a bitmap or ignores it depends on the app.</p>
     <div class="bar">
-      <button id="copyhtmlsvg" class="btn" type="button" disabled>Copy as HTML (SVG)</button>
-      <button id="copyhtmlpng" class="btn" type="button" disabled>Copy as HTML (PNG)</button>
+      <button id="copyhtml" class="btn" type="button" disabled>Copy as HTML (PNG)</button>
     </div>
-    <p><em>Copy image</em> always writes a PNG. Chromium-based browsers (Chrome, Edge, Opera) add an SVG
-      alongside, which Office on Windows and vector editors pick up; Firefox and Safari cannot put SVG on the
-      clipboard. Dragging the formula, or right-clicking it, uses the format chosen next to <em>Download</em>.</p>
+    <p>With SVG selected, <em>Copy SVG</em> puts the SVG and a PNG on the clipboard, and the app you paste into
+      takes the best it understands; apps without SVG support get the PNG. Only Chromium-based browsers
+      (Chrome, Edge, Opera) can put SVG on the clipboard; Firefox and Safari copy the PNG only.
+      With PNG selected, only the PNG is copied.</p>
   </div>
 </details>
 </main>
@@ -389,6 +386,8 @@ const GALLERY = [
 const saved = { latex: EXAMPLES.latex, mathml: EXAMPLES.mathml };
 
 const $ = (id) => document.getElementById(id);
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const modKey = isMac ? "⌘" : "Ctrl";
 const radio = (name) => document.querySelector(`input[name=${name}]:checked`).value;
 const setRadio = (name, value) => {
   const input = document.querySelector(`input[name=${name}][value="${value}"]`);
@@ -576,43 +575,66 @@ function fail(e, range) {
 }
 
 function refreshExportState() {
-  for (const id of ["copy", "download", "copyhtmlsvg", "copyhtmlpng", "copysnippet", "editmathml", "copymathml"]) {
+  for (const id of ["copy", "download", "copyhtml", "copysnippet", "editmathml", "copymathml"]) {
     $(id).disabled = !valid;
   }
   $("out").classList.toggle("ready", valid);
-  for (const id of ["imgsvg", "imgpng"]) $(id).draggable = valid;
+  $("imgout").draggable = valid;
 }
 
 function showPlaceholder(text) {
   $("placeholder").textContent = text;
   $("placeholder").hidden = false;
-  $("stack").hidden = true;
+  $("imgout").hidden = true;
 }
 
 /** Everything that depends on the rendering or the colors. */
 function refreshOutput() {
   if (!rendering) return;
+  renderSeq++;
   // the standalone file, as downloaded; the preview's CSS size overrides its width and height
-  setImage("svg", new Blob([sized().svg], { type: "image/svg+xml" }));
-  $("imgsvg").alt = rendering.alt;
-  $("imgpng").alt = rendering.alt;
-  $("imgpng").hidden = true;          // stale until the new PNG is ready
-  images.png.ready = false;
-  $("stack").hidden = false;
+  setSvg(sized().svg);
+  $("imgout").alt = rendering.alt;
+  $("imgout").hidden = false;
   $("placeholder").hidden = true;
   $("out").classList.toggle("stale", !valid);
   $("out").classList.toggle("checker", !colors().bg);
   $("out").style.backgroundColor = colors().bg ?? "";
-  $("out").style.setProperty("--w", rendering.width / rendering.unitsPerEm);
   refreshExportState();
   updateSnippet();
   schedulePng();
+  updateDisplay();
 }
 
 function updateSnippet() {
   if (!rendering) return;
+  const png = format() === "png";
+  const kindSelect = $("snippetkind");
+  // inline SVG has no PNG counterpart
+  kindSelect.querySelector("option[value=svg]").disabled = png;
+  if (png && kindSelect.value === "svg") kindSelect.value = "img";
+  const kind = kindSelect.value;
+
+  let hint = "";
+  if (kind === "markdownFile") hint = `Save the image with Download as formula.${png ? "png" : "svg"} next to the Markdown file. `;
+  if (kind.startsWith("markdown")) {
+    hint += png
+      ? `Markdown shows a PNG at its pixel size (here ${pngPixelSize()}), so it does not follow the text size; the HTML snippet does.`
+      : "Markdown shows the image at its own size, 48 px per em; the HTML snippet follows the text size.";
+    if (kind === "markdownData") hint += " Some renderers, such as GitHub's, do not show data: URIs.";
+  }
+  $("snippethint").textContent = hint;
+
+  // a drag may use a PNG of another resolution meanwhile, the snippet should not
+  if (png && (images.png.seq !== renderSeq || images.png.pxPerEm !== pxPerEm() || !images.png.dataUri)) {
+    $("snippet").value = "Preparing the PNG…";      // filled in when it is ready
+    $("copysnippet").disabled = true;
+    return;
+  }
   const s = snippets({
     svg: styled(),
+    svgFile: sized().svg,
+    png: png ? images.png.dataUri : null,
     alt: rendering.alt,
     display: rendering.display,
     width: rendering.width,
@@ -620,7 +642,13 @@ function updateSnippet() {
     baseline: rendering.baseline,
     unitsPerEm: rendering.unitsPerEm,
   });
-  $("snippet").value = s[$("snippetkind").value];
+  $("snippet").value = s[kind];
+  $("copysnippet").disabled = !valid;
+}
+
+function pngPixelSize() {
+  const { width, height } = sized(pxPerEm());
+  return `${Math.ceil(width)} × ${Math.ceil(height)} px`;
 }
 
 /** Indents MathML for reading and editing; token elements stay on one line. */
@@ -831,14 +859,19 @@ function needClipboard() {
   }
 }
 
+const canCopySvg = () => typeof ClipboardItem !== "undefined"
+  && typeof ClipboardItem.supports === "function" && ClipboardItem.supports("image/svg+xml");
+
 /**
- * One clipboard item with every image format the browser can write: PNG always, SVG where
- * supported (Chromium 124+). The pasting app picks the richest format it understands. No text
+ * PNG mode: the PNG only. SVG mode: one clipboard item with the SVG and a PNG, so that the app
+ * you paste into takes the best format it understands and apps without SVG support still get an
+ * image. Only Chromium (124+) can write SVG; elsewhere this copies the PNG and says so. No text
  * flavor: apps like LibreOffice Writer would prefer it and paste the SVG source code.
  */
 const copyImage = () => valid && guarded("Copy", async () => {
   needClipboard();
-  const withSvg = typeof ClipboardItem.supports === "function" && ClipboardItem.supports("image/svg+xml");
+  const wantSvg = format() === "svg";
+  const withSvg = wantSvg && canCopySvg();
   // Passing the promise (not the blob) keeps Safari happy: the write must start inside the click.
   const item = { "image/png": pngBlob(pxPerEm()) };
   if (withSvg) {
@@ -847,7 +880,9 @@ const copyImage = () => valid && guarded("Copy", async () => {
     item["image/svg+xml"] = new Blob([svg], { type: "image/svg+xml" });
   }
   await navigator.clipboard.write([new ClipboardItem(item)]);
-  toast(withSvg ? "Copied as PNG and SVG; the app you paste into picks one" : "Copied as PNG");
+  if (withSvg) toast("Copied the SVG, with a PNG for apps that cannot paste SVG");
+  else if (wantSvg) toast("This browser can only put PNG on the clipboard; copied the PNG. For SVG, use Download or Chrome/Edge.", true);
+  else toast("Copied the PNG");
 });
 
 /** `<img>` HTML for the SVG (vector) or the PNG (raster) of the current rendering. */
@@ -870,7 +905,8 @@ function blobToDataUrl(blob) {
   });
 }
 
-const copyHtml = (kind) => () => guarded("Copy as HTML", async () => {
+const copyHtml = () => guarded("Copy as HTML", async () => {
+  const kind = format();
   needClipboard();
   const html = imageHtml(kind).then((h) => new Blob([h], { type: "text/html" }));
   await navigator.clipboard.write([new ClipboardItem({ "text/html": html })]);
@@ -889,57 +925,110 @@ function downloadImage() {
 }
 
 function updateFormatUi() {
+  const f = format().toUpperCase();
   store.set("mathrender.format", format());
+  $("pngscale").hidden = format() !== "png";
+  $("copy").textContent = `Copy ${f}`;
+  $("download").textContent = `Download ${f}`;
+  $("copyhtml").textContent = `Copy as HTML (${f})`;
+  $("copy").title = format() === "svg"
+    ? `Copy the SVG, plus a PNG for apps without SVG support (${modKey}+Enter)`
+    : `Copy the PNG (${modKey}+Enter)`;
 }
 
 // ---------- preview images, dragging and the context menu ----------
 
 /**
- * The preview consists of real images, so that the browser's own image drag (which can produce a
- * file or image data for the drop target, unlike anything a page can put in `dataTransfer`) and
- * its right-click menu work in every browser. Their blob: URLs stay alive while shown, because
- * dragging and "Save Image As" fetch them again.
+ * The preview is a real image of what is exported, so that the browser's own image drag (which
+ * can hand the drop target a file or image data, unlike anything a page can put in
+ * `dataTransfer`) and its right-click menu work in every browser. Blob: URLs stay alive while
+ * shown, because dragging and "Save Image As" fetch them again.
+ *
+ * `seq` says which rendering (formula and colours) an image shows, see `renderSeq`; `w` is its
+ * width in em of the font.
  */
-const images = { svg: { url: null }, png: { url: null, ready: false } };
+const images = {
+  svg: { url: null, seq: -1, w: 0 },
+  png: { url: null, seq: -1, w: 0, dataUri: null, pxPerEm: 0, width: 0, height: 0 },
+};
+let renderSeq = 0;   // bumped whenever the image content changes; not by the PNG resolution
+let shown = null;    // the entry of `images` that the preview shows
 
-function setImage(kind, blob) {
-  const img = $(`img${kind}`);
-  const old = images[kind].url;
-  const url = URL.createObjectURL(blob);
-  images[kind].url = url;
-  img.src = url;   // the old image stays on screen until the new one has loaded
-  if (old) {
-    const release = () => URL.revokeObjectURL(old);
-    img.decode().then(release, release);
-  }
+function setSvg(svg) {
+  const old = images.svg.url;
+  images.svg = {
+    url: URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })),
+    seq: renderSeq,
+    w: rendering.width / rendering.unitsPerEm,
+  };
+  releaseLater(old);
 }
 
-/** The PNG is rasterized, so wait until the input has settled. Only needed in PNG mode. */
+/** Frees a blob: URL once the preview no longer shows it. */
+function releaseLater(url) {
+  if (!url) return;
+  const img = $("imgout");
+  const tryRelease = () => {
+    if (img.src === url) img.addEventListener("load", tryRelease, { once: true });
+    else URL.revokeObjectURL(url);
+  };
+  setTimeout(tryRelease, 0);
+}
+
+/**
+ * Shows the image for the current format. In PNG mode, while the PNG of a new rendering is being
+ * prepared, the previous image stays (a fresh page shows the SVG until then), so typing does not
+ * make the preview flicker between sharp and pixelated.
+ */
+function updateDisplay() {
+  let next = format() === "svg" ? images.svg : images.png;
+  if (format() === "png" && images.png.seq !== renderSeq) {
+    if (shown && shown.url && (shown === images.png || shown.seq === renderSeq)) next = shown;
+    else next = images.svg;
+  }
+  if (!next.url) return;
+  shown = next;
+  const img = $("imgout");
+  if (img.src !== next.url) img.src = next.url;   // the old image stays until the new one loads
+  $("out").style.setProperty("--w", next.w);
+  $("pxinfo").textContent = format() === "png" && images.png.url
+    ? `PNG ${images.png.width} × ${images.png.height} px` : "";
+}
+
+/** Prepares the PNG (rasterizing takes a moment, so let the input settle briefly). */
 let pngTimer = 0;
 let pngToken = 0;
 function schedulePng() {
   clearTimeout(pngTimer);
   const token = ++pngToken;
-  images.png.ready = false;
-  $("imgpng").hidden = true;
   if (format() !== "png" || !valid) return;
+  const seq = renderSeq;
   pngTimer = setTimeout(async () => {
     try {
-      const png = await pngBlob(pxPerEm());
+      const scale = pxPerEm();
+      const png = await pngBlob(scale);
+      const dataUri = await blobToDataUrl(png);
+      const { width, height } = sized(scale);
       if (token !== pngToken) return;
-      setImage("png", png);
-      await $("imgpng").decode();
-      if (token !== pngToken) return;
-      images.png.ready = true;
-      $("imgpng").hidden = false;
-    } catch { /* dragging falls back to a message */ }
-  }, 250);
+      const old = images.png.url;
+      images.png = {
+        url: URL.createObjectURL(png), seq, w: rendering.width / rendering.unitsPerEm,
+        dataUri, pxPerEm: scale, width: Math.ceil(width), height: Math.ceil(height),
+      };
+      updateDisplay();
+      releaseLater(old);
+      updateSnippet();
+    } catch (e) {
+      console.warn("preparing the PNG failed:", e);
+    }
+  }, 100);
 }
 
 function onDragStart(e) {
   const kind = format();
-  const fromPng = e.target.id === "imgpng";
-  if (!valid || (kind === "png" && !fromPng)) {
+  // the preview must show the current formula in the chosen format; only right after an edit in
+  // PNG mode (about 0.1 s plus the rasterizing) is that not the case yet
+  if (!valid || shown !== images[kind] || shown.seq !== renderSeq) {
     e.preventDefault();
     if (valid) toast("The PNG is still being prepared; try again in a moment", true);
     return;
@@ -949,14 +1038,7 @@ function onDragStart(e) {
   // file with a proper name when dropped in a file manager.
   e.dataTransfer.effectAllowed = "copy";
   const [type, name] = kind === "svg" ? ["image/svg+xml", "formula.svg"] : ["image/png", "formula.png"];
-  e.dataTransfer.setData("DownloadURL", `${type}:${name}:${images[kind].url}`);
-  if (fromPng) {
-    // the PNG layer is invisible, so show the vector image as the drag feedback; the drag
-    // image of an <img> is drawn at its natural size, so scale the grab point accordingly
-    const svg = $("imgsvg");
-    const scale = svg.naturalWidth / svg.getBoundingClientRect().width || 1;
-    e.dataTransfer.setDragImage(svg, e.offsetX * scale, e.offsetY * scale);
-  }
+  e.dataTransfer.setData("DownloadURL", `${type}:${name}:${shown.url}`);
 }
 
 // ---------- editor ----------
@@ -1090,15 +1172,18 @@ $("zoomout").addEventListener("click", () => { setZoom(zoom - 0.5); scheduleHash
 $("zoomval").addEventListener("click", () => { setZoom(3); scheduleHashUpdate(); });
 
 for (const input of document.querySelectorAll("input[name=format]")) {
-  input.addEventListener("change", () => { updateFormatUi(); schedulePng(); });
+  input.addEventListener("change", () => { updateFormatUi(); schedulePng(); updateDisplay(); updateSnippet(); });
 }
-$("pngscale").addEventListener("change", () => { store.set("mathrender.pngscale", $("pngscale").value); schedulePng(); });
+$("pngscale").addEventListener("change", () => {
+  store.set("mathrender.pngscale", $("pngscale").value);
+  schedulePng();
+  updateSnippet();
+});
 $("snippetkind").addEventListener("change", updateSnippet);
 
 $("copy").addEventListener("click", copyImage);
 $("download").addEventListener("click", downloadImage);
-$("copyhtmlsvg").addEventListener("click", copyHtml("svg"));
-$("copyhtmlpng").addEventListener("click", copyHtml("png"));
+$("copyhtml").addEventListener("click", copyHtml);
 $("copylink").addEventListener("click", () => guarded("Copy link", async () => {
   history.replaceState(null, "", `#${encodeState(currentState())}`);
   await navigator.clipboard.writeText(location.href);
@@ -1124,12 +1209,9 @@ $("editmathml").addEventListener("click", () => {
   $("src").scrollTop = 0;
 });
 
-$("imgsvg").addEventListener("dragstart", onDragStart);
-$("imgpng").addEventListener("dragstart", onDragStart);
+$("imgout").addEventListener("dragstart", onDragStart);
 
-const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-$("modkey").textContent = isMac ? "⌘" : "Ctrl";
-$("copy").title = `Copy to the clipboard (${isMac ? "⌘" : "Ctrl"}+Enter)`;
+$("modkey").textContent = modKey;
 addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (isMac ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey) {
     e.preventDefault();
