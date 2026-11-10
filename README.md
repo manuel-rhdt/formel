@@ -7,6 +7,10 @@ It implements the typesetting rules from the OpenType MATH specification and
 radicals, tables, accents, italic corrections, math kerning and more, all driven by the metrics the font
 provides, so a well-made math font gives you good output without any hand-tuned constants.
 
+**[Try it in the browser →](https://manuel-rhdt.github.io/mlayout/)** Type LaTeX or MathML, compare the
+bundled fonts (or drop in your own), and copy or download the result as SVG or PNG. The demo is this crate
+compiled to WebAssembly (`mathwasm/`, `web/`); nothing leaves your machine.
+
 ## Gallery
 
 Every formula below is laid out by this crate and rendered to SVG with the bundled `mathimg` tool,

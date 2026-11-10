@@ -3,129 +3,344 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>math-render in the browser</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ctext x=%2216%22 y=%2225%22 font-size=%2226%22 text-anchor=%22middle%22 font-family=%22serif%22 font-style=%22italic%22%3E%E2%88%91%3C/text%3E%3C/svg%3E">
+<title>math-render · LaTeX and MathML to SVG and PNG</title>
+<meta name="description" content="Typeset LaTeX or MathML with a font's OpenType MATH table and export SVG or PNG. Runs entirely in your browser.">
 <style>
-  :root { color-scheme: light dark; --gap: 1rem; --border: color-mix(in srgb, CanvasText 30%, transparent); }
-  body { font: 16px/1.5 system-ui, sans-serif; max-width: 60rem; margin: 0 auto; padding: var(--gap); }
-  h1 { font-size: 1.4rem; margin-bottom: .25rem; }
-  textarea { width: 100%; box-sizing: border-box; font: 14px/1.4 ui-monospace, monospace; }
-  #src { height: 11rem; }
-  .row { display: flex; gap: .5rem var(--gap); flex-wrap: wrap; align-items: center; margin: .75rem 0; }
-  .row label { display: inline-flex; gap: .4rem; align-items: center; }
-  .group { display: inline-flex; gap: .25rem; }
-  button, select { font: inherit; }
-  input[type=color] { width: 2.4rem; height: 2rem; padding: 0; }
-  #out { padding: var(--gap); border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; min-height: 4rem; }
-  #out svg { height: var(--size, 3em); width: auto; display: block; }
-  /* checkerboard: the background is transparent */
-  #out.transparent {
-    background-color: #e4e4e4;
-    background-image: linear-gradient(45deg, #cfcfcf 25%, transparent 25%, transparent 75%, #cfcfcf 75%),
-                      linear-gradient(45deg, #cfcfcf 25%, transparent 25%, transparent 75%, #cfcfcf 75%);
-    background-size: 16px 16px;
-    background-position: 0 0, 8px 8px;
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f6f3;
+    --surface: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6b6b70;
+    --line: #dedcd6;
+    --line-strong: #c5c2ba;
+    --accent: #2f4fb3;
+    --accent-text: #ffffff;
+    --accent-soft: #e6ebf8;
+    --danger: #b3261e;
+    --danger-soft: #fbe9e7;
+    --radius: 8px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
   }
-  .chip { display: inline-block; padding: .15rem .6rem; border: 1px dashed var(--border); border-radius: 999px; cursor: grab; user-select: none; font-size: .9rem; }
-  #status { color: GrayText; }
-  #status.error { color: crimson; }
-  details { margin: var(--gap) 0; }
-  pre, #snippet { max-height: 14rem; overflow: auto; background: color-mix(in srgb, CanvasText 6%, transparent);
-                  padding: .5rem; border-radius: 4px; font: 13px/1.4 ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; }
-  #snippet { height: 7rem; word-break: break-all; }
-  .hint { color: GrayText; font-size: .9rem; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181b;
+      --surface: #202226;
+      --text: #ececec;
+      --muted: #9a9ca3;
+      --line: #34363c;
+      --line-strong: #4a4d55;
+      --accent: #8aa4ff;
+      --accent-text: #10131c;
+      --accent-soft: #263055;
+      --danger: #ff8a80;
+      --danger-soft: #3a2222;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .page { max-width: 64rem; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+  button, select, input { font: inherit; color: inherit; }
+  a { color: var(--accent); }
+  [hidden] { display: none !important; }
+
+  /* ---------- header ---------- */
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  h1 { font: 600 1.6rem/1.2 "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; margin: 0; letter-spacing: .01em; }
+  .tagline { margin: .2rem 0 0; color: var(--muted); max-width: 44rem; }
+  .ghlink { font-size: .9rem; white-space: nowrap; }
+
+  /* ---------- cards and bars ---------- */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+  .card + .card { margin-top: .75rem; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; padding: .55rem .75rem; }
+  .bar .spacer { flex: 1; }
+  .field { display: inline-flex; align-items: center; gap: .4rem; color: var(--muted); font-size: .88rem; }
+  .field > :not(span) { color: var(--text); }
+
+  select, .btn {
+    height: 2rem; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface);
+    padding: 0 .6rem; cursor: pointer;
+  }
+  .btn { display: inline-flex; align-items: center; gap: .35rem; font-size: .9rem; }
+  .btn:hover:not(:disabled), select:hover { border-color: var(--muted); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+  .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn.icon { width: 2rem; justify-content: center; padding: 0; }
+  .btn.quiet { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.quiet:hover:not(:disabled) { color: var(--text); border-color: var(--line-strong); }
+  .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* segmented control built from radio buttons */
+  .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; margin: 0; padding: 0; height: 2rem; }
+  .seg label { display: inline-flex; align-items: center; padding: 0 .7rem; cursor: pointer; font-size: .9rem; color: var(--muted); user-select: none; }
+  .seg label + label { border-left: 1px solid var(--line-strong); }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label:has(input:checked) { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+  .seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  input[type=color] { width: 2rem; height: 2rem; padding: 2px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); cursor: pointer; }
+  input[type=color].off { opacity: .4; }
+
+  /* ---------- editor ---------- */
+  .editor .bar { border-bottom: 1px solid var(--line); }
+  .srcwrap { display: grid; position: relative; }
+  .srcwrap > * { grid-area: 1 / 1; align-self: start; }
+  #src, #backdrop {
+    margin: 0; border: 0; padding: .75rem .9rem; font: 15px/1.55 var(--mono);
+    white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; tab-size: 2;
+    scrollbar-gutter: stable; min-height: 5.2rem; max-height: 22rem;
+  }
+  #src { resize: none; background: transparent; outline: none; position: relative; z-index: 1; overflow: auto; }
+  #backdrop { color: transparent; overflow: hidden; pointer-events: none; }
+  #backdrop mark { color: transparent; background: var(--danger-soft); border-bottom: 2px solid var(--danger); border-radius: 2px; }
+  #backdrop mark.caret { border-bottom: 0; border-left: 2px solid var(--danger); background: none; }
+  .editor:focus-within { border-color: var(--line-strong); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .editor.invalid { border-color: var(--danger); }
+  #error {
+    display: flex; gap: .5rem; align-items: baseline; padding: .45rem .9rem; border-top: 1px solid var(--line);
+    color: var(--danger); font-size: .9rem; background: var(--danger-soft); border-radius: 0 0 var(--radius) var(--radius);
+  }
+  #error button { all: unset; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+
+  /* ---------- preview ---------- */
+  .stage .bar { border-bottom: 1px solid var(--line); }
+  .preview { position: relative; }
+  #out {
+    display: flex; align-items: center; justify-content: center; min-height: 13rem; padding: 2rem 1.5rem 2.75rem;
+    overflow-x: auto; color: #000;
+  }
+  /* The preview is an <img> of the SVG (crisp at any zoom), so the browser's own image drag and
+     right-click menu work. In PNG mode an invisible <img> of the PNG lies on top of it, so those
+     act on the PNG instead. */
+  .stack { position: relative; display: block; flex: none; max-width: 100%; }
+  #imgsvg { display: block; width: calc(var(--w, 0) * var(--size, 3) * 1em); max-width: 100%; height: auto; }
+  #imgpng { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
+  #out.ready .stack { cursor: grab; }
+  #out.stale .stack { opacity: .3; }
+  .exportbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 .1rem; }
+  .checker {
+    background-color: #ececec;
+    background-image: linear-gradient(45deg, #dadada 25%, transparent 25%, transparent 75%, #dadada 75%),
+                      linear-gradient(45deg, #dadada 25%, transparent 25%, transparent 75%, #dadada 75%);
+    background-size: 16px 16px; background-position: 0 0, 8px 8px;
+  }
+  .placeholder { color: #777; font-size: .95rem; }
+  .meta { position: absolute; left: .75rem; bottom: .45rem; font-size: .78rem; color: #6d6d6d; pointer-events: none; }
+  .zoom { position: absolute; right: .5rem; bottom: .4rem; display: flex; gap: .2rem; align-items: center; }
+  .zoom .btn { height: 1.75rem; width: 1.75rem; background: rgba(255,255,255,.85); color: #222; border-color: #c8c8c8; }
+  .zoom output { min-width: 2.6rem; text-align: center; font-size: .8rem; color: #444; background: rgba(255,255,255,.85); border-radius: 4px; padding: 0 .2rem; cursor: pointer; }
+
+  /* font comparison */
+  #fontgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: .5rem; padding: .75rem; border-top: 1px solid var(--line); }
+  .fontcard {
+    display: flex; flex-direction: column; gap: .4rem; align-items: stretch; text-align: left; padding: .5rem .6rem .6rem;
+    border: 1px solid var(--line); border-radius: 6px; background: #fff; color: #222; cursor: pointer; min-height: 6rem;
+  }
+  .fontcard:hover { border-color: var(--line-strong); }
+  .fontcard[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .fontcard .name { font-size: .8rem; color: #555; }
+  .fontcard .img { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 3.5rem; color: #000; }
+  .fontcard svg { width: calc(var(--w, 0) * 1.6em); max-width: 100%; height: auto; }
+
+  /* export */
+  .exportbar { border-top: 1px solid var(--line); }
+  #toast { font-size: .88rem; color: var(--muted); min-height: 1.2em; }
+  #toast.error { color: var(--danger); }
+  .hint { color: var(--muted); font-size: .85rem; }
+  kbd { font: .78rem var(--mono); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3rem; }
+
+  /* ---------- secondary panels ---------- */
+  details.panel { margin-top: .75rem; }
+  details.panel > summary { cursor: pointer; padding: .7rem .9rem; font-weight: 600; list-style: none; display: flex; gap: .5rem; align-items: baseline; }
+  details.panel > summary::-webkit-details-marker { display: none; }
+  details.panel > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; display: inline-block; }
+  details.panel[open] > summary::before { transform: rotate(90deg); }
+  details.panel > summary .sub { font-weight: 400; color: var(--muted); font-size: .88rem; }
+  .panelbody { padding: 0 .9rem .9rem; }
+  .panelbody .bar { padding: 0 0 .6rem; }
+  pre, #snippet {
+    margin: 0; max-height: 16rem; overflow: auto; background: var(--bg); border: 1px solid var(--line);
+    padding: .6rem .7rem; border-radius: 6px; font: 13px/1.45 var(--mono); white-space: pre-wrap; word-break: break-all;
+  }
+  #snippet { width: 100%; height: 7.5rem; resize: vertical; color: var(--text); }
+  .panelbody p { margin: 0 0 .6rem; color: var(--muted); font-size: .9rem; max-width: 46rem; }
+
+  footer { margin-top: 2rem; color: var(--muted); font-size: .82rem; }
+
+  /* drop target for font files */
+  body.dropping::after {
+    content: "Drop the font file to use it"; position: fixed; inset: .75rem; display: grid; place-items: center;
+    border: 3px dashed var(--accent); border-radius: 12px; background: color-mix(in srgb, var(--bg) 85%, transparent);
+    font-size: 1.2rem; z-index: 10; pointer-events: none;
+  }
+
+  @media (max-width: 40rem) {
+    .bar { padding: .5rem .6rem; gap: .5rem; }
+    .hide-narrow { display: none; }
+    #out { min-height: 10rem; padding: 1.5rem .75rem 2.75rem; }
+    details.panel > summary .sub { display: none; }
+  }
 </style>
 </head>
 <body>
-<h1>math-render in the browser</h1>
-<p class="hint">LaTeX or MathML in, SVG or PNG out. Laid out by Rust compiled to WebAssembly, using the font's OpenType MATH table.</p>
+<div class="page">
 
-<div class="row">
-  <label>Input:
-    <select id="mode">
-      <option value="latex">LaTeX</option>
-      <option value="mathml">MathML</option>
+<header>
+  <div>
+    <h1>math-render</h1>
+    <p class="tagline">Typesets LaTeX or MathML using the font’s OpenType MATH table and exports SVG or PNG.
+      Everything runs locally in your browser; nothing is uploaded.</p>
+  </div>
+  <a class="ghlink" href="https://github.com/manuel-rhdt/mlayout">Source on GitHub ↗</a>
+</header>
+
+<main>
+<!-- ============ input ============ -->
+<section class="card editor" id="editor" aria-label="Formula input">
+  <div class="bar">
+    <fieldset class="seg" aria-label="Input language">
+      <label><input type="radio" name="mode" value="latex" checked>LaTeX</label>
+      <label><input type="radio" name="mode" value="mathml">MathML</label>
+    </fieldset>
+    <fieldset class="seg" id="displayseg" aria-label="Style" title="Display style: large operators, limits above and below. Inline style: compact, for running text.">
+      <label><input type="radio" name="display" value="block" checked>Display</label>
+      <label><input type="radio" name="display" value="inline">Inline</label>
+    </fieldset>
+    <span class="spacer"></span>
+    <select id="examples" aria-label="Insert an example">
+      <option value="">Examples…</option>
     </select>
-  </label>
-  <label id="displaylabel"><input id="display" type="checkbox" checked> display style</label>
-</div>
-
-<textarea id="src" spellcheck="false" aria-label="Formula source"></textarea>
-
-<div class="row">
-  <label>Font:
-    <select id="font"></select>
-  </label>
-  <input id="fontfile" type="file" accept=".otf,.ttf" hidden>
-  <label>Text: <input id="fg" type="color" value="#000000"></label>
-  <label>Background: <input id="bg" type="color" value="#ffffff" disabled></label>
-  <label><input id="transparent" type="checkbox" checked> transparent</label>
-  <label>Preview size: <input id="size" type="range" min="1" max="8" step="0.25" value="3"></label>
-  <label><input id="debug" type="checkbox"> show boxes</label>
-</div>
-
-<div class="row">
-  <span class="group">
-    <button id="copypng" type="button" disabled>Copy PNG</button>
-    <button id="copysvg" type="button" disabled>Copy SVG</button>
-  </span>
-  <span class="group">
-    <button id="download" type="button" disabled>Download SVG</button>
-    <button id="downloadpng" type="button" disabled>Download PNG</button>
-  </span>
-  <select id="pngscale" aria-label="PNG resolution">
-    <option value="1">PNG 1× (48 px/em)</option>
-    <option value="2" selected>PNG 2× (96 px/em)</option>
-    <option value="4">PNG 4× (192 px/em)</option>
-  </select>
-  <button id="copylink" type="button">Copy link</button>
-  <span id="status" role="status">loading…</span>
-</div>
-
-<div id="out" class="transparent" aria-live="polite"></div>
-
-<details id="experimental" open>
-  <summary>Experimental: moving the image into other apps</summary>
-  <p class="hint">
-    Browsers cannot hand files to other apps, so these send the image as <em>rich text</em> (HTML with an
-    embedded image). Whether the target keeps it as a vector image, a bitmap or ignores it depends on the app.
-    If they do not work for you, use <em>Copy PNG</em>, or <em>Download SVG</em> and insert the file.
-  </p>
-  <div class="row">
-    <button id="copyhtmlsvg" type="button" disabled>Copy as HTML (SVG)</button>
-    <button id="copyhtmlpng" type="button" disabled>Copy as HTML (PNG)</button>
   </div>
-  <div class="row">
-    <span class="hint">Drag into an app:</span>
-    <span id="dragsvg" class="chip" draggable="true">⠿ SVG (vector)</span>
-    <span id="dragpng" class="chip" draggable="true">⠿ PNG (raster)</span>
+  <div class="srcwrap">
+    <div id="backdrop" aria-hidden="true"></div>
+    <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Formula source"
+      aria-describedby="error" placeholder="Type LaTeX, e.g. \frac{a}{b}"></textarea>
   </div>
-</details>
+  <div id="error" role="alert" hidden><span id="errormsg"></span><button id="errorjump" type="button">show</button></div>
+</section>
 
-<details id="embed" open>
-  <summary>Embed in a web page or Markdown</summary>
-  <div class="row">
-    <label>Snippet:
-      <select id="snippetkind">
-        <option value="img">HTML &lt;img&gt; (data URI, aligned to the text baseline)</option>
-        <option value="svg">Inline &lt;svg&gt;</option>
-        <option value="markdownFile">Markdown image (save the SVG as formula.svg)</option>
-        <option value="markdownData">Markdown image (data URI)</option>
-      </select>
+<!-- ============ output ============ -->
+<section class="card stage" aria-label="Rendered formula">
+  <div class="bar">
+    <label class="field"><span>Font</span>
+      <select id="font"></select>
     </label>
-    <button id="copysnippet" type="button">Copy snippet</button>
+    <button id="compare" class="btn quiet" type="button" aria-pressed="false" aria-controls="fontgrid"
+      title="Render the formula in every font side by side">Compare fonts</button>
+    <span class="spacer"></span>
+    <label class="field"><span>Text</span><input id="fg" type="color" value="#000000" aria-label="Text color"></label>
+    <span class="field"><span>Background</span>
+      <fieldset class="seg" aria-label="Background">
+        <label><input type="radio" name="bgmode" value="none" checked>None</label>
+        <label><input type="radio" name="bgmode" value="color">Fill</label>
+      </fieldset>
+      <input id="bg" type="color" value="#ffffff" class="off" aria-label="Background color">
+    </span>
+    <button id="debug" class="btn quiet" type="button" aria-pressed="false"
+      title="Outline the box of every element (also in the exported image)">Boxes</button>
   </div>
-  <textarea id="snippet" readonly spellcheck="false" aria-label="Embed snippet"></textarea>
+
+  <div class="preview">
+    <div id="out" class="checker" aria-live="polite">
+      <span class="stack" id="stack" hidden title="Drag into another app, or right-click to copy or save the image">
+        <img id="imgsvg" alt=""><img id="imgpng" alt="" hidden>
+      </span>
+      <span class="placeholder" id="placeholder">Loading…</span>
+    </div>
+    <div class="meta" id="meta"></div>
+    <div class="zoom" aria-label="Preview zoom">
+      <button id="zoomout" class="btn icon" type="button" aria-label="Zoom out">−</button>
+      <output id="zoomval" title="Reset zoom">3×</output>
+      <button id="zoomin" class="btn icon" type="button" aria-label="Zoom in">+</button>
+    </div>
+  </div>
+
+  <div id="fontgrid" hidden aria-label="The formula in every font"></div>
+
+  <div class="bar exportbar">
+    <button id="copy" class="btn primary" type="button" disabled
+      title="Puts the formula on the clipboard as PNG, and also as SVG where the browser can; each app takes the best it understands">Copy image</button>
+    <select id="pngscale" aria-label="PNG resolution" title="PNG resolution, for copying and saving. Many apps size a pasted PNG by its pixel count, so higher resolutions paste larger.">
+      <option value="1">PNG 1× · 48 px/em</option>
+      <option value="2" selected>PNG 2× · 96 px/em</option>
+      <option value="4">PNG 4× · 192 px/em</option>
+      <option value="8">PNG 8× · 384 px/em</option>
+    </select>
+    <span class="sep" aria-hidden="true"></span>
+    <fieldset class="seg" aria-label="Format for download, drag and right-click" title="Format for Download, dragging the formula and the right-click menu">
+      <label title="Bitmap: works in almost any app"><input type="radio" name="format" value="png" checked>PNG</label>
+      <label title="Vector: sharp at any size; best for the web, Inkscape, Illustrator, Office"><input type="radio" name="format" value="svg">SVG</label>
+    </fieldset>
+    <button id="download" class="btn" type="button" disabled>Download</button>
+    <button id="copylink" class="btn quiet" type="button" title="Copy a link that reopens this formula with these settings">Copy link</button>
+    <span class="spacer"></span>
+    <span id="toast" role="status"></span>
+    <span class="hint hide-narrow" id="hint">or drag / right-click the formula · <kbd id="modkey">Ctrl</kbd> <kbd>Enter</kbd> copies</span>
+  </div>
+</section>
+
+<!-- ============ secondary ============ -->
+<details class="card panel" id="embed">
+  <summary>Embed in a web page or Markdown <span class="sub">self-contained snippet, aligned to the text baseline</span></summary>
+  <div class="panelbody">
+    <div class="bar">
+      <select id="snippetkind" aria-label="Snippet type">
+        <option value="img">HTML &lt;img&gt; with data URI</option>
+        <option value="svg">Inline &lt;svg&gt;</option>
+        <option value="markdownFile">Markdown, linking formula.svg</option>
+        <option value="markdownData">Markdown with data URI</option>
+      </select>
+      <button id="copysnippet" class="btn" type="button">Copy snippet</button>
+    </div>
+    <textarea id="snippet" readonly spellcheck="false" aria-label="Embed snippet"></textarea>
+  </div>
 </details>
 
-<details id="mathmldetails">
-  <summary>Generated MathML</summary>
-  <pre id="mathml"></pre>
+<details class="card panel" id="mathmldetails">
+  <summary>Generated MathML <span class="sub">what the LaTeX was converted to</span></summary>
+  <div class="panelbody">
+    <div class="bar">
+      <button id="editmathml" class="btn" type="button">Edit as MathML</button>
+      <button id="copymathml" class="btn quiet" type="button">Copy</button>
+    </div>
+    <pre id="mathml"></pre>
+  </div>
 </details>
+
+<details class="card panel" id="experimental">
+  <summary>More ways to move the image <span class="sub">experimental, app-dependent</span></summary>
+  <div class="panelbody">
+    <p>If <em>Copy image</em> or dragging does not work with an app, these put the image on the clipboard as
+      <em>rich text</em> instead: HTML with the image embedded. Whether the target app keeps it as a vector image,
+      converts it to a bitmap or ignores it depends on the app.</p>
+    <div class="bar">
+      <button id="copyhtmlsvg" class="btn" type="button" disabled>Copy as HTML (SVG)</button>
+      <button id="copyhtmlpng" class="btn" type="button" disabled>Copy as HTML (PNG)</button>
+    </div>
+    <p><em>Copy image</em> always writes a PNG. Chromium-based browsers (Chrome, Edge, Opera) add an SVG
+      alongside, which Office on Windows and vector editors pick up; Firefox and Safari cannot put SVG on the
+      clipboard. Dragging the formula, or right-clicking it, uses the format chosen next to <em>Download</em>.</p>
+  </div>
+</details>
+</main>
+
+<footer>
+  Layout by Rust compiled to WebAssembly. Upload any OpenType font with a MATH table via the font menu,
+  or drop the file onto the page. Bundled fonts are under the
+  <a href="fonts/LICENSES.md">OFL and GUST font licenses</a>.
+</footer>
+</div>
+
+<input id="fontfile" type="file" accept=".otf,.ttf,font/otf,font/ttf" hidden>
 
 <script type="module">
-import init, { MathRenderer, latex_to_mathml } from "./pkg/mathwasm.js";
+import init, { MathRenderer, latex_to_mathml, latex_error_range } from "./pkg/mathwasm.js";
 import {
-  styleSvg, sizeSvg, snippets, encodeState, decodeState, oneLine, svgDataUri, htmlImage,
+  styleSvg, sizeSvg, snippets, encodeState, decodeState, oneLine, svgDataUri, htmlImage, escapeXml,
 } from "./export.js";
 
 const FONTS = [
@@ -152,35 +367,106 @@ const EXAMPLES = {
   </mrow>
 </math>`,
 };
+
+/** The examples menu. LaTeX; in MathML mode they are inserted converted. */
+const GALLERY = [
+  ["Quadratic formula", EXAMPLES.latex],
+  ["Gaussian integral", String.raw`\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}`],
+  ["Basel problem", String.raw`\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}`],
+  ["Fourier transform", String.raw`\hat{f}(\xi) = \int_{-\infty}^{\infty} f(x)\, e^{-2\pi i x \xi}\,dx`],
+  ["Schrödinger equation", String.raw`i\hbar \frac{\partial}{\partial t}\Psi(\mathbf{r},t) = \left[-\frac{\hbar^2}{2m}\nabla^2 + V(\mathbf{r},t)\right]\Psi(\mathbf{r},t)`],
+  ["Maxwell (aligned)", String.raw`\begin{aligned}
+  \nabla\cdot\mathbf{E} &= \frac{\rho}{\varepsilon_0} \\
+  \nabla\times\mathbf{B} &= \mu_0\mathbf{J} + \mu_0\varepsilon_0\frac{\partial\mathbf{E}}{\partial t}
+\end{aligned}`],
+  ["Stokes’ theorem", String.raw`\oint_{\partial\Sigma} \mathbf{F}\cdot d\mathbf{r} = \iint_{\Sigma} (\nabla\times\mathbf{F})\cdot d\boldsymbol{\Sigma}`],
+  ["Determinant (matrix)", String.raw`\det\begin{pmatrix} a & b \\ c & d \end{pmatrix} = ad - bc`],
+  ["Piecewise (cases)", String.raw`|x| = \begin{cases} x & \text{if } x \ge 0 \\ -x & \text{otherwise} \end{cases}`],
+  ["Continued fraction", String.raw`\varphi = 1 + \cfrac{1}{1 + \cfrac{1}{1 + \cfrac{1}{1 + \cdots}}}`],
+  ["QED Lagrangian", String.raw`\mathcal{L} = -\frac{1}{4}F_{\mu\nu}F^{\mu\nu} + \bar{\psi}(i\gamma^\mu D_\mu - m)\psi`],
+];
+
 const saved = { latex: EXAMPLES.latex, mathml: EXAMPLES.mathml };
 
 const $ = (id) => document.getElementById(id);
-const renderers = new Map();   // font file -> MathRenderer
+const radio = (name) => document.querySelector(`input[name=${name}]:checked`).value;
+const setRadio = (name, value) => {
+  const input = document.querySelector(`input[name=${name}][value="${value}"]`);
+  if (input) input.checked = true;
+};
+const store = {
+  get: (key, fallback) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } },
+  set: (key, value) => { try { localStorage.setItem(key, value); } catch { /* private mode etc. */ } },
+};
+
+const renderers = new Map();   // font file -> Promise<MathRenderer>
+let customRenderer = null;     // { renderer, name } for an uploaded font
 let renderer = null;           // the one in use
 let fontFile = FONTS[0].file;  // CUSTOM for an uploaded font
 let fontName = "";
-let rendering = null;          // { svg, width, height, baseline, mathml, alt, display }
+let rendering = null;          // last successful: { svg, width, height, baseline, mathml, alt, display, unitsPerEm }
+let valid = false;             // whether `rendering` matches the current input
 let loadToken = 0;
-let drag = { svgUrl: null, pngUrl: null, svgHtml: null, pngHtml: null };   // payloads for dragging out
-let exportToken = 0;
 
-function status(msg, error = false) {
-  $("status").textContent = msg;
-  $("status").classList.toggle("error", error);
+// ---------- messages ----------
+
+let toastTimer = 0;
+function toast(msg, error = false) {
+  $("toast").textContent = msg;
+  $("toast").classList.toggle("error", error);
+  $("hint").hidden = Boolean(msg);
+  clearTimeout(toastTimer);
+  if (msg && !error) toastTimer = setTimeout(() => toast(""), 4000);
+}
+
+/** Shows an input error under the editor and marks `range` (UTF-16 indices) in the source. */
+function showError(msg, range = null) {
+  const src = $("src").value;
+  let text = msg.replace(/^LaTeX error:\s*/, "");
+  let jump = null;
+  if (range) {
+    const [start, end] = range;
+    const before = src.slice(0, start);
+    const line = before.split("\n").length;
+    const col = start - before.lastIndexOf("\n");
+    if (src.includes("\n")) text += ` (line ${line}, column ${col})`;
+    jump = [start, end];
+    const caret = end <= start;
+    $("backdrop").innerHTML = escapeXml(before)
+      + `<mark${caret ? ' class="caret"' : ""}>${caret ? "​" : escapeXml(src.slice(start, end))}</mark>`
+      + escapeXml(src.slice(Math.max(start, end))) + "\n";
+  } else {
+    $("backdrop").textContent = "";
+  }
+  $("errormsg").textContent = text;
+  $("errorjump").hidden = !jump;
+  $("errorjump").onclick = () => {
+    $("src").focus();
+    $("src").setSelectionRange(jump[0], Math.max(jump[0], jump[1]));
+  };
+  $("error").hidden = false;
+  $("editor").classList.add("invalid");
+  syncBackdrop();
+}
+
+function clearError() {
+  $("error").hidden = true;
+  $("editor").classList.remove("invalid");
+  $("backdrop").textContent = "";
 }
 
 // ---------- state in the URL ----------
 
 function currentState() {
   return {
-    mode: $("mode").value,
+    mode: radio("mode"),
     source: $("src").value,
     font: fontFile,
-    display: $("display").checked,
+    display: radio("display") === "block",
     fg: $("fg").value,
-    bg: $("transparent").checked ? null : $("bg").value,
-    size: Number($("size").value),
-    debug: $("debug").checked,
+    bg: radio("bgmode") === "none" ? null : $("bg").value,
+    size: zoom,
+    debug: $("debug").getAttribute("aria-pressed") === "true",
   };
 }
 
@@ -195,30 +481,30 @@ function scheduleHashUpdate() {
 }
 
 function applyState(state, hasSource) {
-  $("mode").value = state.mode;
+  setRadio("mode", state.mode);
   if (hasSource) saved[state.mode] = state.source;
-  $("display").checked = state.display;
+  setRadio("display", state.display ? "block" : "inline");
   $("fg").value = state.fg;
-  $("transparent").checked = state.bg === null;
+  setRadio("bgmode", state.bg ? "color" : "none");
   if (state.bg) $("bg").value = state.bg;
-  $("bg").disabled = state.bg === null;
-  $("size").value = state.size;
-  document.documentElement.style.setProperty("--size", `${state.size}em`);
-  $("debug").checked = state.debug;
+  setZoom(state.size);
+  $("debug").setAttribute("aria-pressed", String(state.debug));
   fontFile = state.font;
   $("font").value = state.font;
 }
 
 // ---------- rendering ----------
 
+function isLatex() { return radio("mode") === "latex"; }
+
 function toMathML(source) {
-  if ($("mode").value === "mathml") return source;
-  return latex_to_mathml(source, $("display").checked);
+  if (!isLatex()) return source;
+  return latex_to_mathml(source, radio("display") === "block");
 }
 
 /** Alternative text: the LaTeX source, or the text content of the MathML. */
 function altText(source, mathml) {
-  if ($("mode").value === "latex") return oneLine(source);
+  if (isLatex()) return oneLine(source);
   try {
     const text = new DOMParser().parseFromString(mathml, "text/xml").documentElement.textContent;
     return oneLine(text) || "formula";
@@ -227,12 +513,12 @@ function altText(source, mathml) {
   }
 }
 
-function isDisplay(source, mathml) {
-  return $("mode").value === "latex" ? $("display").checked : /display\s*=\s*["']block["']/.test(mathml);
+function isDisplay(mathml) {
+  return isLatex() ? radio("display") === "block" : /display\s*=\s*["']block["']/.test(mathml);
 }
 
 function colors() {
-  return { fg: $("fg").value, bg: $("transparent").checked ? null : $("bg").value };
+  return { fg: $("fg").value, bg: radio("bgmode") === "none" ? null : $("bg").value };
 }
 
 /** The SVG with the chosen colors and alt text. */
@@ -243,40 +529,84 @@ function styled() {
 function render() {
   if (!renderer) return;
   const source = $("src").value;
+  scheduleHashUpdate();
+  if (!source.trim()) {
+    valid = false;
+    clearError();
+    showPlaceholder("Type a formula above, or pick one from Examples.");
+    $("meta").textContent = "";
+    refreshExportState();
+    return;
+  }
+  const t0 = performance.now();
+  let mathml;
   try {
-    const t0 = performance.now();
-    const mathml = toMathML(source);
-    const r = renderer.render(mathml, $("debug").checked);
+    mathml = toMathML(source);
+  } catch (e) {
+    let range = null;
+    try { range = latex_error_range(source, radio("display") === "block"); } catch { /* no range */ }
+    return fail(e, range ? [range[0], range[1]] : null);
+  }
+  try {
+    const r = renderer.render(mathml, $("debug").getAttribute("aria-pressed") === "true");
     rendering = {
-      svg: r.svg, width: r.width, height: r.height, baseline: r.baseline,
-      mathml, alt: altText(source, mathml), display: isDisplay(source, mathml),
+      svg: r.svg, width: r.width, height: r.height, baseline: r.baseline, unitsPerEm: renderer.units_per_em(),
+      mathml, alt: altText(source, mathml), display: isDisplay(mathml),
     };
     r.free();
-    $("mathml").textContent = mathml;
-    status(`${fontName} · rendered in ${(performance.now() - t0).toFixed(1)} ms`);
-    refreshOutput();
   } catch (e) {
-    rendering = null;
-    setExportEnabled(false);
-    status(String(e?.message ?? e), true);
+    return fail(e, null);
   }
-  scheduleHashUpdate();
+  valid = true;
+  clearError();
+  $("mathml").textContent = prettyXml(mathml);
+  $("meta").textContent = `${fontName} · ${(performance.now() - t0).toFixed(1)} ms`;
+  refreshOutput();
+  scheduleFontGrid();
 }
 
-function setExportEnabled(on) {
-  for (const id of ["copypng", "copysvg", "download", "downloadpng", "copyhtmlsvg", "copyhtmlpng"]) $(id).disabled = !on;
+function fail(e, range) {
+  valid = false;
+  showError(String(e?.message ?? e), range);
+  // keep the last good result visible, but faded, so the layout does not jump while typing
+  $("out").classList.add("stale");
+  $("meta").textContent = rendering ? "showing the last valid formula" : "";
+  if (!rendering) showPlaceholder("Fix the error above to see the formula.");
+  refreshExportState();
+}
+
+function refreshExportState() {
+  for (const id of ["copy", "download", "copyhtmlsvg", "copyhtmlpng", "copysnippet", "editmathml", "copymathml"]) {
+    $(id).disabled = !valid;
+  }
+  $("out").classList.toggle("ready", valid);
+  for (const id of ["imgsvg", "imgpng"]) $(id).draggable = valid;
+}
+
+function showPlaceholder(text) {
+  $("placeholder").textContent = text;
+  $("placeholder").hidden = false;
+  $("stack").hidden = true;
 }
 
 /** Everything that depends on the rendering or the colors. */
 function refreshOutput() {
   if (!rendering) return;
-  const svg = styled();
-  $("out").innerHTML = svg;
-  $("out").classList.toggle("transparent", !colors().bg);
+  // the standalone file, as downloaded; the preview's CSS size overrides its width and height
+  setImage("svg", new Blob([sized().svg], { type: "image/svg+xml" }));
+  $("imgsvg").alt = rendering.alt;
+  $("imgpng").alt = rendering.alt;
+  $("imgpng").hidden = true;          // stale until the new PNG is ready
+  images.png.ready = false;
+  $("stack").hidden = false;
+  $("placeholder").hidden = true;
+  $("out").classList.toggle("stale", !valid);
+  $("out").classList.toggle("checker", !colors().bg);
   $("out").style.backgroundColor = colors().bg ?? "";
-  setExportEnabled(true);
+  $("out").style.setProperty("--w", rendering.width / rendering.unitsPerEm);
+  refreshExportState();
   updateSnippet();
-  scheduleDragFiles();
+  schedulePng();
 }
 
 function updateSnippet() {
@@ -288,43 +618,157 @@ function updateSnippet() {
     width: rendering.width,
     height: rendering.height,
     baseline: rendering.baseline,
-    unitsPerEm: renderer.units_per_em(),
+    unitsPerEm: rendering.unitsPerEm,
   });
   $("snippet").value = s[$("snippetkind").value];
 }
 
+/** Indents MathML for reading and editing; token elements stay on one line. */
+function prettyXml(xml) {
+  const doc = new DOMParser().parseFromString(xml, "application/xml");
+  if (doc.querySelector("parsererror")) return xml;
+  const out = [];
+  const walk = (node, depth) => {
+    const pad = "  ".repeat(depth);
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node.nodeValue.trim();
+      if (t) out.push(pad + escapeXml(t));
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const name = node.nodeName;
+    const attrs = [...node.attributes]
+      .filter((a) => !(a.name === "xmlns" && a.value === "http://www.w3.org/1998/Math/MathML"))
+      .map((a) => ` ${a.name}="${escapeXml(a.value)}"`).join("");
+    const kids = [...node.childNodes].filter((n) => n.nodeType === Node.ELEMENT_NODE
+      || (n.nodeType === Node.TEXT_NODE && n.nodeValue.trim()));
+    if (!kids.length) out.push(`${pad}<${name}${attrs}/>`);
+    else if (kids.every((n) => n.nodeType === Node.TEXT_NODE)) {
+      out.push(`${pad}<${name}${attrs}>${escapeXml(node.textContent).replace(/&quot;/g, '"')}</${name}>`);
+    } else {
+      out.push(`${pad}<${name}${attrs}>`);
+      for (const k of kids) walk(k, depth + 1);
+      out.push(`${pad}</${name}>`);
+    }
+  };
+  walk(doc.documentElement, 0);
+  return out.join("\n");
+}
+
+// ---------- zoom ----------
+
+let zoom = 3;
+function setZoom(value) {
+  zoom = Math.min(8, Math.max(1, Math.round(value * 4) / 4));
+  document.documentElement.style.setProperty("--size", String(zoom));
+  $("zoomval").value = `${zoom}×`;
+  $("zoomout").disabled = zoom <= 1;
+  $("zoomin").disabled = zoom >= 8;
+}
+
 // ---------- fonts ----------
+
+function loadRenderer(file) {
+  let p = renderers.get(file);
+  if (!p) {
+    p = fetch(`./fonts/${file}`).then(async (res) => {
+      if (!res.ok) throw new Error(`could not load ${file} (HTTP ${res.status})`);
+      return new MathRenderer(new Uint8Array(await res.arrayBuffer()));
+    });
+    p.catch(() => renderers.delete(file));   // allow a retry
+    renderers.set(file, p);
+  }
+  return p;
+}
 
 async function selectFont(file) {
   const token = ++loadToken;
   try {
-    let r = renderers.get(file);
-    if (!r) {
-      status("loading font…");
-      const res = await fetch(`./fonts/${file}`);
-      if (!res.ok) throw new Error(`could not load ${file} (HTTP ${res.status})`);
-      r = new MathRenderer(new Uint8Array(await res.arrayBuffer()));
-      renderers.set(file, r);
-    }
+    if (!renderer) $("meta").textContent = "loading font…";
+    const r = file === CUSTOM ? customRenderer.renderer : await loadRenderer(file);
     if (token !== loadToken) return;           // a newer selection won
     renderer = r;
     fontFile = file;
-    fontName = FONTS.find((f) => f.file === file)?.name ?? file;
+    fontName = file === CUSTOM ? customRenderer.name : FONTS.find((f) => f.file === file)?.name ?? file;
+    $("font").value = file;
+    lastFont = file;
     render();
+    markCurrentFontCard();
   } catch (e) {
-    if (token === loadToken) status(String(e?.message ?? e), true);
+    if (token === loadToken) toast(String(e?.message ?? e), true);
   }
 }
 
 function setCustomFont(bytes, name) {
-  ++loadToken;
+  let r;
   try {
-    renderer = new MathRenderer(new Uint8Array(bytes));
-    fontFile = CUSTOM;
-    fontName = name;
-    render();
+    r = new MathRenderer(new Uint8Array(bytes));
   } catch (e) {
-    status(String(e?.message ?? e), true);
+    toast(`${name}: ${e?.message ?? e}`, true);
+    $("font").value = lastFont;
+    return;
+  }
+  customRenderer = { renderer: r, name };
+  uploadOption.text = `${name} (uploaded)`;
+  buildFontGrid();
+  selectFont(CUSTOM);
+}
+
+// ---------- font comparison ----------
+
+function fontEntries() {
+  const list = FONTS.map((f) => ({ ...f }));
+  if (customRenderer) list.push({ file: CUSTOM, name: customRenderer.name });
+  return list;
+}
+
+function buildFontGrid() {
+  const grid = $("fontgrid");
+  grid.replaceChildren(...fontEntries().map(({ file, name }) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "fontcard";
+    card.dataset.file = file;
+    card.innerHTML = `<span class="name"></span><span class="img"><span class="placeholder">loading…</span></span>`;
+    card.querySelector(".name").textContent = name;
+    card.addEventListener("click", () => selectFont(file));
+    return card;
+  }));
+  markCurrentFontCard();
+  if (!grid.hidden) renderFontGrid();
+}
+
+function markCurrentFontCard() {
+  for (const card of $("fontgrid").children) {
+    card.setAttribute("aria-pressed", String(card.dataset.file === fontFile));
+  }
+}
+
+let gridTimer = 0;
+function scheduleFontGrid() {
+  if ($("fontgrid").hidden) return;
+  clearTimeout(gridTimer);
+  gridTimer = setTimeout(renderFontGrid, 120);
+}
+
+async function renderFontGrid() {
+  if (!valid || !rendering) return;
+  const mathml = rendering.mathml;
+  const debug = $("debug").getAttribute("aria-pressed") === "true";
+  for (const card of $("fontgrid").children) {
+    const file = card.dataset.file;
+    const slot = card.querySelector(".img");
+    try {
+      const r = file === CUSTOM ? customRenderer.renderer : await loadRenderer(file);
+      if (!valid || rendering.mathml !== mathml) return;   // input changed meanwhile
+      const out = r.render(mathml, debug);
+      slot.innerHTML = styleSvg(out.svg, { fg: "#000000", alt: rendering.alt });
+      slot.style.setProperty("--w", out.width / r.units_per_em());
+      out.free();
+    } catch (e) {
+      slot.innerHTML = `<span class="placeholder"></span>`;
+      slot.firstChild.textContent = String(e?.message ?? e);
+    }
   }
 }
 
@@ -336,7 +780,7 @@ function pxPerEm() {
 
 /** The SVG with an absolute size, for use outside of this page. */
 function sized(pxPerEmValue = 48) {
-  return sizeSvg(styled(), pxPerEmValue, renderer.units_per_em());
+  return sizeSvg(styled(), pxPerEmValue, rendering.unitsPerEm);
 }
 
 async function pngBlob(pxPerEmValue) {
@@ -377,33 +821,33 @@ async function guarded(what, action) {
   try {
     await action();
   } catch (e) {
-    status(`${what} failed: ${e?.message ?? e}`, true);
+    toast(`${what} failed: ${e?.message ?? e}`, true);
   }
 }
 
-const copyPng = () => guarded("Copy PNG", async () => {
+function needClipboard() {
   if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
     throw new Error("the clipboard API is not available (it needs https or localhost)");
   }
-  // Passing the promise (not the blob) keeps Safari happy: it must start inside the click.
-  await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob(pxPerEm()) })]);
-  status("Copied PNG to the clipboard");
-});
+}
 
-const copySvg = () => guarded("Copy SVG", async () => {
-  if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
-    throw new Error("the clipboard API is not available (it needs https or localhost)");
+/**
+ * One clipboard item with every image format the browser can write: PNG always, SVG where
+ * supported (Chromium 124+). The pasting app picks the richest format it understands. No text
+ * flavor: apps like LibreOffice Writer would prefer it and paste the SVG source code.
+ */
+const copyImage = () => valid && guarded("Copy", async () => {
+  needClipboard();
+  const withSvg = typeof ClipboardItem.supports === "function" && ClipboardItem.supports("image/svg+xml");
+  // Passing the promise (not the blob) keeps Safari happy: the write must start inside the click.
+  const item = { "image/png": pngBlob(pxPerEm()) };
+  if (withSvg) {
+    // without the XML declaration, which Chromium's sanitizer would turn into a comment
+    const svg = sized().svg.replace(/^<\?xml[^>]*\?>\s*/, "");
+    item["image/svg+xml"] = new Blob([svg], { type: "image/svg+xml" });
   }
-  const { svg } = sized();
-  // Where the browser can put real SVG on the clipboard, do only that: with a text flavor next
-  // to it, apps such as LibreOffice Writer may paste the source code instead of the image.
-  // Everywhere else the SVG source goes on as text.
-  const asImage = ClipboardItem.supports?.("image/svg+xml");
-  const item = asImage
-    ? { "image/svg+xml": new Blob([svg], { type: "image/svg+xml" }) }
-    : { "text/plain": new Blob([svg], { type: "text/plain" }) };
   await navigator.clipboard.write([new ClipboardItem(item)]);
-  status(asImage ? "Copied SVG as an image" : "This browser can only copy the SVG source as text; use Download SVG or Copy PNG to get an image");
+  toast(withSvg ? "Copied as PNG and SVG; the app you paste into picks one" : "Copied as PNG");
 });
 
 /** `<img>` HTML for the SVG (vector) or the PNG (raster) of the current rendering. */
@@ -427,151 +871,284 @@ function blobToDataUrl(blob) {
 }
 
 const copyHtml = (kind) => () => guarded("Copy as HTML", async () => {
-  if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
-    throw new Error("the clipboard API is not available (it needs https or localhost)");
-  }
+  needClipboard();
   const html = imageHtml(kind).then((h) => new Blob([h], { type: "text/html" }));
   await navigator.clipboard.write([new ClipboardItem({ "text/html": html })]);
-  status(`Copied as HTML (${kind.toUpperCase()}); paste it into the other app`);
+  toast(`Copied as HTML (${kind.toUpperCase()}); paste it into the other app`);
 });
 
 const downloadSvg = () => saveBlob(new Blob([sized().svg], { type: "image/svg+xml" }), "formula.svg");
 const downloadPng = () => guarded("PNG export", async () => saveBlob(await pngBlob(pxPerEm()), "formula.png"));
 
-// ---------- dragging files out ----------
+const format = () => radio("format");
+function downloadImage() {
+  if (!valid) return;
+  if (format() === "png") return downloadPng();
+  downloadSvg();
+  toast("Saved formula.svg");
+}
+
+function updateFormatUi() {
+  store.set("mathrender.format", format());
+}
+
+// ---------- preview images, dragging and the context menu ----------
 
 /**
- * Keeps blob: URLs ready, because `dragstart` handlers must provide data synchronously. The
- * PNG is rasterized, so wait until the input has settled.
+ * The preview consists of real images, so that the browser's own image drag (which can produce a
+ * file or image data for the drop target, unlike anything a page can put in `dataTransfer`) and
+ * its right-click menu work in every browser. Their blob: URLs stay alive while shown, because
+ * dragging and "Save Image As" fetch them again.
  */
-let dragTimer = 0;
-function scheduleDragFiles() {
-  clearTimeout(dragTimer);
-  dragTimer = setTimeout(prepareDragFiles, 250);
-}
+const images = { svg: { url: null }, png: { url: null, ready: false } };
 
-function prepareDragFiles() {
-  if (!rendering) return;
-  const token = ++exportToken;
-  for (const key of ["svgUrl", "pngUrl"]) {
-    if (drag[key]) URL.revokeObjectURL(drag[key]);
+function setImage(kind, blob) {
+  const img = $(`img${kind}`);
+  const old = images[kind].url;
+  const url = URL.createObjectURL(blob);
+  images[kind].url = url;
+  img.src = url;   // the old image stays on screen until the new one has loaded
+  if (old) {
+    const release = () => URL.revokeObjectURL(old);
+    img.decode().then(release, release);
   }
-  drag = { svgUrl: null, pngUrl: null, svgHtml: null, pngHtml: null };
-
-  const { svg, width, height } = sized();
-  drag.svgUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-  drag.svgHtml = htmlImage({ src: svgDataUri(svg), alt: rendering.alt, width, height });
-  pngBlob(pxPerEm()).then(async (png) => {
-    const dataUrl = await blobToDataUrl(png);
-    if (token !== exportToken) return;
-    drag.pngUrl = URL.createObjectURL(png);
-    drag.pngHtml = htmlImage({ src: dataUrl, alt: rendering.alt, width, height });
-  }).catch(() => { /* dragging a PNG is simply unavailable */ });
 }
 
-function onDragStart(kind) {
-  return (e) => {
-    const url = rendering && drag[`${kind}Url`];
-    const html = rendering && drag[`${kind}Html`];
-    if (!url && !html) {
-      e.preventDefault();
-      status(kind === "png" ? "The PNG is still being prepared; try again in a moment" : "Nothing to drag yet", true);
-      return;
-    }
-    e.dataTransfer.effectAllowed = "copy";
-    // Rich-text apps read the HTML. Do not add a text flavor: apps like LibreOffice Writer
-    // would then prefer it and insert the source code instead of the image.
-    if (html) e.dataTransfer.setData("text/html", html);
-    if (url) {
-      // Chromium turns this into a file when dropped on the desktop or in a file manager.
-      const [type, name] = kind === "svg" ? ["image/svg+xml", "formula.svg"] : ["image/png", "formula.png"];
-      e.dataTransfer.setData("DownloadURL", `${type}:${name}:${url}`);
-    }
-  };
+/** The PNG is rasterized, so wait until the input has settled. Only needed in PNG mode. */
+let pngTimer = 0;
+let pngToken = 0;
+function schedulePng() {
+  clearTimeout(pngTimer);
+  const token = ++pngToken;
+  images.png.ready = false;
+  $("imgpng").hidden = true;
+  if (format() !== "png" || !valid) return;
+  pngTimer = setTimeout(async () => {
+    try {
+      const png = await pngBlob(pxPerEm());
+      if (token !== pngToken) return;
+      setImage("png", png);
+      await $("imgpng").decode();
+      if (token !== pngToken) return;
+      images.png.ready = true;
+      $("imgpng").hidden = false;
+    } catch { /* dragging falls back to a message */ }
+  }, 250);
+}
+
+function onDragStart(e) {
+  const kind = format();
+  const fromPng = e.target.id === "imgpng";
+  if (!valid || (kind === "png" && !fromPng)) {
+    e.preventDefault();
+    if (valid) toast("The PNG is still being prepared; try again in a moment", true);
+    return;
+  }
+  // Leave the browser's own image data alone (do not set text/html: rich-text apps would get an
+  // <img> with a blob: URL they cannot load). Chromium additionally turns DownloadURL into a
+  // file with a proper name when dropped in a file manager.
+  e.dataTransfer.effectAllowed = "copy";
+  const [type, name] = kind === "svg" ? ["image/svg+xml", "formula.svg"] : ["image/png", "formula.png"];
+  e.dataTransfer.setData("DownloadURL", `${type}:${name}:${images[kind].url}`);
+  if (fromPng) {
+    // the PNG layer is invisible, so show the vector image as the drag feedback; the drag
+    // image of an <img> is drawn at its natural size, so scale the grab point accordingly
+    const svg = $("imgsvg");
+    const scale = svg.naturalWidth / svg.getBoundingClientRect().width || 1;
+    e.dataTransfer.setDragImage(svg, e.offsetX * scale, e.offsetY * scale);
+  }
+}
+
+// ---------- editor ----------
+
+/** Replaces the source in a way that the browser's undo can revert. */
+function replaceSource(text) {
+  const src = $("src");
+  src.focus();
+  src.select();
+  if (!document.execCommand?.("insertText", false, text)) {
+    src.value = text;
+    src.dispatchEvent(new Event("input"));
+  }
+  src.setSelectionRange(text.length, text.length);
+  src.scrollTop = 0;
+}
+
+function autosize() {
+  const src = $("src");
+  src.style.height = "auto";
+  src.style.height = `${src.scrollHeight + 2}px`;
+  syncBackdrop();
+}
+
+function syncBackdrop() {
+  $("backdrop").style.height = $("src").style.height;
+  $("backdrop").scrollTop = $("src").scrollTop;
+}
+
+function updateMode(previous) {
+  const mode = radio("mode");
+  if (previous && previous !== mode) saved[previous] = $("src").value;
+  $("src").value = saved[mode];
+  $("displayseg").hidden = mode !== "latex";
+  $("mathmldetails").hidden = mode !== "latex";
+  $("src").placeholder = mode === "latex" ? String.raw`Type LaTeX, e.g. \frac{a}{b}` : "Type MathML, e.g. <math><mi>x</mi></math>";
+  autosize();
 }
 
 // ---------- wiring ----------
 
-function updateMode(previous) {
-  const mode = $("mode").value;
-  if (previous) saved[previous] = $("src").value;
-  $("src").value = saved[mode];
-  $("displaylabel").hidden = mode !== "latex";
-  $("mathmldetails").hidden = mode !== "latex";
-}
-
 for (const f of FONTS) $("font").add(new Option(f.name, f.file));
 const uploadOption = new Option("Upload font file…", CUSTOM);
 $("font").add(uploadOption);
+for (const [name] of GALLERY) $("examples").add(new Option(name, name));
 
 let lastFont = FONTS[0].file;   // what the dropdown shows if the upload dialog is cancelled
 $("font").addEventListener("change", (e) => {
-  if (e.target.value === CUSTOM) {
+  if (e.target.value === CUSTOM && !customRenderer) {
     $("fontfile").click();
   } else {
-    lastFont = e.target.value;
-    selectFont(lastFont);
+    selectFont(e.target.value);
   }
 });
 $("fontfile").addEventListener("change", async (e) => {
   const file = e.target.files[0];
-  if (file) {
-    uploadOption.text = `${file.name} (uploaded)`;
-    $("font").value = CUSTOM;
-    lastFont = CUSTOM;
-    setCustomFont(await file.arrayBuffer(), file.name);
-  } else {
-    $("font").value = lastFont;
-  }
+  if (file) setCustomFont(await file.arrayBuffer(), file.name);
+  else $("font").value = lastFont;
   e.target.value = "";
 });
 // closing the file dialog without a choice fires `cancel` (and no `change`) in current browsers
 $("fontfile").addEventListener("cancel", () => { $("font").value = lastFont; });
 
-let currentMode = $("mode").value;
-$("mode").addEventListener("change", () => { updateMode(currentMode); currentMode = $("mode").value; render(); });
-$("src").addEventListener("input", render);
-$("display").addEventListener("change", render);
-$("debug").addEventListener("change", render);
-$("fg").addEventListener("input", () => { refreshOutput(); scheduleHashUpdate(); });
-$("bg").addEventListener("input", () => { refreshOutput(); scheduleHashUpdate(); });
-$("transparent").addEventListener("change", () => {
-  $("bg").disabled = $("transparent").checked;
-  refreshOutput();
-  scheduleHashUpdate();
+// drop a font file anywhere on the page
+let dragDepth = 0;
+let draggingOut = false;        // our own formula image is being dragged: not a font drop
+addEventListener("dragstart", () => { draggingOut = true; });
+addEventListener("dragend", () => { draggingOut = false; });
+const hasFile = (e) => !draggingOut && [...(e.dataTransfer?.types ?? [])].includes("Files");
+addEventListener("dragenter", (e) => { if (hasFile(e)) { dragDepth++; document.body.classList.add("dropping"); } });
+addEventListener("dragleave", (e) => { if (hasFile(e) && --dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dropping"); } });
+addEventListener("dragover", (e) => { if (hasFile(e)) e.preventDefault(); });
+addEventListener("drop", async (e) => {
+  if (!hasFile(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove("dropping");
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (!/\.(otf|ttf)$/i.test(file.name)) return toast(`${file.name} is not an .otf or .ttf font`, true);
+  setCustomFont(await file.arrayBuffer(), file.name);
 });
-$("size").addEventListener("input", (e) => {
-  document.documentElement.style.setProperty("--size", `${e.target.value}em`);
-  scheduleHashUpdate();
+
+$("compare").addEventListener("click", () => {
+  const open = $("fontgrid").hidden;
+  $("fontgrid").hidden = !open;
+  $("compare").setAttribute("aria-pressed", String(open));
+  if (open) {
+    if (!$("fontgrid").children.length) buildFontGrid();
+    else renderFontGrid();
+  }
 });
-$("pngscale").addEventListener("change", scheduleDragFiles);
+
+let currentMode = radio("mode");
+for (const input of document.querySelectorAll("input[name=mode]")) {
+  input.addEventListener("change", () => { updateMode(currentMode); currentMode = radio("mode"); render(); });
+}
+for (const input of document.querySelectorAll("input[name=display]")) input.addEventListener("change", render);
+$("src").addEventListener("input", () => { autosize(); render(); });
+$("src").addEventListener("scroll", syncBackdrop);
+new ResizeObserver(syncBackdrop).observe($("src"));
+
+$("examples").addEventListener("change", (e) => {
+  const entry = GALLERY.find(([name]) => name === e.target.value);
+  e.target.value = "";
+  if (!entry) return;
+  let text = entry[1];
+  if (!isLatex()) {
+    try { text = prettyXml(latex_to_mathml(text, true)); } catch { return; }
+  }
+  replaceSource(text);
+});
+
+$("debug").addEventListener("click", () => {
+  const on = $("debug").getAttribute("aria-pressed") !== "true";
+  $("debug").setAttribute("aria-pressed", String(on));
+  render();
+});
+
+const recolor = () => { refreshOutput(); scheduleHashUpdate(); };
+$("fg").addEventListener("input", recolor);
+$("bg").addEventListener("click", () => { setRadio("bgmode", "color"); updateBgUi(); recolor(); });
+$("bg").addEventListener("input", () => { setRadio("bgmode", "color"); updateBgUi(); recolor(); });
+for (const input of document.querySelectorAll("input[name=bgmode]")) {
+  input.addEventListener("change", () => { updateBgUi(); recolor(); });
+}
+function updateBgUi() { $("bg").classList.toggle("off", radio("bgmode") === "none"); }
+
+$("zoomin").addEventListener("click", () => { setZoom(zoom + 0.5); scheduleHashUpdate(); });
+$("zoomout").addEventListener("click", () => { setZoom(zoom - 0.5); scheduleHashUpdate(); });
+$("zoomval").addEventListener("click", () => { setZoom(3); scheduleHashUpdate(); });
+
+for (const input of document.querySelectorAll("input[name=format]")) {
+  input.addEventListener("change", () => { updateFormatUi(); schedulePng(); });
+}
+$("pngscale").addEventListener("change", () => { store.set("mathrender.pngscale", $("pngscale").value); schedulePng(); });
 $("snippetkind").addEventListener("change", updateSnippet);
 
-$("copypng").addEventListener("click", copyPng);
-$("copysvg").addEventListener("click", copySvg);
+$("copy").addEventListener("click", copyImage);
+$("download").addEventListener("click", downloadImage);
 $("copyhtmlsvg").addEventListener("click", copyHtml("svg"));
 $("copyhtmlpng").addEventListener("click", copyHtml("png"));
-$("download").addEventListener("click", downloadSvg);
-$("downloadpng").addEventListener("click", downloadPng);
 $("copylink").addEventListener("click", () => guarded("Copy link", async () => {
   history.replaceState(null, "", `#${encodeState(currentState())}`);
   await navigator.clipboard.writeText(location.href);
-  status("Copied link");
+  toast("Copied link to this formula");
 }));
 $("copysnippet").addEventListener("click", () => guarded("Copy snippet", async () => {
   await navigator.clipboard.writeText($("snippet").value);
-  status("Copied snippet");
+  toast("Copied snippet");
 }));
+$("copymathml").addEventListener("click", () => guarded("Copy MathML", async () => {
+  await navigator.clipboard.writeText($("mathml").textContent);
+  toast("Copied MathML");
+}));
+$("editmathml").addEventListener("click", () => {
+  saved.latex = $("src").value;
+  saved.mathml = $("mathml").textContent;
+  setRadio("mode", "mathml");
+  updateMode(null);
+  currentMode = "mathml";
+  render();
+  $("src").focus();
+  $("src").setSelectionRange(0, 0);
+  $("src").scrollTop = 0;
+});
 
-$("dragsvg").addEventListener("dragstart", onDragStart("svg"));
-$("dragpng").addEventListener("dragstart", onDragStart("png"));
+$("imgsvg").addEventListener("dragstart", onDragStart);
+$("imgpng").addEventListener("dragstart", onDragStart);
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+$("modkey").textContent = isMac ? "⌘" : "Ctrl";
+$("copy").title = `Copy to the clipboard (${isMac ? "⌘" : "Ctrl"}+Enter)`;
+addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (isMac ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey) {
+    e.preventDefault();
+    copyImage();
+  }
+});
 
 // ---------- start ----------
+
+setRadio("format", store.get("mathrender.format", "png"));
+$("pngscale").value = store.get("mathrender.pngscale", "2");
+if (!$("pngscale").value) $("pngscale").value = "2";
+updateFormatUi();
 
 await init();
 const { state, hasSource } = decodeState(location.hash, FONTS.map((f) => f.file));
 applyState(state, hasSource);
-currentMode = $("mode").value;
+updateBgUi();
+currentMode = radio("mode");
 lastFont = state.font;
 updateMode(null);
 selectFont(state.font);

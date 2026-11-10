@@ -111,11 +111,12 @@ impl MathRenderer {
             return Err(JsError::new("the MathML document is empty"));
         }
 
-        // A font size of one em per font unit makes px equal font units.
+        // A font size of one em per font unit makes px equal font units. As in MathML Core
+        // (`math { math-style: compact }`), `<math>` is inline unless it has `display="block"`.
         let units_per_em = self.shaper.units_per_em() as f32;
         let options = StyleOptions {
             font_size: units_per_em,
-            ..Default::default()
+            math_style: math_render::host::MathStyle::Compact,
         };
         let typeset = math_render::layout(&document, &self.shaper, options);
         let flags = svg_renderer::Flags {
@@ -198,6 +199,26 @@ mod tests {
     }
 
     #[test]
+    fn math_is_inline_unless_display_block() {
+        let r = renderer();
+        let size = |mathml: &str| {
+            let out = r.render(mathml, false).unwrap_or_else(|_| panic!("{mathml}"));
+            (out.width(), out.height())
+        };
+        let sum = "<munderover><mo>∑</mo><mi>a</mi><mi>b</mi></munderover>";
+        let inline = size(&format!("<math>{sum}</math>"));
+        let block = size(&format!("<math display=\"block\">{sum}</math>"));
+        assert_eq!(inline, size(&format!("<math display=\"inline\">{sum}</math>")));
+        // inline: small operator with limits at the side; display: large with limits stacked
+        assert!(inline.1 < block.1 && inline.0 > block.0, "{inline:?} {block:?}");
+        // and the LaTeX switch maps onto it (math-core sets the operator spacing, so compare
+        // only the heights)
+        let latex = |display| size(&convert_latex(r"\sum_a^b", display).unwrap()).1;
+        assert_eq!(latex(false), inline.1);
+        assert_eq!(latex(true), block.1);
+    }
+
+    #[test]
     fn debug_output_has_boxes() {
         let r = renderer();
         let mathml = "<math><mi>x</mi></math>";
@@ -227,6 +248,28 @@ pub fn latex_to_mathml(latex: &str, display: bool) -> Result<String, JsError> {
 }
 
 fn convert_latex(latex: &str, display: bool) -> Result<String, String> {
+    convert_latex_raw(latex, display)?
+        .map(adapt_for_this_renderer)
+        .map_err(|e| format!("LaTeX error: {e}"))
+}
+
+/// Where in `latex` the conversion fails, as `[start, end]` in UTF-16 code units (the indices
+/// of a JavaScript string, e.g. for `textarea.setSelectionRange`). `undefined` if it converts.
+#[wasm_bindgen]
+pub fn latex_error_range(latex: &str, display: bool) -> Option<Vec<u32>> {
+    let error = convert_latex_raw(latex, display).ok()?.err()?;
+    let utf16 = |byte: usize| {
+        let byte = byte.min(latex.len());
+        // a range may in principle end inside a character; round down to a boundary
+        let byte = (0..=byte).rev().find(|&b| latex.is_char_boundary(b)).unwrap_or(0);
+        latex[..byte].encode_utf16().count() as u32
+    };
+    Some(vec![utf16(error.0.start), utf16(error.0.end)])
+}
+
+type LatexResult = Result<String, Box<math_core::LatexError>>;
+
+fn convert_latex_raw(latex: &str, display: bool) -> Result<LatexResult, String> {
     use math_core::{LatexToMathML, MathCoreConfig, MathDisplay};
 
     let converter = LatexToMathML::new(MathCoreConfig::default(), Vec::new())
@@ -236,10 +279,9 @@ fn convert_latex(latex: &str, display: bool) -> Result<String, String> {
     } else {
         MathDisplay::Inline
     };
-    converter
+    Ok(converter
         .convert_with_local_state(latex, display)
-        .map(|result| adapt_for_this_renderer(result.mathml))
-        .map_err(|e| format!("LaTeX error: {e}"))
+        .map(|result| result.mathml))
 }
 
 /// math-core targets browsers implementing MathML Core. Two details differ from what this
@@ -299,6 +341,20 @@ mod latex_tests {
     fn reports_latex_errors() {
         assert!(convert_latex(r"\frac{1", true).is_err());
         assert!(convert_latex(r"\notacommand", true).is_err());
+    }
+
+    #[test]
+    fn error_range_points_into_the_source() {
+        assert_eq!(latex_error_range(r"\frac{1}{2}", true), None);
+        let src = r"x + \notacommand y";
+        let range = latex_error_range(src, true).expect("error expected");
+        assert_eq!(&src[range[0] as usize..range[1] as usize], r"\notacommand");
+        // indices count UTF-16 code units, like JavaScript strings
+        let src = "αβ + \\notacommand";
+        let range = latex_error_range(src, true).expect("error expected");
+        let units: Vec<u16> = src.encode_utf16().collect();
+        let marked = String::from_utf16(&units[range[0] as usize..range[1] as usize]).unwrap();
+        assert_eq!(marked, r"\notacommand");
     }
 
     #[test]
