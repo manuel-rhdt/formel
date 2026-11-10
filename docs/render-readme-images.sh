@@ -6,13 +6,17 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 declare -A FONTS=(
-  [latinmodern]=/usr/share/texmf/fonts/opentype/public/lm-math/latinmodern-math.otf
+  [newcm]=${NEWCM_MATH:-$HOME/.local/share/fonts/NewCMMath-Regular.otf}
   [pagella]=/usr/share/texmf/fonts/opentype/public/tex-gyre-math/texgyrepagella-math.otf
   [termes]=/usr/share/texmf/fonts/opentype/public/tex-gyre-math/texgyretermes-math.otf
   [asana]=/usr/share/fonts/opentype/asana-math/Asana-Math.otf
   [dejavu]=/usr/share/fonts/truetype/dejavu/DejaVuMathTeXGyre.ttf
   [bonum]=/usr/share/texmf/fonts/opentype/public/tex-gyre-math/texgyrebonum-math.otf
-  [stix]=/usr/share/fonts/opentype/stix-word/STIXMath-Regular.otf
+  [schola]=/usr/share/texmf/fonts/opentype/public/tex-gyre-math/texgyreschola-math.otf
+  [fira]=${FIRA_MATH:-$HOME/.local/share/fonts/FiraMath-Regular.otf}
+  [noto]=${NOTO_SANS_MATH:-$HOME/.local/share/fonts/NotoSansMath-Math.ttf}
+  [cambria]=${CAMBRIA_MATH:-$HOME/.local/share/fonts/CambriaMath.ttf}
+  [stix]=${STIX_TWO_MATH:-$HOME/.local/share/fonts/STIXTwoMath-Regular.otf}
 )
 
 ONLY=${ONLY:-}
@@ -29,6 +33,8 @@ for eq in docs/equations/*.xml; do
     [[ -n $ONLY && $font != "$ONLY" ]] && continue
     # known layout glitch: overlapping subscript on the stacked integral in DejaVu
     [[ $name == stokes && $font == dejavu ]] && continue
+    # Fira Math has no vertical or diagonal ellipsis glyphs
+    [[ $name == matrix && $font == fira ]] && continue
     "$MATHIMG" -f "${FONTS[$font]}" "$eq" "$tmp/out.svg"
     sed 's/"black"/"#1f2328"/g' "$tmp/out.svg" > "docs/img/$name-$font-light.svg"
     sed 's/"black"/"#e6edf3"/g' "$tmp/out.svg" > "docs/img/$name-$font-dark.svg"
