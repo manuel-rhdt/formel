@@ -201,7 +201,21 @@ impl<'d, F: MathFont + Clone> MathTree for StyledDocument<'d, F> {
     }
 
     fn attribute(&self, node: NodeId, name: &str) -> Option<Cow<'_, str>> {
-        self.document.attribute(node, name).map(Cow::Borrowed)
+        if let Some(value) = self.document.attribute(node, name) {
+            return Some(Cow::Borrowed(value));
+        }
+        // `style="text-align: ..."` on a cell stands in for a missing `columnalign`.
+        if name == "columnalign" && self.document.node(node).element == MathElement::Mtd {
+            let inline = self.document.attribute(node, "style")?;
+            let align = ua_style::inline_style_property(inline, "text-align")?;
+            return match align {
+                "left" | "start" => Some(Cow::Borrowed("left")),
+                "right" | "end" => Some(Cow::Borrowed("right")),
+                "center" => Some(Cow::Borrowed("center")),
+                _ => None,
+            };
+        }
+        None
     }
 }
 

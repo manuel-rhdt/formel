@@ -5,22 +5,76 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>math-render in the browser</title>
 <style>
-  :root { color-scheme: light dark; --gap: 1rem; }
+  :root { color-scheme: light dark; --gap: 1rem; --border: color-mix(in srgb, CanvasText 30%, transparent); }
   body { font: 16px/1.5 system-ui, sans-serif; max-width: 60rem; margin: 0 auto; padding: var(--gap); }
-  h1 { font-size: 1.4rem; }
-  textarea { width: 100%; height: 14rem; font: 14px/1.4 ui-monospace, monospace; box-sizing: border-box; }
-  .row { display: flex; gap: var(--gap); flex-wrap: wrap; align-items: center; margin: var(--gap) 0; }
-  #out { padding: var(--gap); border: 1px solid GrayText; border-radius: 6px; overflow-x: auto; min-height: 4rem; }
+  h1 { font-size: 1.4rem; margin-bottom: .25rem; }
+  textarea { width: 100%; height: 12rem; font: 14px/1.4 ui-monospace, monospace; box-sizing: border-box; }
+  .row { display: flex; gap: .5rem var(--gap); flex-wrap: wrap; align-items: center; margin: var(--gap) 0; }
+  .row label { display: inline-flex; gap: .4rem; align-items: center; }
+  button, select { font: inherit; }
+  #out { padding: var(--gap); border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; min-height: 4rem; }
   #out svg { height: var(--size, 3em); width: auto; display: block; }
+  /* the SVG hard-codes black; follow the page colors instead (the download keeps black) */
+  #out svg [fill="black"] { fill: currentColor; }
+  #out svg [stroke="black"] { stroke: currentColor; }
   #status { color: GrayText; }
   #status.error { color: crimson; }
+  details { margin: var(--gap) 0; }
+  #mathml { max-height: 14rem; overflow: auto; background: color-mix(in srgb, CanvasText 6%, transparent);
+            padding: .5rem; border-radius: 4px; font: 13px/1.4 ui-monospace, monospace; white-space: pre-wrap; }
+  .hint { color: GrayText; font-size: .9rem; }
 </style>
 </head>
 <body>
 <h1>math-render in the browser</h1>
-<p>MathML in, SVG out, laid out by Rust compiled to WebAssembly.</p>
+<p class="hint">LaTeX or MathML in, SVG out. Laid out by Rust compiled to WebAssembly, using the font's OpenType MATH table.</p>
 
-<textarea id="src" spellcheck="false"><math display="block">
+<div class="row">
+  <label>Input:
+    <select id="mode">
+      <option value="latex">LaTeX</option>
+      <option value="mathml">MathML</option>
+    </select>
+  </label>
+  <label id="displaylabel"><input id="display" type="checkbox" checked> display style</label>
+</div>
+
+<textarea id="src" spellcheck="false" aria-label="Formula source"></textarea>
+
+<div class="row">
+  <label>Font:
+    <select id="font"></select>
+  </label>
+  <input id="fontfile" type="file" accept=".otf,.ttf" hidden>
+  <label>Size: <input id="size" type="range" min="1" max="8" step="0.25" value="3"></label>
+  <label><input id="debug" type="checkbox"> show boxes</label>
+  <button id="download" type="button" disabled>Download SVG</button>
+  <span id="status" role="status">loading…</span>
+</div>
+
+<div id="out" aria-live="polite"></div>
+
+<details id="mathmldetails">
+  <summary>Generated MathML</summary>
+  <pre id="mathml"></pre>
+</details>
+
+<script type="module">
+import init, { MathRenderer, latex_to_mathml } from "./pkg/mathwasm.js";
+
+const FONTS = [
+  { file: "latinmodern-math.otf", name: "Latin Modern Math" },
+  { file: "texgyrepagella-math.otf", name: "TeX Gyre Pagella Math" },
+  { file: "texgyretermes-math.otf", name: "TeX Gyre Termes Math" },
+  { file: "stixtwo-math.otf", name: "STIX Two Math" },
+  { file: "firamath-regular.otf", name: "Fira Math" },
+  { file: "notosans-math.ttf", name: "Noto Sans Math" },
+];
+const CUSTOM = "custom";
+
+const EXAMPLES = {
+  latex: String.raw`x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}`,
+  mathml: `<math display="block">
   <mrow>
     <mi>x</mi><mo>=</mo>
     <mfrac>
@@ -30,69 +84,148 @@
       <mrow><mn>2</mn><mi>a</mi></mrow>
     </mfrac>
   </mrow>
-</math></textarea>
-
-<div class="row">
-  <label>Font: <input id="fontfile" type="file" accept=".otf,.ttf"></label>
-  <label>Size: <input id="size" type="range" min="1" max="8" step="0.25" value="3"></label>
-  <label><input id="debug" type="checkbox"> show boxes</label>
-  <span id="status">loading…</span>
-</div>
-<div id="out"></div>
-
-<script type="module">
-import init, { MathRenderer } from "./pkg/mathwasm.js";
+</math>`,
+};
+const saved = { latex: EXAMPLES.latex, mathml: EXAMPLES.mathml };
 
 const $ = (id) => document.getElementById(id);
-let renderer = null;
+const renderers = new Map();   // font file -> MathRenderer
+let renderer = null;           // the one in use
+let fontName = "";
+let currentSvg = "";
+let loadToken = 0;
 
 function status(msg, error = false) {
   $("status").textContent = msg;
   $("status").classList.toggle("error", error);
 }
 
+function toMathML(source) {
+  if ($("mode").value === "mathml") return source;
+  return latex_to_mathml(source, $("display").checked);
+}
+
 function render() {
   if (!renderer) return;
+  const source = $("src").value;
   try {
     const t0 = performance.now();
-    const mathml = $("src").value;
-    $("out").innerHTML = $("debug").checked
-      ? renderer.render_svg_debug(mathml)
-      : renderer.render_svg(mathml);
-    status(`rendered in ${(performance.now() - t0).toFixed(1)} ms`);
+    const mathml = toMathML(source);
+    $("mathml").textContent = mathml;
+    currentSvg = $("debug").checked ? renderer.render_svg_debug(mathml) : renderer.render_svg(mathml);
+    $("out").innerHTML = currentSvg;
+    $("download").disabled = false;
+    status(`${fontName} · rendered in ${(performance.now() - t0).toFixed(1)} ms`);
   } catch (e) {
+    $("download").disabled = true;
     status(String(e?.message ?? e), true);
   }
 }
 
-function setFont(bytes, name) {
+async function selectFont(file) {
+  const token = ++loadToken;
   try {
-    renderer = new MathRenderer(new Uint8Array(bytes));
-    status(`font: ${name}`);
+    let r = renderers.get(file);
+    if (!r) {
+      status("loading font…");
+      const res = await fetch(`./fonts/${file}`);
+      if (!res.ok) throw new Error(`could not load ${file} (HTTP ${res.status})`);
+      r = new MathRenderer(new Uint8Array(await res.arrayBuffer()));
+      renderers.set(file, r);
+    }
+    if (token !== loadToken) return;           // a newer selection won
+    renderer = r;
+    fontName = FONTS.find((f) => f.file === file)?.name ?? file;
     render();
   } catch (e) {
-    renderer = null;
+    if (token === loadToken) status(String(e?.message ?? e), true);
+  }
+}
+
+function setCustomFont(bytes, name) {
+  ++loadToken;
+  try {
+    renderer = new MathRenderer(new Uint8Array(bytes));
+    fontName = name;
+    render();
+  } catch (e) {
     status(String(e?.message ?? e), true);
   }
 }
 
-await init();
-try {
-  const res = await fetch("./font.otf");
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  setFont(await res.arrayBuffer(), "Latin Modern Math");
-} catch (e) {
-  status(`could not load ./font.otf (${e.message}); choose a math font above`, true);
+// Wraps the rendered SVG so it can be used on its own: an absolute size (1 em = 48 px) and the
+// XML declaration, instead of the unsized viewBox-only SVG that scales with the page.
+function standaloneSvg() {
+  const m = currentSvg.match(/viewBox="([^"]+)"/);
+  if (!m) return currentSvg;
+  const [, , w, h] = m[1].split(/\s+/).map(Number);
+  const scale = 48 / renderer.units_per_em();
+  const sized = currentSvg.replace(
+    "<svg ",
+    `<svg width="${(w * scale).toFixed(2)}" height="${(h * scale).toFixed(2)}" `);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${sized}\n`;
 }
 
-$("src").addEventListener("input", render);
-$("debug").addEventListener("change", render);
-$("size").addEventListener("input", (e) =>
-  document.documentElement.style.setProperty("--size", `${e.target.value}em`));
+function download() {
+  const blob = new Blob([standaloneSvg()], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement("a"), { href: url, download: "formula.svg" });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function updateMode(previous) {
+  const mode = $("mode").value;
+  if (previous) saved[previous] = $("src").value;
+  $("src").value = saved[mode];
+  $("displaylabel").hidden = mode !== "latex";
+  $("mathmldetails").hidden = mode !== "latex";
+}
+
+// --- wiring ---
+for (const f of FONTS) $("font").add(new Option(f.name, f.file));
+const uploadOption = new Option("Upload font file…", CUSTOM);
+$("font").add(uploadOption);
+
+let lastFont = FONTS[0].file;   // what the dropdown shows if the upload dialog is cancelled
+$("font").addEventListener("change", (e) => {
+  if (e.target.value === CUSTOM) {
+    $("fontfile").click();
+  } else {
+    lastFont = e.target.value;
+    selectFont(lastFont);
+  }
+});
 $("fontfile").addEventListener("change", async (e) => {
   const file = e.target.files[0];
-  if (file) setFont(await file.arrayBuffer(), file.name);
+  if (file) {
+    uploadOption.text = `${file.name} (uploaded)`;
+    $("font").value = CUSTOM;
+    lastFont = CUSTOM;
+    setCustomFont(await file.arrayBuffer(), file.name);
+  } else {
+    $("font").value = lastFont;
+  }
+  e.target.value = "";
 });
+
+// closing the file dialog without a choice fires `cancel` (and no `change`) in current browsers
+$("fontfile").addEventListener("cancel", () => { $("font").value = lastFont; });
+
+let currentMode = $("mode").value;
+$("mode").addEventListener("change", () => { updateMode(currentMode); currentMode = $("mode").value; render(); });
+$("src").addEventListener("input", render);
+$("display").addEventListener("change", render);
+$("debug").addEventListener("change", render);
+$("download").addEventListener("click", download);
+$("size").addEventListener("input", (e) =>
+  document.documentElement.style.setProperty("--size", `${e.target.value}em`));
+
+await init();
+updateMode(null);
+selectFont(FONTS[0].file);
 </script>
 </body>
 </html>

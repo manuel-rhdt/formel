@@ -109,6 +109,10 @@ impl<'a, F: MathFont> Resolver<'a, F> {
                 bottom: 0.25 * style.font_size,
                 left: 0.4 * style.font_size,
             };
+            // Inline `style="padding-left: 0; ..."`, as produced by LaTeX-to-MathML converters.
+            if let Some(inline) = doc.attribute(node, "style") {
+                apply_inline_padding(&mut style, inline);
+            }
         }
 
         if element.is_token() {
@@ -215,4 +219,52 @@ impl<'a, F: MathFont> Resolver<'a, F> {
             .attribute(parent, attribute)
             .is_some_and(|value| value.trim().eq_ignore_ascii_case("true"))
     }
+}
+
+/// The value of `property` in an inline `style` attribute (the last declaration wins).
+pub(super) fn inline_style_property<'a>(style_attribute: &'a str, property: &str) -> Option<&'a str> {
+    style_attribute
+        .split(';')
+        .filter_map(|declaration| declaration.split_once(':'))
+        .filter(|(name, _)| name.trim().eq_ignore_ascii_case(property))
+        .map(|(_, value)| value.trim())
+        .last()
+}
+
+/// Applies the `padding` shorthand and the `padding-*` longhands of an inline style attribute.
+fn apply_inline_padding(style: &mut MathComputedStyle, inline: &str) {
+    let length = |value: &str| {
+        // A unitless zero is a valid CSS length.
+        if value.trim() == "0" {
+            Some(0.0)
+        } else {
+            parse_math_length(value, style)
+        }
+    };
+    let mut padding = style.padding;
+    // declarations apply in order, so a later longhand overrides an earlier shorthand
+    for declaration in inline.split(';') {
+        let Some((name, value)) = declaration.split_once(':') else {
+            continue;
+        };
+        let value = value.trim();
+        match name.trim().to_ascii_lowercase().as_str() {
+            "padding" => {
+                let values: Vec<f32> = value.split_whitespace().filter_map(length).collect();
+                padding = match values.as_slice() {
+                    [all] => Edges { top: *all, right: *all, bottom: *all, left: *all },
+                    [v, h] => Edges { top: *v, right: *h, bottom: *v, left: *h },
+                    [t, h, b] => Edges { top: *t, right: *h, bottom: *b, left: *h },
+                    [t, r, b, l] => Edges { top: *t, right: *r, bottom: *b, left: *l },
+                    _ => padding,
+                };
+            }
+            "padding-top" => padding.top = length(value).unwrap_or(padding.top),
+            "padding-right" => padding.right = length(value).unwrap_or(padding.right),
+            "padding-bottom" => padding.bottom = length(value).unwrap_or(padding.bottom),
+            "padding-left" => padding.left = length(value).unwrap_or(padding.left),
+            _ => {}
+        }
+    }
+    style.padding = padding;
 }
