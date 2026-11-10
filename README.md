@@ -25,6 +25,12 @@ Nested fractions shrink through script styles, and the radical's surd and rule a
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/quadratic-dejavu-dark.svg"><img alt="quadratic in TeX Gyre DejaVu Math" src="docs/img/quadratic-dejavu-light.svg" height="110"></picture></td></tr>
 </table>
 
+For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
+
+$$
+x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}, \qquad \varphi = 1 + \cfrac{1}{1 + \cfrac{1}{1 + \cfrac{1}{1 + \dots}}}
+$$
+
 <details>
 <summary>MathML source</summary>
 
@@ -59,6 +65,12 @@ Display-style `∑` is enlarged and gets under/over limits, while `∫` takes it
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/basel-dejavu-dark.svg"><img alt="basel in TeX Gyre DejaVu Math" src="docs/img/basel-dejavu-light.svg" height="97"></picture></td></tr>
 </table>
 
+For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
+
+$$
+\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}, \qquad \int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
+$$
+
 <details>
 <summary>MathML source</summary>
 
@@ -91,6 +103,12 @@ Contour and surface integrals with the correct glyph variants, plus bold math al
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/stokes-bonum-dark.svg"><img alt="stokes in TeX Gyre Bonum Math" src="docs/img/stokes-bonum-light.svg" height="75"></picture></td></tr>
 </table>
 
+For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
+
+$$
+\oint_{\partial S} \mathbf{F}\cdot d\mathbf{s} = \iint_S \nabla\times\mathbf{F}\cdot d\mathbf{s}
+$$
+
 <details>
 <summary>MathML source</summary>
 
@@ -118,6 +136,12 @@ Contour and surface integrals with the correct glyph variants, plus bold math al
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/matrix-bonum-dark.svg"><img alt="matrix in TeX Gyre Bonum Math" src="docs/img/matrix-bonum-light.svg" height="87"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/matrix-dejavu-dark.svg"><img alt="matrix in TeX Gyre DejaVu Math" src="docs/img/matrix-dejavu-light.svg" height="89"></picture></td></tr>
 </table>
+
+For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
+
+$$
+A = \begin{pmatrix} a_{11} & \cdots & a_{1n} \\ \vdots & \ddots & \vdots \\ a_{m1} & \cdots & a_{mn} \end{pmatrix}, \qquad |x| = \begin{cases} x & \text{if } x \ge 0 \\ -x & \text{if } x < 0 \end{cases}
+$$
 
 <details>
 <summary>MathML source</summary>
@@ -158,6 +182,12 @@ Quantum-mechanics notation: stretchy brackets and bras/kets, `ħ`, a wide-hat ac
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/schrodinger-dejavu-dark.svg"><img alt="schrodinger in TeX Gyre DejaVu Math" src="docs/img/schrodinger-dejavu-light.svg" height="70"></picture></td></tr>
 </table>
 
+For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
+
+$$
+i\hbar\frac{\partial}{\partial t}\Psi = \left[-\frac{\hbar^2}{2m}\nabla^2 + V\right]\Psi, \qquad Z = \langle\psi|\,e^{-\beta\hat H}\,|\psi\rangle
+$$
+
 <details>
 <summary>MathML source</summary>
 
@@ -192,6 +222,12 @@ Stacked pre-super/subscripts as used for isotopes and tensor indices.
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/nuclear-bonum-dark.svg"><img alt="nuclear in TeX Gyre Bonum Math" src="docs/img/nuclear-bonum-light.svg" height="43"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/nuclear-dejavu-dark.svg"><img alt="nuclear in TeX Gyre DejaVu Math" src="docs/img/nuclear-dejavu-light.svg" height="45"></picture></td></tr>
 </table>
+
+For comparison, the same formula as LaTeX, rendered live by GitHub (MathJax) in your browser:
+
+$$
+{}^{235}_{\;\,92}\mathrm{U} + n \to {}^{141}_{\;\,56}\mathrm{Ba} + {}^{92}_{\;\,36}\mathrm{Kr} + 3n, \qquad {}^{\alpha}_{\beta}\Lambda^{\mu}_{\nu}
+$$
 
 <details>
 <summary>MathML source</summary>
