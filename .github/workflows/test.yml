@@ -1,0 +1,33 @@
+name: Test
+
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
+          rustup default stable
+
+      # must match the `wasm-bindgen` version pinned in mathwasm/Cargo.toml
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.100
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test --workspace --exclude mathimg
+
+      - name: Test the demo's JavaScript helpers
+        run: node --test web/test/export.test.mjs
+
+      - name: Build the demo
+        run: web/build.sh
+
+      - name: Test the rendered output
+        run: node --test web/test/render.test.mjs

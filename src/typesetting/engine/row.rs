@@ -257,7 +257,24 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let replacement = replacement.to_string();
         let glyphs = font.font.shape(&replacement, Self::shape_options(style, ctx));
         match glyphs.as_slice() {
-            [glyph] if glyph.glyph_code != 0 => replacement,
+            [glyph] if glyph.glyph_code != 0 => {
+                // A combining accent without wide variants would leave a wide base uncovered.
+                // If the font can stretch the plain character instead (arrows have horizontal
+                // variants and assemblies), keep that rather than the combining form.
+                let original_stretches = || {
+                    font.font.shape(text, Self::shape_options(style, ctx)).first().is_some_and(
+                        |g| font.font.is_stretchable(g.glyph_code, true),
+                    )
+                };
+                if ctx.stretch.is_some()
+                    && !font.font.is_stretchable(glyph.glyph_code, true)
+                    && original_stretches()
+                {
+                    text.to_owned()
+                } else {
+                    replacement
+                }
+            }
             _ => text.to_owned(),
         }
     }

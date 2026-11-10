@@ -41,6 +41,9 @@ jobs:
       - name: Build the demo
         run: web/build.sh
 
+      - name: Test the rendered output
+        run: node --test web/test/render.test.mjs
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
