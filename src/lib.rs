@@ -4,11 +4,14 @@
 //! - [`standalone`]: a minimal MathML document with a built-in user agent stylesheet.
 //! - [`mathmlparser`]: the operator dictionary and (with the `mathml_parser` feature) an XML
 //!   parser that produces a [`standalone::MathDocument`].
+//! - `svg_renderer` (feature `svg`): draws a laid-out document as SVG.
 //! - [`shaper`]: [`shaper::Shaper`], a [`host::MathFont`] based on rustybuzz.
 
 pub mod host;
 pub mod mathmlparser;
 pub mod standalone;
+#[cfg(feature = "svg")]
+pub mod svg_renderer;
 mod typesetting;
 
 pub use crate::standalone::layout;

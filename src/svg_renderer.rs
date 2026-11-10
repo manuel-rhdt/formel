@@ -1,18 +1,19 @@
 use std::collections::HashMap;
-use std::path;
+use std::path::Path as FsPath;
 
-use math_render::host::{Fragment, NodeLayout, Point};
-use math_render::standalone::{MathDocument, NodeId};
+use crate::host::{Fragment, NodeLayout, Point};
+use crate::standalone::{MathDocument, NodeId};
 
-use svg::Document;
-use svg::node::Node;
-use svg::node::element::{Group, Line, Path, Rectangle};
+use ::svg::node::element::{Group, Line, Path, Rectangle};
+use ::svg::node::Node;
+use ::svg::Document;
 
 use std::fmt::Write;
 
 use rustybuzz::ttf_parser::{GlyphId, OutlineBuilder};
 use rustybuzz::Face;
 
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Flags {
     /// Fill the boxes of token elements.
     pub show_ink_bounds: bool,
@@ -20,9 +21,8 @@ pub struct Flags {
     pub show_logical_bounds: bool,
 }
 
-/// Renders a laid-out document to SVG. Coordinates are px; `units_per_em` converts glyph
-/// outlines from font units.
-pub fn render<T: AsRef<path::Path>>(
+/// Renders a laid-out document to an SVG file. See [`render_to_string`].
+pub fn render<T: AsRef<FsPath>>(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
     font: &Face<'_>,
@@ -30,6 +30,29 @@ pub fn render<T: AsRef<path::Path>>(
     flags: Flags,
     out_path: T,
 ) {
+    let svg_document = build_document(document, layouts, font, units_per_em, flags);
+    ::svg::save(out_path, &svg_document).unwrap();
+}
+
+/// Renders a laid-out document to an SVG string. Coordinates are px; `units_per_em` converts
+/// glyph outlines from font units.
+pub fn render_to_string(
+    document: &MathDocument,
+    layouts: &HashMap<NodeId, NodeLayout>,
+    font: &Face<'_>,
+    units_per_em: f32,
+    flags: Flags,
+) -> String {
+    build_document(document, layouts, font, units_per_em, flags).to_string()
+}
+
+fn build_document(
+    document: &MathDocument,
+    layouts: &HashMap<NodeId, NodeLayout>,
+    font: &Face<'_>,
+    units_per_em: f32,
+    flags: Flags,
+) -> Document {
     let root = document.root().expect("document has a root");
     let root_layout = &layouts[&root];
 
@@ -139,8 +162,7 @@ pub fn render<T: AsRef<path::Path>>(
         svg_document.append(logical_group);
     }
     svg_document.append(black_group);
-
-    svg::save(out_path, &svg_document).unwrap();
+    svg_document
 }
 
 /// Collects a glyph outline as SVG path data.

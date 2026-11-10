@@ -1,6 +1,5 @@
 
 
-mod svg_renderer;
 
 use std::borrow::Cow;
 use std::fs::File;
@@ -11,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 
 use math_render::mathmlparser;
+use math_render::svg_renderer;
 use math_render::host::MathFont;
 use math_render::shaper::Shaper;
 use math_render::standalone::StyleOptions;

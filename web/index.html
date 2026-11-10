@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>math-render in the browser</title>
+<style>
+  :root { color-scheme: light dark; --gap: 1rem; }
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 60rem; margin: 0 auto; padding: var(--gap); }
+  h1 { font-size: 1.4rem; }
+  textarea { width: 100%; height: 14rem; font: 14px/1.4 ui-monospace, monospace; box-sizing: border-box; }
+  .row { display: flex; gap: var(--gap); flex-wrap: wrap; align-items: center; margin: var(--gap) 0; }
+  #out { padding: var(--gap); border: 1px solid GrayText; border-radius: 6px; overflow-x: auto; min-height: 4rem; }
+  #out svg { height: var(--size, 3em); width: auto; display: block; }
+  #status { color: GrayText; }
+  #status.error { color: crimson; }
+</style>
+</head>
+<body>
+<h1>math-render in the browser</h1>
+<p>MathML in, SVG out, laid out by Rust compiled to WebAssembly.</p>
+
+<textarea id="src" spellcheck="false"><math display="block">
+  <mrow>
+    <mi>x</mi><mo>=</mo>
+    <mfrac>
+      <mrow><mo>-</mo><mi>b</mi><mo>±</mo>
+        <msqrt><msup><mi>b</mi><mn>2</mn></msup><mo>-</mo><mn>4</mn><mi>a</mi><mi>c</mi></msqrt>
+      </mrow>
+      <mrow><mn>2</mn><mi>a</mi></mrow>
+    </mfrac>
+  </mrow>
+</math></textarea>
+
+<div class="row">
+  <label>Font: <input id="fontfile" type="file" accept=".otf,.ttf"></label>
+  <label>Size: <input id="size" type="range" min="1" max="8" step="0.25" value="3"></label>
+  <label><input id="debug" type="checkbox"> show boxes</label>
+  <span id="status">loading…</span>
+</div>
+<div id="out"></div>
+
+<script type="module">
+import init, { MathRenderer } from "./pkg/mathwasm.js";
+
+const $ = (id) => document.getElementById(id);
+let renderer = null;
+
+function status(msg, error = false) {
+  $("status").textContent = msg;
+  $("status").classList.toggle("error", error);
+}
+
+function render() {
+  if (!renderer) return;
+  try {
+    const t0 = performance.now();
+    const mathml = $("src").value;
+    $("out").innerHTML = $("debug").checked
+      ? renderer.render_svg_debug(mathml)
+      : renderer.render_svg(mathml);
+    status(`rendered in ${(performance.now() - t0).toFixed(1)} ms`);
+  } catch (e) {
+    status(String(e?.message ?? e), true);
+  }
+}
+
+function setFont(bytes, name) {
+  try {
+    renderer = new MathRenderer(new Uint8Array(bytes));
+    status(`font: ${name}`);
+    render();
+  } catch (e) {
+    renderer = null;
+    status(String(e?.message ?? e), true);
+  }
+}
+
+await init();
+try {
+  const res = await fetch("./font.otf");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  setFont(await res.arrayBuffer(), "Latin Modern Math");
+} catch (e) {
+  status(`could not load ./font.otf (${e.message}); choose a math font above`, true);
+}
+
+$("src").addEventListener("input", render);
+$("debug").addEventListener("change", render);
+$("size").addEventListener("input", (e) =>
+  document.documentElement.style.setProperty("--size", `${e.target.value}em`));
+$("fontfile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (file) setFont(await file.arrayBuffer(), file.name);
+});
+</script>
+</body>
+</html>

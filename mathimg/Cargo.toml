@@ -6,10 +6,9 @@ edition = "2024"
 rust-version = "1.85"
 
 [dependencies]
-math-render = { path = "..", version = "0.1.0", features = ["mathml_parser"] }
+math-render = { path = "..", version = "0.1.0", features = ["mathml_parser", "svg"] }
 docopt = "1.1"
 serde = { version = "1", features = ["derive"] }
-svg = "*"
 rustybuzz = "0.20"
 fontconfig-sys = { git = "https://github.com/manuel-rhdt/fontconfig-rs" }
 fontconfig = { git = "https://github.com/manuel-rhdt/fontconfig-rs" }
