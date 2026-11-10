@@ -19,7 +19,7 @@ test("styleSvg recolors and labels", () => {
   assert.ok(svg.includes('fill="#ff0000"'));
   assert.ok(!svg.includes('"black"'));
   assert.ok(svg.includes('role="img" aria-label="x &lt; y"'));
-  assert.ok(svg.includes("<title>x &lt; y</title>"));
+  assert.ok(/<title id="[^"]+">x &lt; y<\/title>/.test(svg));
   assert.ok(!svg.includes("<rect"), "transparent background adds no rect");
 });
 
@@ -202,4 +202,29 @@ test("text size is kept in the link and clamped", () => {
   assert.equal(decodeState("#t=24").state.textSize, 24);
   assert.equal(decodeState("#t=9999").state.textSize, 200);
   assert.equal(decodeState("#t=abc").state.textSize, 12);
+});
+
+test("styleSvg embeds MathML and links the description", () => {
+  const mathml = '<math display="block"><mi>x</mi></math>';
+  const a = styleSvg(RAW, { alt: "x", mathml });
+  const b = styleSvg(RAW, { alt: "x", mathml });
+  for (const svg of [a, b]) {
+    assert.ok(svg.includes('xmlns="http://www.w3.org/1998/Math/MathML"'));
+    assert.ok(svg.includes("<metadata>"));
+    const title = svg.match(/<title id="([^"]+)"/)[1];
+    const desc = svg.match(/<desc id="([^"]+)"/)[1];
+    assert.ok(svg.includes(`aria-labelledby="${title}"`));
+    assert.ok(svg.includes(`aria-describedby="${desc}"`));
+    assert.ok(svg.indexOf("<title") < svg.indexOf("<desc"));
+    assert.ok(svg.indexOf("<desc") < svg.indexOf("<metadata"));
+    assert.ok(svg.indexOf("<metadata") < svg.indexOf("<g "));
+  }
+  // ids must differ, so several of these can be inlined into one document
+  assert.notEqual(a.match(/<title id="([^"]+)"/)[1], b.match(/<title id="([^"]+)"/)[1]);
+});
+
+test("styleSvg without MathML keeps the plain label", () => {
+  const svg = styleSvg(RAW, { alt: "x" });
+  assert.ok(!svg.includes("<metadata>"));
+  assert.ok(!svg.includes("aria-describedby"));
 });
