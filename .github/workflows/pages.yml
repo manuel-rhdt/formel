@@ -20,11 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # `freetype-rs` is a dev-dependency (used by examples/freetype_renderer.rs), so
-      # `cargo test` needs the system FreeType headers.
-      - name: Install system libraries
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfreetype-dev pkg-config
-
       - name: Install Rust toolchain
         run: |
           rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
