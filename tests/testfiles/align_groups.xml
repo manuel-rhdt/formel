@@ -1,0 +1,41 @@
+<math display="block">
+  <mtable>
+    <mtr>
+      <mtd>
+        <maligngroup groupalign="right"/><mi>x</mi>
+        <maligngroup groupalign="left"/><mo>=</mo><mn>1</mn><mo>+</mo><mi>y</mi>
+      </mtd>
+    </mtr>
+    <mtr>
+      <mtd>
+        <maligngroup groupalign="right"/><mi>long</mi><mo>+</mo><mi>name</mi>
+        <maligngroup groupalign="left"/><mo>=</mo><mfrac><mn>2</mn><mn>3</mn></mfrac>
+      </mtd>
+    </mtr>
+    <mtr>
+      <mtd>
+        <maligngroup groupalign="right"/><msup><mi>z</mi><mn>2</mn></msup>
+        <maligngroup groupalign="left"/><mo>≤</mo><mn>10</mn>
+      </mtd>
+    </mtr>
+  </mtable>
+</math>
+<math display="block">
+  <mtable>
+    <mtr><mtd><maligngroup/><mn>3</mn><malignmark/><mo>.</mo><mn>14159</mn></mtd></mtr>
+    <mtr><mtd><maligngroup/><mn>12345</mn><malignmark/><mo>.</mo><mn>5</mn></mtd></mtr>
+    <mtr><mtd><maligngroup/><mn>0</mn><malignmark/><mo>.</mo><mn>001</mn></mtd></mtr>
+  </mtable>
+</math>
+<math display="block">
+  <mtable columnspacing="1em">
+    <mtr>
+      <mtd><maligngroup groupalign="right"/><mi>a</mi><maligngroup/><mo>+</mo><mi>b</mi></mtd>
+      <mtd><maligngroup groupalign="right"/><mi>c</mi><maligngroup/><mo>=</mo><mn>0</mn></mtd>
+    </mtr>
+    <mtr>
+      <mtd><maligngroup groupalign="right"/><mi>aaa</mi><maligngroup/><mo>−</mo><mi>bbbbb</mi></mtd>
+      <mtd><maligngroup groupalign="right"/><mi>cc</mi><maligngroup/><mo>=</mo><mn>10</mn></mtd>
+    </mtr>
+  </mtable>
+</math>

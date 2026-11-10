@@ -1,0 +1,24 @@
+<math display="block">
+  <menclose notation="box"><mi>a</mi><mo>+</mo><mi>b</mi></menclose>
+  <mspace width="1em"/>
+  <menclose notation="roundedbox"><mfrac><mn>1</mn><mn>2</mn></mfrac></menclose>
+  <mspace width="1em"/>
+  <menclose notation="updiagonalstrike downdiagonalstrike"><mi>x</mi><mo>=</mo><mn>0</mn></menclose>
+  <mspace width="1em"/>
+  <menclose notation="horizontalstrike"><mi>y</mi></menclose>
+  <mspace width="1em"/>
+  <menclose notation="verticalstrike"><mi>z</mi></menclose>
+  <mspace width="1em"/>
+  <menclose notation="top bottom"><mn>42</mn></menclose>
+  <mspace width="1em"/>
+  <menclose notation="left right"><mn>7</mn></menclose>
+  <mspace width="1em"/>
+  <menclose notation="actuarial"><mi>n</mi></menclose>
+  <mspace width="1em"/>
+  <menclose notation="radical"><mi>a</mi><mo>+</mo><mi>b</mi></menclose>
+  <mspace width="1em"/>
+  <menclose notation="radical box"><mi>q</mi></menclose>
+  <mspace width="1em"/>
+  <mn>12</mn>
+  <menclose><mn>345</mn></menclose>
+</math>

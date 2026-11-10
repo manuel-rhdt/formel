@@ -1,0 +1,20 @@
+<math display="block">
+  <mtable frame="solid" columnlines="solid" rowlines="solid">
+    <mtr>
+      <mtd columnspan="2"><mi>wide cell</mi></mtd>
+      <mtd><mi>c</mi></mtd>
+    </mtr>
+    <mtr>
+      <mtd rowspan="2"><mfrac><mi>tall</mi><mi>cell</mi></mfrac></mtd>
+      <mtd><mi>b</mi></mtd>
+      <mtd><mi>c</mi></mtd>
+    </mtr>
+    <mtr>
+      <mtd><mi>b</mi></mtd>
+      <mtd><mi>c</mi></mtd>
+    </mtr>
+    <mtr>
+      <mtd columnspan="3" rowspan="0"><mi>everything below</mi></mtd>
+    </mtr>
+  </mtable>
+</math>

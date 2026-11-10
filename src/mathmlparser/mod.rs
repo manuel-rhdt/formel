@@ -56,4 +56,24 @@ mod tests {
         assert!(parse("<mrow><mi>x</mi></mfrac>".as_bytes()).is_err());
         assert!(parse("<mrow><mi>x</mi>".as_bytes()).is_err());
     }
+
+    #[test]
+    fn mfenced_expands_to_a_row() {
+        let doc = parse(r#"<mfenced open="[" separators=";,"><mi>a</mi><mi>b</mi><mi>c</mi></mfenced>"#.as_bytes())
+            .unwrap();
+        let row = doc.node(doc.root().unwrap()).children[0];
+        assert_eq!(doc.node(row).element, MathElement::Mrow);
+        let text = |id: usize| doc.node(id).text.clone().unwrap();
+        let texts: Vec<String> = doc.node(row).children.iter().map(|&c| text(c)).collect();
+        // the last separator repeats; `close` defaults to ")"
+        assert_eq!(texts, ["[", "a", ";", "b", ",", "c", ")"]);
+    }
+
+    #[test]
+    fn mfenced_with_empty_fences_and_no_separators() {
+        let doc = parse(r#"<mfenced open="" close="" separators=""><mi>a</mi><mi>b</mi></mfenced>"#.as_bytes())
+            .unwrap();
+        let row = doc.node(doc.root().unwrap()).children[0];
+        assert_eq!(doc.node(row).children.len(), 2);
+    }
 }

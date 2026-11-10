@@ -1058,3 +1058,154 @@ fn wpt_columnspan_rowspan_005_006() {
         assert_green_square(&mut doc, table, &cells, 200.0);
     }
 }
+
+use MathElement::Mlabeledtr;
+
+/// A table with one `mlabeledtr` and one `mtr`; returns (table, label, cell of the labeled
+/// row, cell of the plain row).
+fn labeled_table(side: Option<&str>) -> (Doc, Id, Id, Id, Id) {
+    let mut doc = Doc::new();
+    let label_text = doc.tok(Mn, "(1)");
+    let label = doc.el(Mtd, &[label_text]);
+    let a = doc.tok(Mn, "a");
+    let cell = doc.el(Mtd, &[a]);
+    let labeled = doc.el(Mlabeledtr, &[label, cell]);
+    let b = doc.tok(Mn, "b");
+    let plain_cell = doc.el(Mtd, &[b]);
+    let plain = doc.el(Mtr, &[plain_cell]);
+    let table = doc.el(Mtable, &[labeled, plain]);
+    if let Some(side) = side {
+        doc.set_attr(table, "side", side);
+    }
+    let root = doc.el(Math, &[table]);
+    doc.run(root);
+    (doc, table, label, cell, plain_cell)
+}
+
+#[test]
+fn labels_go_to_the_right_by_default() {
+    let (doc, table, label, cell, plain_cell) = labeled_table(None);
+    let rect = |n| doc.absolute_rect(table, n);
+    assert!(rect(label).origin.x >= rect(cell).right());
+    // the label is outside of the table's cells but inside its box
+    assert_close(rect(label).right(), doc.layout(table).size.width);
+    // the gap is at least minlabelspacing (0.8em), measured from the widest cell
+    assert!(rect(label).origin.x - rect(cell).right() >= 16.0 - 1e-3);
+    // cells don't move, labeled or not
+    assert_close(rect(cell).origin.x, rect(plain_cell).origin.x);
+    // the label shares the baseline of its row
+    assert_close(rect(label).bottom() - rect(cell).bottom(), 0.0);
+}
+
+#[test]
+fn labels_on_the_left_move_the_table_right() {
+    let (doc, table, label, cell, _) = labeled_table(Some("left"));
+    let rect = |n| doc.absolute_rect(table, n);
+    assert_close(rect(label).origin.x, 0.0);
+    assert!(rect(cell).origin.x >= rect(label).right() + 16.0 - 1e-3);
+    let (right, ..) = labeled_table(None);
+    assert_close(doc.layout(table).size.width, right.layout(right.nodes.len() - 2).size.width);
+}
+
+#[test]
+fn minlabelspacing_sets_the_gap() {
+    let (mut doc, table, label, cell, _) = labeled_table(None);
+    doc.set_attr(table, "minlabelspacing", "50px");
+    let root = doc.nodes.len() - 1;
+    doc.run(root);
+    let rect = |n| doc.absolute_rect(table, n);
+    assert_close(rect(label).origin.x - rect(cell).right(), 50.0);
+}
+
+use MathElement::{Maligngroup, Malignmark};
+
+fn group(doc: &mut Doc, align: &str) -> Id {
+    let id = doc.el(Maligngroup, &[]);
+    doc.set_attr(id, "groupalign", align);
+    id
+}
+
+/// Rows `lhs = rhs` in one column: the left sides are right aligned, the right sides left
+/// aligned, so that the `=` signs line up.
+#[test]
+fn alignment_groups_line_up_the_equals_signs() {
+    let mut doc = Doc::new();
+    let mut rows = Vec::new();
+    let mut lhs = Vec::new();
+    let mut equals = Vec::new();
+    for (left, right) in [(10.0, 5.0), (40.0, 30.0), (25.0, 60.0)] {
+        let (g1, g2) = (group(&mut doc, "right"), group(&mut doc, "left"));
+        let l = px_space(&mut doc, left, 5.0, 0.0);
+        let eq = doc.tok(Mo, "=");
+        let r = px_space(&mut doc, right, 5.0, 0.0);
+        let cell = doc.el(Mtd, &[g1, l, g2, eq, r]);
+        rows.push(doc.el(Mtr, &[cell]));
+        lhs.push(l);
+        equals.push(eq);
+    }
+    let table = doc.el(Mtable, &rows);
+    let root = doc.el(Math, &[table]);
+    doc.run(root);
+
+    let rect = |n| doc.absolute_rect(root, n);
+    for pair in equals.windows(2) {
+        assert_close(rect(pair[0]).origin.x, rect(pair[1]).origin.x);
+    }
+    for pair in lhs.windows(2) {
+        assert_close(rect(pair[0]).right(), rect(pair[1]).right());
+    }
+    // the cells of the column are equally wide
+    let widths: Vec<f32> = doc.nodes[table]
+        .children
+        .iter()
+        .map(|&tr| doc.layout(doc.nodes[tr].children[0]).size.width)
+        .collect();
+    assert_close(widths[0], widths[1]);
+    assert_close(widths[1], widths[2]);
+}
+
+#[test]
+fn alignment_marks_override_groupalign() {
+    let mut doc = Doc::new();
+    let mut rows = Vec::new();
+    let mut marks = Vec::new();
+    for (before, after) in [(10.0, 20.0), (30.0, 5.0)] {
+        let g = group(&mut doc, "left");
+        let a = px_space(&mut doc, before, 5.0, 0.0);
+        let mark = doc.el(Malignmark, &[]);
+        let b = px_space(&mut doc, after, 5.0, 0.0);
+        let cell = doc.el(Mtd, &[g, a, mark, b]);
+        rows.push(doc.el(Mtr, &[cell]));
+        marks.push(mark);
+    }
+    let table = doc.el(Mtable, &rows);
+    let root = doc.el(Math, &[table]);
+    doc.run(root);
+    assert_close(
+        doc.absolute_rect(root, marks[0]).origin.x,
+        doc.absolute_rect(root, marks[1]).origin.x,
+    );
+}
+
+#[test]
+fn alignment_groups_work_inside_padded_cells() {
+    let mut doc = Doc::new();
+    let mut rows = Vec::new();
+    let mut spaces = Vec::new();
+    for width in [10.0, 40.0] {
+        let g = group(&mut doc, "right");
+        let space = px_space(&mut doc, width, 5.0, 0.0);
+        let cell = doc.el(Mtd, &[g, space]);
+        doc.style_mut(cell).padding = Edges { top: 1.0, right: 7.0, bottom: 1.0, left: 3.0 };
+        rows.push(doc.el(Mtr, &[cell]));
+        spaces.push(space);
+    }
+    let table = doc.el(Mtable, &rows);
+    let root = doc.el(Math, &[table]);
+    doc.run(root);
+    let rect = |n| doc.absolute_rect(root, n);
+    assert_close(rect(spaces[0]).right(), rect(spaces[1]).right());
+    let cell_width = |tr: Id| doc.layout(doc.nodes[tr].children[0]).size.width;
+    assert_close(cell_width(rows[0]), 40.0 + 10.0);
+    assert_close(cell_width(rows[1]), 40.0 + 10.0);
+}

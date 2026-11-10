@@ -36,12 +36,16 @@ pub enum MathElement {
     /// `<menclose>`: draws the lines named by its `notation` attribute around its content.
     Menclose,
     Mphantom,
+    /// `<maligngroup>`: starts an alignment group in a table cell (a direct child of `<mtd>`).
+    Maligngroup,
+    /// `<malignmark>`: the alignment point of the group it is in.
+    Malignmark,
     Mstyle,
     Merror,
     Semantics,
     Mtable,
     Mtr,
-    /// A table row whose first child is a label. The label is not displayed yet.
+    /// A table row whose first child is a label, placed beside the table (`side`).
     Mlabeledtr,
     Mtd,
     /// Any other element in the MathML namespace. Laid out like `<mrow>`.
@@ -76,6 +80,8 @@ impl MathElement {
             "mpadded" => Mpadded,
             "menclose" => Menclose,
             "mphantom" => Mphantom,
+            "maligngroup" => Maligngroup,
+            "malignmark" => Malignmark,
             "mstyle" => Mstyle,
             "merror" => Merror,
             "semantics" => Semantics,

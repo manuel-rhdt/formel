@@ -137,7 +137,50 @@ fn finish(document: &mut MathDocument, open: OpenElement) -> NodeId {
             .text
             .trim_matches(|c| matches!(c, ' ' | '\t' | '\n' | '\r'));
         document.add_token(&open.name, open.attributes, text)
+    } else if open.name == "mfenced" {
+        expand_mfenced(document, open)
     } else {
         document.add_element(&open.name, open.attributes, open.children)
     }
+}
+
+/// Replaces the deprecated `<mfenced>` with the `<mrow>` it stands for: the `open` fence
+/// (default `(`), the children separated by the `separators` (default `,`; the last one
+/// repeats) and the `close` fence (default `)`).
+fn expand_mfenced(document: &mut MathDocument, open: OpenElement) -> NodeId {
+    let attribute = |name: &str| {
+        open.attributes
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.trim().to_owned())
+    };
+    let fence = |document: &mut MathDocument, text: &str, role: &str| {
+        let attributes = vec![(role.to_owned(), "true".to_owned())];
+        document.add_token("mo", attributes, text)
+    };
+    let separators: Vec<char> = attribute("separators")
+        .unwrap_or_else(|| ",".to_owned())
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+
+    let mut children = Vec::new();
+    let opening = attribute("open").unwrap_or_else(|| "(".to_owned());
+    if !opening.is_empty() {
+        children.push(fence(document, &opening, "fence"));
+    }
+    let count = open.children.len();
+    for (i, child) in open.children.into_iter().enumerate() {
+        children.push(child);
+        if i + 1 < count {
+            if let Some(&separator) = separators.get(i).or(separators.last()) {
+                children.push(fence(document, &separator.to_string(), "separator"));
+            }
+        }
+    }
+    let closing = attribute("close").unwrap_or_else(|| ")".to_owned());
+    if !closing.is_empty() {
+        children.push(fence(document, &closing, "fence"));
+    }
+    document.add_element("mrow", Vec::new(), children)
 }

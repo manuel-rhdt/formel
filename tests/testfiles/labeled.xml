@@ -1,0 +1,30 @@
+<math display="block">
+  <mtable columnalign="right left" columnspacing="0em">
+    <mlabeledtr>
+      <mtd><mtext>(1)</mtext></mtd>
+      <mtd><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup></mtd>
+      <mtd><mo>=</mo><msup><mi>c</mi><mn>2</mn></msup></mtd>
+    </mlabeledtr>
+    <mtr>
+      <mtd><mi>x</mi></mtd>
+      <mtd><mo>=</mo><mfrac><mrow><mo>−</mo><mi>b</mi><mo>±</mo><msqrt><msup><mi>b</mi><mn>2</mn></msup><mo>−</mo><mn>4</mn><mi>a</mi><mi>c</mi></msqrt></mrow><mrow><mn>2</mn><mi>a</mi></mrow></mfrac></mtd>
+    </mtr>
+    <mlabeledtr>
+      <mtd><mtext>(2)</mtext></mtd>
+      <mtd><mi>E</mi></mtd>
+      <mtd><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mtd>
+    </mlabeledtr>
+  </mtable>
+</math>
+<math display="block">
+  <mtable side="left" minlabelspacing="2em">
+    <mlabeledtr>
+      <mtd><mtext>(A)</mtext></mtd>
+      <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo></mtd>
+    </mlabeledtr>
+    <mlabeledtr>
+      <mtd><mtext>(B)</mtext></mtd>
+      <mtd><mi>g</mi><mo>(</mo><mi>x</mi><mo>)</mo></mtd>
+    </mlabeledtr>
+  </mtable>
+</math>

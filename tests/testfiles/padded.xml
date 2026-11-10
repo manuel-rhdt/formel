@@ -1,0 +1,10 @@
+<math display="block">
+  <mi>a</mi>
+  <mpadded width="+2em" lspace="1em"><mi>b</mi></mpadded>
+  <mi>c</mi>
+  <mpadded width="0" height="0" depth="0"><mfrac><mi>x</mi><mi>y</mi></mfrac></mpadded>
+  <mi>d</mi>
+  <mpadded voffset="0.5em" height="+0.5em"><mo>→</mo></mpadded>
+  <mpadded width="150%" height="2depth" depth="+0.2em"><msqrt><mi>z</mi></msqrt></mpadded>
+  <mi>e</mi>
+</math>

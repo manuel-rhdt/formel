@@ -1,0 +1,13 @@
+<math display="block">
+  <mfenced><mi>x</mi><mi>y</mi><mi>z</mi></mfenced>
+  <mo>=</mo>
+  <mfenced open="[" close="]" separators=";"><mn>1</mn><mn>2</mn><mn>3</mn></mfenced>
+  <mo>+</mo>
+  <mfenced open="{" close="}" separators=""><mi>a</mi><mi>b</mi></mfenced>
+  <mo>+</mo>
+  <mfenced open="⟨" close="⟩" separators=",;"><mi>u</mi><mi>v</mi><mi>w</mi><mi>t</mi></mfenced>
+  <mo>+</mo>
+  <mfenced><mfrac><mn>1</mn><mn>2</mn></mfrac></mfenced>
+  <mfenced open="" close="|"><mi>p</mi></mfenced>
+  <mfenced/>
+</math>

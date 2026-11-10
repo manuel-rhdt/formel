@@ -110,7 +110,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
     pub(crate) fn is_space_like(&self, node: T::NodeId) -> bool {
         use MathElement::*;
         match self.element(node) {
-            Some(Mtext | Mspace) => true,
+            Some(Mtext | Mspace | Maligngroup | Malignmark) => true,
             Some(Mrow | Mstyle | Mphantom | Mpadded) => {
                 self.tree.children(node).all(|child| self.is_space_like(child))
             }
