@@ -25,6 +25,27 @@ Nested fractions shrink through script styles, and the radical's surd and rule a
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/quadratic-dejavu-dark.svg"><img alt="quadratic in TeX Gyre DejaVu Math" src="docs/img/quadratic-dejavu-light.svg" height="110"></picture></td></tr>
 </table>
 
+<details>
+<summary>MathML source</summary>
+
+```xml
+<math display="block">
+  <mi>x</mi><mo>=</mo>
+  <mfrac>
+    <mrow><mo>&minus;</mo><mi>b</mi><mo>&pm;</mo>
+      <msqrt><msup><mi>b</mi><mn>2</mn></msup><mo>&minus;</mo><mn>4</mn><mi>a</mi><mi>c</mi></msqrt>
+    </mrow>
+    <mrow><mn>2</mn><mi>a</mi></mrow>
+  </mfrac>
+  <mo>,</mo><mspace width="1em"/>
+  <mi>&phi;</mi><mo>=</mo>
+  <mn>1</mn><mo>+</mo>
+  <mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><mo>&hellip;</mo></mrow></mfrac></mrow></mfrac></mrow></mfrac>
+</math>
+```
+
+</details>
+
 ### Big operators with limits, integrals
 
 Display-style `∑` is enlarged and gets under/over limits, while `∫` takes its limits as scripts and is italic-corrected.
@@ -38,6 +59,26 @@ Display-style `∑` is enlarged and gets under/over limits, while `∫` takes it
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/basel-dejavu-dark.svg"><img alt="basel in TeX Gyre DejaVu Math" src="docs/img/basel-dejavu-light.svg" height="97"></picture></td></tr>
 </table>
 
+<details>
+<summary>MathML source</summary>
+
+```xml
+<math display="block">
+  <munderover><mo>&Sum;</mo><mrow><mi>n</mi><mo>=</mo><mn>1</mn></mrow><mi>&infin;</mi></munderover>
+  <mfrac><mn>1</mn><msup><mi>n</mi><mn>2</mn></msup></mfrac>
+  <mo>=</mo>
+  <mfrac><msup><mi>&pi;</mi><mn>2</mn></msup><mn>6</mn></mfrac>
+  <mo>,</mo><mspace width="1em"/>
+  <msubsup><mo>&int;</mo><mrow><mo>&minus;</mo><mi>&infin;</mi></mrow><mi>&infin;</mi></msubsup>
+  <msup><mi>e</mi><mrow><mo>&minus;</mo><msup><mi>x</mi><mn>2</mn></msup></mrow></msup>
+  <mi>d</mi><mi>x</mi>
+  <mo>=</mo>
+  <msqrt><mi>&pi;</mi></msqrt>
+</math>
+```
+
+</details>
+
 ### Stretchy operators & bold vectors
 
 Contour and surface integrals with the correct glyph variants, plus bold math alphanumerics.
@@ -49,6 +90,21 @@ Contour and surface integrals with the correct glyph variants, plus bold math al
 <tr><td width="150"><sub>Asana Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/stokes-asana-dark.svg"><img alt="stokes in Asana Math" src="docs/img/stokes-asana-light.svg" height="86"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/stokes-bonum-dark.svg"><img alt="stokes in TeX Gyre Bonum Math" src="docs/img/stokes-bonum-light.svg" height="75"></picture></td></tr>
 </table>
+
+<details>
+<summary>MathML source</summary>
+
+```xml
+<math display="block">
+  <msub><mo>&conint;</mo><mrow><mi>&part;</mi><mi>S</mi></mrow></msub>
+  <mi mathvariant="bold">F</mi><mo>&sdot;</mo><mrow><mi>d</mi><mi mathvariant="bold">s</mi></mrow>
+  <mo>=</mo>
+  <msub><mo>&Int;</mo><mi>S</mi></msub>
+  <mo>&Del;</mo><mo>&times;</mo><mi mathvariant="bold">F</mi><mo>&sdot;</mo><mrow><mi>d</mi><mi mathvariant="bold">s</mi></mrow>
+</math>
+```
+
+</details>
 
 ### Tables, stretchy delimiters & cases
 
@@ -63,6 +119,32 @@ Contour and surface integrals with the correct glyph variants, plus bold math al
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/matrix-dejavu-dark.svg"><img alt="matrix in TeX Gyre DejaVu Math" src="docs/img/matrix-dejavu-light.svg" height="89"></picture></td></tr>
 </table>
 
+<details>
+<summary>MathML source</summary>
+
+```xml
+<math display="block">
+  <mi>A</mi><mo>=</mo>
+  <mrow><mo>(</mo>
+    <mtable>
+      <mtr><mtd><msub><mi>a</mi><mn>11</mn></msub></mtd><mtd><mo>&hellip;</mo></mtd><mtd><msub><mi>a</mi><mrow><mn>1</mn><mi>n</mi></mrow></msub></mtd></mtr>
+      <mtr><mtd><mo>&vellip;</mo></mtd><mtd><mo>&dtdot;</mo></mtd><mtd><mo>&vellip;</mo></mtd></mtr>
+      <mtr><mtd><msub><mi>a</mi><mrow><mi>m</mi><mn>1</mn></mrow></msub></mtd><mtd><mo>&hellip;</mo></mtd><mtd><msub><mi>a</mi><mrow><mi>m</mi><mi>n</mi></mrow></msub></mtd></mtr>
+    </mtable>
+  <mo>)</mo></mrow>
+  <mo>,</mo><mspace width="1em"/>
+  <mrow><mo>|</mo><mi>x</mi><mo>|</mo></mrow><mo>=</mo>
+  <mrow><mo>{</mo>
+    <mtable columnalign="left">
+      <mtr><mtd><mi>x</mi></mtd><mtd><mtext>if&#xA0;</mtext><mi>x</mi><mo>&ge;</mo><mn>0</mn></mtd></mtr>
+      <mtr><mtd><mo>&minus;</mo><mi>x</mi></mtd><mtd><mtext>if&#xA0;</mtext><mi>x</mi><mo>&lt;</mo><mn>0</mn></mtd></mtr>
+    </mtable>
+  </mrow>
+</math>
+```
+
+</details>
+
 ### Fractions, brackets, accents
 
 Quantum-mechanics notation: stretchy brackets and bras/kets, `ħ`, a wide-hat accent, and the Laplacian.
@@ -76,6 +158,28 @@ Quantum-mechanics notation: stretchy brackets and bras/kets, `ħ`, a wide-hat ac
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/schrodinger-dejavu-dark.svg"><img alt="schrodinger in TeX Gyre DejaVu Math" src="docs/img/schrodinger-dejavu-light.svg" height="70"></picture></td></tr>
 </table>
 
+<details>
+<summary>MathML source</summary>
+
+```xml
+<math display="block">
+  <mi>i</mi><mi>&hbar;</mi>
+  <mfrac><mo>&part;</mo><mrow><mo>&part;</mo><mi>t</mi></mrow></mfrac>
+  <mi>&Psi;</mi><mo>=</mo>
+  <mrow><mo>[</mo>
+    <mo>&minus;</mo>
+    <mfrac><msup><mi>&hbar;</mi><mn>2</mn></msup><mrow><mn>2</mn><mi>m</mi></mrow></mfrac>
+    <msup><mo>&nabla;</mo><mn>2</mn></msup><mo>+</mo><mi>V</mi>
+  <mo>]</mo></mrow>
+  <mi>&Psi;</mi>
+  <mo>,</mo><mspace width="1em"/>
+  <mi>Z</mi><mo>=</mo>
+  <mrow><mo>&langle;</mo><mi>&psi;</mi><mo>|</mo><msup><mi>e</mi><mrow><mo>&minus;</mo><mi>&beta;</mi><mover accent="true"><mi>H</mi><mo>&#x302;</mo></mover></mrow></msup><mo>|</mo><mi>&psi;</mi><mo>&rangle;</mo></mrow>
+</math>
+```
+
+</details>
+
 ### Prescripts (`mmultiscripts`)
 
 Stacked pre-super/subscripts as used for isotopes and tensor indices.
@@ -88,6 +192,15 @@ Stacked pre-super/subscripts as used for isotopes and tensor indices.
 <tr><td width="150"><sub>TeX Gyre Bonum Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/nuclear-bonum-dark.svg"><img alt="nuclear in TeX Gyre Bonum Math" src="docs/img/nuclear-bonum-light.svg" height="43"></picture></td></tr>
 <tr><td width="150"><sub>TeX Gyre DejaVu Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/nuclear-dejavu-dark.svg"><img alt="nuclear in TeX Gyre DejaVu Math" src="docs/img/nuclear-dejavu-light.svg" height="45"></picture></td></tr>
 </table>
+
+<details>
+<summary>MathML source</summary>
+
+```xml
+<math display="block"><mmultiscripts><mi mathvariant="normal">U</mi><mprescripts/><mn>92</mn><mn>235</mn></mmultiscripts><mo>+</mo><mi>n</mi><mo>&rarr;</mo><mmultiscripts><mi>Ba</mi><mprescripts/><mn>56</mn><mn>141</mn></mmultiscripts><mo>+</mo><mmultiscripts><mi>Kr</mi><mprescripts/><mn>36</mn><mn>92</mn></mmultiscripts><mo>+</mo><mn>3</mn><mi>n</mi><mo>,</mo><mspace width="1em"/><mmultiscripts><mi>&Lambda;</mi><mi>&nu;</mi><mi>&mu;</mi><mprescripts/><mi>&beta;</mi><mi>&alpha;</mi></mmultiscripts></math>
+```
+
+</details>
 
 ## License
 
