@@ -88,7 +88,7 @@ test("markdown snippets escape the alt text", () => {
 });
 
 test("state round-trips through the URL fragment", () => {
-  const fonts = ["latinmodern-math.otf", "stixtwo-math.otf"];
+  const fonts = ["newcomputermodern-math.otf", "stixtwo-math.otf"];
   const state = {
     ...DEFAULTS, mode: "mathml", source: "<math>\n<mi>x</mi> & é</math>", font: "stixtwo-math.otf",
     display: false, fg: "#FF0000", bg: "#00ff00", size: 5.5, textSize: 10.5,

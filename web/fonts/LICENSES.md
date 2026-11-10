@@ -1,11 +1,10 @@
 # Fonts used by the demo
 
 All fonts here are free to use and redistribute. The copyright lines are taken from the
-fonts' own `name` tables. Latin Modern Math is copied from `tests/testfiles/` by `web/build.sh`.
+fonts' own `name` tables.
 
 | File | Font | Copyright | License |
 | --- | --- | --- | --- |
-| `latinmodern-math.otf` | Latin Modern Math | 2012 B. Jackowski, P. Strzelczyk and P. Pianowski (on behalf of TeX users groups) | GUST Font License |
 | `newcomputermodern-math.otf` | New Computer Modern Math | (C) 2019-2026 Antonis Tsolomitis | GUST Font License |
 | `texgyrepagella-math.otf` | TeX Gyre Pagella Math | 2012-2014 B. Jackowski, P. Strzelczyk and P. Pianowski (on behalf of TeX users groups) | GUST Font License |
 | `texgyretermes-math.otf` | TeX Gyre Termes Math | 2012-2014 B. Jackowski, P. Strzelczyk and P. Pianowski (on behalf of TeX users groups) | GUST Font License |
