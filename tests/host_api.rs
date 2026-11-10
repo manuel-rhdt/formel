@@ -754,3 +754,307 @@ fn table_lines_stop_at_spanning_cells() {
         assert!(line.bottom() <= spanning.origin.y + 1e-3 || line.origin.y >= spanning.bottom() - 1e-3);
     }
 }
+
+// Ports of the table tests in web-platform-tests `mathml/presentation-markup/tables/`. The
+// reftests (`columnspan-rowspan-*`) become size and tiling checks, since mlayout has no
+// rasterizer to compare against a reference page.
+
+/// A `<mspace>` of the given size in px.
+fn px_space(doc: &mut Doc, width: f32, height: f32, depth: f32) -> Id {
+    let id = doc.el(Mspace, &[]);
+    doc.set_attr(id, "width", &format!("{width}px"));
+    doc.set_attr(id, "height", &format!("{height}px"));
+    doc.set_attr(id, "depth", &format!("{depth}px"));
+    id
+}
+
+/// A table of rows of cells; each cell is `(content, columnspan, rowspan)`. Returns the table,
+/// the `mtd` of every cell (in reading order) and the table root.
+fn spanned_table(doc: &mut Doc, rows: &[Vec<(Id, u32, u32)>]) -> (Id, Vec<Id>) {
+    let mut cells = Vec::new();
+    let mut row_ids = Vec::new();
+    for row in rows {
+        let mut row_cells = Vec::new();
+        for &(content, column_span, row_span) in row {
+            let mtd = doc.el(Mtd, &[content]);
+            if column_span != 1 {
+                doc.set_attr(mtd, "columnspan", &column_span.to_string());
+            }
+            if row_span != 1 {
+                doc.set_attr(mtd, "rowspan", &row_span.to_string());
+            }
+            row_cells.push(mtd);
+            cells.push(mtd);
+        }
+        row_ids.push(doc.el(Mtr, &row_cells));
+    }
+    let table = doc.el(Mtable, &row_ids);
+    // MathML Core tables have no spacing between cells.
+    doc.set_attr(table, "columnspacing", "0");
+    doc.set_attr(table, "rowspacing", "0");
+    (table, cells)
+}
+
+/// The table fills a `side` px square and its cells tile it without gaps or overlaps.
+fn assert_green_square(doc: &mut Doc, table: Id, cells: &[Id], side: f32) {
+    let root = doc.el(Math, &[table]);
+    doc.run(root);
+    let size = doc.layout(table).size;
+    assert_close(size.width, side);
+    assert_close(size.height, side);
+    let mut area = 0.0;
+    for (i, &a) in cells.iter().enumerate() {
+        let ra = doc.absolute_rect(table, a);
+        assert!(ra.origin.x >= -1e-3 && ra.origin.y >= -1e-3);
+        assert!(ra.right() <= side + 1e-3 && ra.bottom() <= side + 1e-3);
+        area += ra.size.width * ra.size.height;
+        for &b in &cells[i + 1..] {
+            let rb = doc.absolute_rect(table, b);
+            let overlaps = ra.origin.x < rb.right() - 1e-3
+                && rb.origin.x < ra.right() - 1e-3
+                && ra.origin.y < rb.bottom() - 1e-3
+                && rb.origin.y < ra.bottom() - 1e-3;
+            assert!(!overlaps, "cells overlap: {ra:?} {rb:?}");
+        }
+    }
+    assert_close(area, side * side);
+}
+
+fn squares(doc: &mut Doc, sizes: &[(f32, f32)]) -> Vec<Id> {
+    sizes.iter().map(|&(w, d)| px_space(doc, w, 0.0, d)).collect()
+}
+
+/// table-001: cells of 2x2, 4x3 and 3x4 tables are in reading order.
+#[test]
+fn wpt_table_001_basic_layout() {
+    for (columns, rows) in [(2, 2), (4, 3), (3, 4)] {
+        let mut doc = Doc::new();
+        let mut grid: Vec<Vec<Id>> = Vec::new();
+        let mut trs = Vec::new();
+        for _ in 0..rows {
+            let mut spaces = Vec::new();
+            let mut tds = Vec::new();
+            for _ in 0..columns {
+                let space = px_space(&mut doc, 20.0, 10.0, 0.0);
+                tds.push(doc.el(Mtd, &[space]));
+                spaces.push(space);
+            }
+            trs.push(doc.el(Mtr, &tds));
+            grid.push(spaces);
+        }
+        let table = doc.el(Mtable, &trs);
+        let root = doc.el(Math, &[table]);
+        doc.run(root);
+        let rect = |n| doc.absolute_rect(root, n);
+        for j in 0..rows {
+            for i in 0..columns - 1 {
+                let (a, b) = (rect(grid[j][i]), rect(grid[j][i + 1]));
+                assert_close(a.origin.y, b.origin.y);
+                assert!(a.right() < b.origin.x, "({i},{j}) is left of ({},{j})", i + 1);
+            }
+        }
+        for j in 0..rows - 1 {
+            for i in 0..columns {
+                let (a, b) = (rect(grid[j][i]), rect(grid[j + 1][i]));
+                assert_close(a.origin.x, b.origin.x);
+                assert!(a.bottom() < b.origin.y, "({i},{j}) is above ({i},{})", j + 1);
+            }
+        }
+    }
+}
+
+/// table-002 and table-003: cells share a baseline and are centered in their column, with or
+/// without an `<mrow>` around the content.
+#[test]
+fn wpt_table_002_003_cell_alignment() {
+    for wrapped in [false, true] {
+        let mut doc = Doc::new();
+        let cells = [
+            (40.0, 0.0),
+            (0.0, 40.0),
+            (20.0, 20.0),
+            (30.0, 10.0),
+            (10.0, 30.0),
+            (80.0, 0.0),
+            (0.0, 80.0),
+            (40.0, 40.0),
+            (70.0, 30.0),
+            (30.0, 70.0),
+        ];
+        let mut spaces = Vec::new();
+        let mut tds = Vec::new();
+        for (height, depth) in cells {
+            let space = px_space(&mut doc, 10.0, height, depth);
+            let content = if wrapped { doc.el(Mrow, &[space]) } else { space };
+            tds.push(doc.el(Mtd, &[content]));
+            spaces.push(space);
+        }
+        let tr = doc.el(Mtr, &tds);
+        let vertical = doc.el(Mtable, &[tr]);
+
+        let widths = [10.0, 40.0, 30.0, 20.0, 50.0, 100.0, 90.0, 70.0, 80.0, 40.0];
+        let mut wide = Vec::new();
+        let mut trs = Vec::new();
+        for width in widths {
+            let space = px_space(&mut doc, width, 10.0, 0.0);
+            let content = if wrapped { doc.el(Mrow, &[space]) } else { space };
+            let td = doc.el(Mtd, &[content]);
+            trs.push(doc.el(Mtr, &[td]));
+            wide.push(space);
+        }
+        let horizontal = doc.el(Mtable, &trs);
+        let root = doc.el(Math, &[vertical, horizontal]);
+        doc.run(root);
+
+        let baseline = |n| {
+            let rect = doc.absolute_rect(root, n);
+            rect.origin.y
+        };
+        for (i, (height, _)) in cells.iter().enumerate().take(9) {
+            let next = cells[i + 1].0;
+            assert!(
+                (baseline(spaces[i]) + height - (baseline(spaces[i + 1]) + next)).abs() < 1.0,
+                "baselines of cells {i} and {} are aligned (wrapped: {wrapped})",
+                i + 1
+            );
+        }
+        for pair in wide.windows(2) {
+            let (a, b) = (doc.absolute_rect(root, pair[0]), doc.absolute_rect(root, pair[1]));
+            assert!((a.origin.x + a.size.width / 2.0 - (b.origin.x + b.size.width / 2.0)).abs() < 1.0);
+        }
+    }
+}
+
+/// table-cell-mrow-layout: `<mtd>` lays out its children like `<mrow>`, and wrapping them in
+/// an explicit `<mrow>` changes nothing.
+#[test]
+fn wpt_table_cell_mrow_layout() {
+    let parts = [(10.0, 20.0, 20.0), (10.0, 30.0, 10.0), (10.0, 10.0, 30.0)];
+    let mut doc = Doc::new();
+    let mut direct = Vec::new();
+    let mut wrapped = Vec::new();
+    let mut reference = Vec::new();
+    for &(width, height, depth) in &parts {
+        direct.push(px_space(&mut doc, width, height, depth));
+        wrapped.push(px_space(&mut doc, width, height, depth));
+        reference.push(px_space(&mut doc, width, height, depth));
+    }
+    let mtd = doc.el(Mtd, &direct);
+    let tr = doc.el(Mtr, &[mtd]);
+    let mtable = doc.el(Mtable, &[tr]);
+    let row = doc.el(Mrow, &wrapped);
+    let mtd2 = doc.el(Mtd, &[row]);
+    let tr2 = doc.el(Mtr, &[mtd2]);
+    let mtable2 = doc.el(Mtable, &[tr2]);
+    let mrow = doc.el(Mrow, &reference);
+    let root = doc.el(Math, &[mtable, mtable2, mrow]);
+    doc.run(root);
+
+    let size = |n: Id| doc.layout(n).size;
+    assert_close(size(mtd).width, size(mrow).width);
+    assert_close(size(mtd).height, size(mrow).height);
+    assert_close(doc.layout(mtd).baseline, doc.layout(mrow).baseline);
+    assert_close(size(mtable).width, size(mtable2).width);
+    assert_close(size(mtable).height, size(mtable2).height);
+    for (a, b) in direct.iter().zip(&wrapped) {
+        // positions inside the tables (the tables themselves sit side by side)
+        let ra = doc.absolute_rect(root, *a);
+        let rb = doc.absolute_rect(root, *b);
+        let (ta, tb) = (doc.absolute_rect(root, mtable), doc.absolute_rect(root, mtable2));
+        assert_close(ra.origin.x - ta.origin.x, rb.origin.x - tb.origin.x);
+        assert_close(ra.origin.y - ta.origin.y, rb.origin.y - tb.origin.y);
+    }
+}
+
+/// columnspan-rowspan-001: a cell spanning two columns.
+#[test]
+fn wpt_columnspan_rowspan_001() {
+    let mut doc = Doc::new();
+    let mut rows = Vec::new();
+    let first = squares(&mut doc, &[(80.0, 40.0), (40.0, 40.0), (40.0, 40.0), (40.0, 40.0)]);
+    rows.push(vec![(first[0], 2, 1), (first[1], 1, 1), (first[2], 1, 1), (first[3], 1, 1)]);
+    for _ in 0..4 {
+        let row = squares(&mut doc, &[(40.0, 40.0); 5]);
+        rows.push(row.into_iter().map(|c| (c, 1, 1)).collect());
+    }
+    let (table, cells) = spanned_table(&mut doc, &rows);
+    assert_green_square(&mut doc, table, &cells, 200.0);
+}
+
+/// columnspan-rowspan-002: a cell spanning three rows.
+#[test]
+fn wpt_columnspan_rowspan_002() {
+    let mut doc = Doc::new();
+    let mut rows = Vec::new();
+    for (lead, count) in [(true, 3), (false, 3), (false, 3), (false, 4)] {
+        let mut row = Vec::new();
+        if lead && rows.is_empty() {
+            let tall = px_space(&mut doc, 50.0, 0.0, 150.0);
+            row.push((tall, 1, 3));
+        }
+        for _ in 0..count {
+            row.push((px_space(&mut doc, 50.0, 0.0, 50.0), 1, 1));
+        }
+        rows.push(row);
+    }
+    let (table, cells) = spanned_table(&mut doc, &rows);
+    assert_green_square(&mut doc, table, &cells, 200.0);
+}
+
+/// columnspan-rowspan-003: a cell spanning four rows and four columns.
+#[test]
+fn wpt_columnspan_rowspan_003() {
+    let mut doc = Doc::new();
+    let big = px_space(&mut doc, 160.0, 0.0, 160.0);
+    let mut rows = vec![vec![(big, 4, 4), (px_space(&mut doc, 40.0, 0.0, 40.0), 1, 1)]];
+    for _ in 0..3 {
+        rows.push(vec![(px_space(&mut doc, 40.0, 0.0, 40.0), 1, 1)]);
+    }
+    rows.push((0..5).map(|_| (px_space(&mut doc, 40.0, 0.0, 40.0), 1, 1)).collect());
+    let (table, cells) = spanned_table(&mut doc, &rows);
+    assert_green_square(&mut doc, table, &cells, 200.0);
+}
+
+/// columnspan-rowspan-004: staircase of rowspans over a staircase of columnspans.
+#[test]
+fn wpt_columnspan_rowspan_004() {
+    let mut doc = Doc::new();
+    let mut rows = Vec::new();
+    let first: Vec<(Id, u32, u32)> = (0..5)
+        .map(|i| (px_space(&mut doc, 40.0, 0.0, 40.0 * (5 - i) as f32), 1, 5 - i as u32))
+        .collect();
+    rows.push(first);
+    rows.push(vec![(px_space(&mut doc, 40.0, 0.0, 40.0), 1, 1)]);
+    for span in 2..=4u32 {
+        rows.push(vec![(px_space(&mut doc, 40.0 * span as f32, 0.0, 40.0), span, 1)]);
+    }
+    let (table, cells) = spanned_table(&mut doc, &rows);
+    assert_green_square(&mut doc, table, &cells, 200.0);
+}
+
+/// columnspan-rowspan-005 and -006: staircases that meet; `rowspan="0"` means "to the last
+/// row".
+#[test]
+fn wpt_columnspan_rowspan_005_006() {
+    for zero in [false, true] {
+        let mut doc = Doc::new();
+        let mut rows = Vec::new();
+        rows.push(vec![(px_space(&mut doc, 200.0, 0.0, 40.0), 5, 1)]);
+        for k in 1..4u32 {
+            let columns = 5 - k;
+            let rows_spanned = 5 - k;
+            let rowspan = if zero { 0 } else { rows_spanned };
+            rows.push(vec![
+                (px_space(&mut doc, 40.0 * columns as f32, 0.0, 40.0), columns, 1),
+                (px_space(&mut doc, 40.0, 0.0, 40.0 * rows_spanned as f32), 1, rowspan),
+            ]);
+        }
+        let last_span = if zero { 0 } else { 1 };
+        rows.push(vec![
+            (px_space(&mut doc, 40.0, 0.0, 40.0), 1, 1),
+            (px_space(&mut doc, 40.0, 0.0, 40.0), 1, last_span),
+        ]);
+        let (table, cells) = spanned_table(&mut doc, &rows);
+        assert_green_square(&mut doc, table, &cells, 200.0);
+    }
+}

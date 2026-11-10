@@ -138,7 +138,9 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let mut cells: Vec<Cell<Box_<T>>> = Vec::new();
         // grid slots taken by cells that span several rows or columns
         let mut occupied = std::collections::HashSet::new();
-        for (i, child) in self.children(node).into_iter().enumerate() {
+        let table_children = self.children(node);
+        let total_rows = table_children.len();
+        for (i, child) in table_children.into_iter().enumerate() {
             let (row_node, cell_nodes) = match self.element(child) {
                 Some(MathElement::Mtr) => (Some(child), self.children(child)),
                 Some(MathElement::Mlabeledtr) => {
@@ -173,10 +175,14 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                     self.tree
                         .attribute(cell_node, name)
                         .and_then(|value| value.trim().parse::<usize>().ok())
-                        .filter(|&n| n > 0)
-                        .unwrap_or(1)
                 };
-                let (row_span, column_span) = (span("rowspan"), span("columnspan"));
+                // `rowspan="0"` spans all remaining rows. Spans can't reach past the last row.
+                let row_span = match span("rowspan") {
+                    Some(0) => total_rows - i,
+                    Some(n) => n.min(total_rows - i),
+                    None => 1,
+                };
+                let column_span = span("columnspan").filter(|&n| n > 0).unwrap_or(1);
                 for r in i..i + row_span {
                     for c in column..column + column_span {
                         occupied.insert((r, c));
@@ -199,10 +205,6 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 ascent: 0.0,
                 descent: 0.0,
             });
-        }
-        // spans can't reach past the last row
-        for cell in &mut cells {
-            cell.row_span = cell.row_span.min(rows.len() - cell.row);
         }
 
         // row heights: baseline-aligned cells share the baseline; the others only need room

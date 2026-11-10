@@ -3,7 +3,7 @@
 
 use super::{MathDocument, NodeId, StyleOptions};
 use crate::host::{
-    MathComputedStyle, MathElement, MathFont, MathShift, MathStyle, parse_math_length,
+    Edges, MathComputedStyle, MathElement, MathFont, MathShift, MathStyle, parse_math_length,
     script_scale_factor,
 };
 use crate::unicode_math::{Family, StringExtMathml};
@@ -98,6 +98,17 @@ impl<'a, F: MathFont> Resolver<'a, F> {
             } else if let Some(px) = parse_math_length(size, &style) {
                 style.font_size = px;
             }
+        }
+
+        // MathML Core: `mtd { padding: 0.5ex 0.4em }`. Without access to the font's x-height,
+        // 1ex is approximated as 0.5em, as in `parse_math_length`.
+        if element == MathElement::Mtd {
+            style.padding = Edges {
+                top: 0.25 * style.font_size,
+                right: 0.4 * style.font_size,
+                bottom: 0.25 * style.font_size,
+                left: 0.4 * style.font_size,
+            };
         }
 
         if element.is_token() {

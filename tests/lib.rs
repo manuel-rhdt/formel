@@ -1,6 +1,6 @@
 #![cfg(feature = "mathml_parser")]
 
-use math_render::host::{Fragment, MathFont, NodeLayout, Rect};
+use math_render::host::{Fragment, MathElement, MathFont, NodeLayout, Rect};
 use math_render::mathmlparser;
 use math_render::standalone::{MathDocument, StyleOptions};
 
@@ -43,10 +43,16 @@ fn all_test_files_lay_out() {
                 "{:?} has an empty layout",
                 path
             );
-            // every node reachable from the root has a layout
+            // Every node reachable from the root has a layout, except the markers `<none/>` and
+            // `<mprescripts/>` of `<mmultiscripts>`, which take no space.
             let mut stack = vec![root];
             while let Some(node) = stack.pop() {
-                let _ = layout(node);
+                if !matches!(
+                    doc.node(node).element,
+                    MathElement::NoneElement | MathElement::Mprescripts
+                ) {
+                    let _ = layout(node);
+                }
                 stack.extend(&doc.node(node).children);
             }
         });
@@ -94,4 +100,23 @@ fn fraction_centering_test() {
             );
         }
     })
+}
+
+#[test]
+fn table_cells_have_default_padding() {
+    layout_xml(
+        "<mtable><mtr><mtd><mn>1</mn></mtd></mtr></mtable>",
+        |doc, layout| {
+            let find = |element| {
+                (0..doc.len())
+                    .find(|&id| doc.node(id).element == element)
+                    .expect("element exists")
+            };
+            let (cell, number) = (layout(find(MathElement::Mtd)), layout(find(MathElement::Mn)));
+            let em = TEST_FONT.with(|font| font.units_per_em() as f32);
+            // MathML Core: `mtd { padding: 0.5ex 0.4em }`, with 1ex approximated as 0.5em
+            assert!((cell.size.width - number.size.width - 0.8 * em).abs() < 1e-2);
+            assert!((cell.size.height - number.size.height - 0.5 * em).abs() < 1e-2);
+        },
+    );
 }
