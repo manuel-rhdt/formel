@@ -8,5 +8,4 @@ cd "$(dirname "$0")/.."
 cargo build -p mathwasm --target wasm32-unknown-unknown --release
 wasm-bindgen --target web --no-typescript --out-dir web/pkg \
   target/wasm32-unknown-unknown/release/mathwasm.wasm
-cp tests/testfiles/latinmodern-math.otf web/fonts/latinmodern-math.otf
 echo "built web/pkg; serve with: python3 -m http.server -d web 8000"

@@ -3,7 +3,7 @@
 export const DEFAULTS = Object.freeze({
   mode: "latex",
   source: "",
-  font: "latinmodern-math.otf",
+  font: "newcomputermodern-math.otf",
   display: true,
   fg: "#000000",
   bg: null, // null = transparent
