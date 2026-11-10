@@ -383,22 +383,118 @@ const EXAMPLES = {
 </math>`,
 };
 
-/** The examples menu. LaTeX; in MathML mode they are inserted converted. */
+/**
+ * The examples menu, grouped by field. Each entry is `[name, LaTeX]`; the name is also the option
+ * value, so it has to be unique. LaTeX is in display style; in MathML mode entries are inserted
+ * converted.
+ */
 const GALLERY = [
-  ["Quadratic formula", EXAMPLES.latex],
-  ["Gaussian integral", String.raw`\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}`],
-  ["Basel problem", String.raw`\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}`],
-  ["Fourier transform", String.raw`\hat{f}(\xi) = \int_{-\infty}^{\infty} f(x)\, e^{-2\pi i x \xi}\,dx`],
-  ["Schrödinger equation", String.raw`i\hbar \frac{\partial}{\partial t}\Psi(\mathbf{r},t) = \left[-\frac{\hbar^2}{2m}\nabla^2 + V(\mathbf{r},t)\right]\Psi(\mathbf{r},t)`],
-  ["Maxwell (aligned)", String.raw`\begin{aligned}
+  {
+    group: "Algebra & arithmetic",
+    items: [
+      ["Quadratic formula", EXAMPLES.latex],
+      ["Difference of squares", String.raw`a^2 - b^2 = (a - b)(a + b)`],
+      ["Binomial expansion", String.raw`(a + b)^{n} = \sum_{k=0}^{n} \binom{n}{k} a^{n-k} b^{k}`],
+      ["Partial fractions", String.raw`\frac{1}{x(x+1)} = \frac{1}{x} - \frac{1}{x+1}`],
+      ["Nested fractions", String.raw`1 + \frac{1}{1 + \frac{1}{1 + \frac{1}{x}}}`],
+      ["Cubic formula (Cardano)", String.raw`x = \sqrt[3]{-\frac{q}{2} + \sqrt{\frac{q^{2}}{4} + \frac{p^{3}}{27}}} + \sqrt[3]{-\frac{q}{2} - \sqrt{\frac{q^{2}}{4} + \frac{p^{3}}{27}}}`],
+    ],
+  },
+  {
+    group: "Calculus & analysis",
+    items: [
+      ["Gaussian integral", String.raw`\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}`],
+      ["Basel problem", String.raw`\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}`],
+      ["Fourier transform", String.raw`\hat{f}(\xi) = \int_{-\infty}^{\infty} f(x)\, e^{-2\pi i x \xi}\,dx`],
+      ["Derivative (limit)", String.raw`f'(x) = \lim_{h \to 0} \frac{f(x+h) - f(x)}{h}`],
+      ["Integration by parts", String.raw`\int u\,dv = uv - \int v\,du`],
+      ["Taylor series", String.raw`e^{x} = \sum_{n=0}^{\infty} \frac{x^{n}}{n!} = 1 + x + \frac{x^2}{2} + \frac{x^3}{6} + \cdots`],
+      ["Leibniz rule", String.raw`\frac{d}{dx}\left(f g\right) = f'g + fg'`],
+    ],
+  },
+  {
+    group: "Linear algebra",
+    items: [
+      ["Determinant (matrix)", String.raw`\det\begin{pmatrix} a & b \\ c & d \end{pmatrix} = ad - bc`],
+      ["Inverse 2×2 matrix", String.raw`\begin{pmatrix} a & b \\ c & d \end{pmatrix}^{-1} = \frac{1}{ad - bc}\begin{pmatrix} d & -b \\ -c & a \end{pmatrix}`],
+      ["Eigenvalue equation", String.raw`A\mathbf{v} = \lambda \mathbf{v}`],
+      ["Identity matrix", String.raw`I_3 = \begin{bmatrix} 1 & 0 & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1 \end{bmatrix}`],
+      ["Cross product", String.raw`\mathbf{a} \times \mathbf{b} = \det\begin{pmatrix} \mathbf{i} & \mathbf{j} & \mathbf{k} \\ a_1 & a_2 & a_3 \\ b_1 & b_2 & b_3 \end{pmatrix}`],
+      ["Dot product & norm", String.raw`\mathbf{a}\cdot\mathbf{b} = \sum_{i=1}^{n} a_i b_i, \qquad \|\mathbf{a}\| = \sqrt{\mathbf{a}\cdot\mathbf{a}}`],
+    ],
+  },
+  {
+    group: "Geometry & trigonometry",
+    items: [
+      ["Law of cosines", String.raw`c^{2} = a^{2} + b^{2} - 2ab\cos\gamma`],
+      ["Angle addition", String.raw`\sin(\alpha \pm \beta) = \sin\alpha\cos\beta \pm \cos\alpha\sin\beta`],
+      ["Euler’s identity", String.raw`e^{i\pi} + 1 = 0`],
+      ["Great-circle distance", String.raw`\cos d = \sin\varphi_1 \sin\varphi_2 + \cos\varphi_1 \cos\varphi_2 \cos(\lambda_2 - \lambda_1)`],
+      ["Volume of a sphere", String.raw`V = \frac{4}{3}\pi r^{3}, \qquad A = 4\pi r^{2}`],
+    ],
+  },
+  {
+    group: "Physics",
+    items: [
+      ["Schrödinger equation", String.raw`i\hbar \frac{\partial}{\partial t}\Psi(\mathbf{r},t) = \left[-\frac{\hbar^2}{2m}\nabla^2 + V(\mathbf{r},t)\right]\Psi(\mathbf{r},t)`],
+      ["Maxwell (aligned)", String.raw`\begin{aligned}
   \nabla\cdot\mathbf{E} &= \frac{\rho}{\varepsilon_0} \\
   \nabla\times\mathbf{B} &= \mu_0\mathbf{J} + \mu_0\varepsilon_0\frac{\partial\mathbf{E}}{\partial t}
 \end{aligned}`],
-  ["Stokes’ theorem", String.raw`\oint_{\partial\Sigma} \mathbf{F}\cdot d\mathbf{r} = \iint_{\Sigma} (\nabla\times\mathbf{F})\cdot d\boldsymbol{\Sigma}`],
-  ["Determinant (matrix)", String.raw`\det\begin{pmatrix} a & b \\ c & d \end{pmatrix} = ad - bc`],
-  ["Piecewise (cases)", String.raw`|x| = \begin{cases} x & \text{if } x \ge 0 \\ -x & \text{otherwise} \end{cases}`],
-  ["Continued fraction", String.raw`\varphi = 1 + \cfrac{1}{1 + \cfrac{1}{1 + \cfrac{1}{1 + \cdots}}}`],
-  ["QED Lagrangian", String.raw`\mathcal{L} = -\frac{1}{4}F_{\mu\nu}F^{\mu\nu} + \bar{\psi}(i\gamma^\mu D_\mu - m)\psi`],
+      ["Stokes’ theorem", String.raw`\oint_{\partial\Sigma} \mathbf{F}\cdot d\mathbf{r} = \iint_{\Sigma} (\nabla\times\mathbf{F})\cdot d\boldsymbol{\Sigma}`],
+      ["QED Lagrangian", String.raw`\mathcal{L} = -\frac{1}{4}F_{\mu\nu}F^{\mu\nu} + \bar{\psi}(i\gamma^\mu D_\mu - m)\psi`],
+      ["Einstein field equations", String.raw`R_{\mu\nu} - \frac{1}{2}R\,g_{\mu\nu} + \Lambda g_{\mu\nu} = \frac{8\pi G}{c^{4}} T_{\mu\nu}`],
+      ["Lorentz force", String.raw`\mathbf{F} = q\left(\mathbf{E} + \mathbf{v}\times\mathbf{B}\right)`],
+      ["Wave equation", String.raw`\frac{\partial^{2} u}{\partial t^{2}} = c^{2}\nabla^{2} u`],
+      ["Snell’s law", String.raw`\frac{\sin\theta_1}{\sin\theta_2} = \frac{n_2}{n_1} = \frac{v_1}{v_2}`],
+      ["Lorentz factor", String.raw`\gamma = \frac{1}{\sqrt{1 - v^{2}/c^{2}}}`],
+      ["Boltzmann entropy", String.raw`S = k_{\mathrm{B}} \ln \Omega`],
+    ],
+  },
+  {
+    group: "Probability & statistics",
+    items: [
+      ["Normal distribution", String.raw`f(x) = \frac{1}{\sigma\sqrt{2\pi}}\, e^{-\frac{(x-\mu)^2}{2\sigma^2}}`],
+      ["Bayes’ theorem", String.raw`P(A\mid B) = \frac{P(B\mid A)\,P(A)}{P(B)}`],
+      ["Expectation & variance", String.raw`\mathrm{Var}(X) = \mathbb{E}\left[(X - \mu)^{2}\right] = \mathbb{E}[X^{2}] - \mu^{2}`],
+      ["Central limit theorem", String.raw`\frac{\bar{X}_n - \mu}{\sigma/\sqrt{n}} \xrightarrow{d} \mathcal{N}(0,1)`],
+    ],
+  },
+  {
+    group: "Number theory & combinatorics",
+    items: [
+      ["Binomial coefficient", String.raw`\binom{n}{k} = \frac{n!}{k!\,(n-k)!}`],
+      ["Gauss sum", String.raw`\sum_{k=1}^{n} k = \frac{n(n+1)}{2}, \qquad \sum_{k=1}^{n} k^{2} = \frac{n(n+1)(2n+1)}{6}`],
+      ["Riemann zeta function", String.raw`\zeta(s) = \sum_{n=1}^{\infty} n^{-s} = \prod_{p\ \mathrm{prime}} \frac{1}{1 - p^{-s}}`],
+      ["Fermat’s little theorem", String.raw`a^{p-1} \equiv 1 \pmod{p}`],
+      ["Euler’s totient", String.raw`\varphi(n) = n\prod_{p\mid n}\left(1 - \frac{1}{p}\right)`],
+    ],
+  },
+  {
+    group: "Layout & environments",
+    items: [
+      ["Piecewise (cases)", String.raw`|x| = \begin{cases} x & \text{if } x \ge 0 \\ -x & \text{otherwise} \end{cases}`],
+      ["System of equations", String.raw`\begin{aligned}
+  x + y + z &= 3 \\
+  2x - y &= 0 \\
+  y - 2z &= -1
+\end{aligned}`],
+      ["Continued fraction", String.raw`\varphi = 1 + \cfrac{1}{1 + \cfrac{1}{1 + \cfrac{1}{1 + \cdots}}}`],
+      ["Underbrace & overbrace", String.raw`\overbrace{a + \cdots + a}^{n \text{ times}} = \underbrace{n \cdot a}_{\text{product}}`],
+      ["Big delimiters", String.raw`\left(\frac{a}{b}\right)^{2}, \quad \left\lfloor x \right\rfloor, \quad \left\lceil y \right\rceil, \quad \langle u, v \rangle`],
+      ["Limits & products", String.raw`\lim_{n\to\infty}\left(1 + \frac{1}{n}\right)^{n} = e, \qquad \prod_{i=1}^{n} i = n!`],
+      ["Sum of sums", String.raw`\sum_{i=1}^{n}\sum_{j=1}^{m} a_{ij} = \prod_{k=1}^{n} b_k`],
+    ],
+  },
+  {
+    group: "Symbols & accents",
+    items: [
+      ["Blackboard bold", String.raw`x \in \mathbb{R}^{n}, \quad z \in \mathbb{C}, \quad \mathbb{N} \subset \mathbb{Z} \subset \mathbb{Q}`],
+      ["Accents", String.raw`\hat{a}\ \bar{b}\ \vec{c}\ \dot{d}\ \ddot{e}\ \tilde{f}\ \acute{g}\ \grave{h}`],
+      ["Greek alphabet", String.raw`\alpha\beta\gamma\delta\epsilon\zeta\eta\theta\iota\kappa\lambda\mu\nu\xi\pi\rho\sigma\tau\upsilon\phi\chi\psi\omega`],
+      ["Text in math", String.raw`A = \pi r^{2} \quad \text{(area of a circle)}`],
+    ],
+  },
 ];
 
 const saved = { latex: EXAMPLES.latex, mathml: EXAMPLES.mathml };
@@ -1154,7 +1250,13 @@ function updateMode(previous) {
 for (const f of FONTS) $("font").add(new Option(f.name, f.file));
 const uploadOption = new Option("Upload font file…", CUSTOM);
 $("font").add(uploadOption);
-for (const [name] of GALLERY) $("examples").add(new Option(name, name));
+const galleryEntry = new Map(GALLERY.flatMap(({ items }) => items));
+for (const { group, items } of GALLERY) {
+  const optgroup = document.createElement("optgroup");
+  optgroup.label = group;
+  for (const [name] of items) optgroup.append(new Option(name, name));
+  $("examples").append(optgroup);
+}
 
 let lastFont = FONTS[0].file;   // what the dropdown shows if the upload dialog is cancelled
 $("font").addEventListener("change", (e) => {
@@ -1213,14 +1315,15 @@ $("src").addEventListener("scroll", syncBackdrop);
 new ResizeObserver(syncBackdrop).observe($("src"));
 
 $("examples").addEventListener("change", (e) => {
-  const entry = GALLERY.find(([name]) => name === e.target.value);
+  const tex = galleryEntry.get(e.target.value);
+  const name = e.target.value;
   e.target.value = "";
-  if (!entry) return;
-  let text = entry[1];
+  if (!tex) return;
+  let text = tex;
   if (!isLatex()) {
     try { text = prettyXml(latex_to_mathml(text, true)); } catch { return; }
   }
-  replaceSource(text, entry[0]);
+  replaceSource(text, name);
 });
 
 $("debug").addEventListener("click", () => {
