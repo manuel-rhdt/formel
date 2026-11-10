@@ -118,7 +118,6 @@
   #imgout { display: block; flex: none; width: calc(var(--w, 0) * var(--size, 3) * 1em); max-width: 100%; height: auto; }
   #out.ready #imgout { cursor: grab; }
   #out.stale #imgout { opacity: .3; }
-  #pxinfo:not(:empty)::before { content: " · "; }
   .exportbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 .1rem; }
   .checker {
     background-color: #ececec;
@@ -248,7 +247,7 @@
       <img id="imgout" alt="" hidden title="Drag into another app, or right-click to copy or save the image">
       <span class="placeholder" id="placeholder">Loading…</span>
     </div>
-    <div class="meta"><span id="meta"></span><span id="pxinfo"></span></div>
+    <div class="meta" id="meta"></div>
     <div class="zoom" aria-label="Preview zoom">
       <button id="zoomout" class="btn icon" type="button" aria-label="Zoom out">−</button>
       <output id="zoomval" title="Reset zoom">3×</output>
@@ -263,11 +262,11 @@
       <label title="Bitmap: works in almost any app"><input type="radio" name="format" value="png" checked>PNG</label>
       <label title="Vector: sharp at any size; best for the web, Inkscape, Illustrator, Office"><input type="radio" name="format" value="svg">SVG</label>
     </fieldset>
-    <select id="pngscale" aria-label="PNG resolution" title="PNG resolution. Many apps size a pasted PNG by its pixel count, so higher resolutions paste larger.">
-      <option value="1">1× · 48 px/em</option>
-      <option value="2" selected>2× · 96 px/em</option>
-      <option value="4">4× · 192 px/em</option>
-      <option value="8">8× · 384 px/em</option>
+    <select id="pngscale" aria-label="PNG resolution" title="PNG resolution, shown as the size of the image you get. 1× is 48 pixels per font size, which for a formula printed at 12 pt is about 300 dpi; 2× about 600 dpi. Many apps paste a PNG at its pixel size, so higher resolutions come in larger: scale it down there and it stays sharp.">
+      <option value="1">1×</option>
+      <option value="2" selected>2×</option>
+      <option value="4">4×</option>
+      <option value="8">8×</option>
     </select>
     <span class="sep" aria-hidden="true"></span>
     <button id="copy" class="btn primary" type="button" disabled>Copy PNG</button>
@@ -601,6 +600,7 @@ function refreshOutput() {
   $("out").classList.toggle("checker", !colors().bg);
   $("out").style.backgroundColor = colors().bg ?? "";
   refreshExportState();
+  updateScaleLabels();
   updateSnippet();
   schedulePng();
   updateDisplay();
@@ -646,9 +646,19 @@ function updateSnippet() {
   $("copysnippet").disabled = !valid;
 }
 
-function pngPixelSize() {
-  const { width, height } = sized(pxPerEm());
-  return `${Math.ceil(width)} × ${Math.ceil(height)} px`;
+/** Labels the PNG resolutions with the pixel size they give for the current formula. */
+function updateScaleLabels() {
+  for (const option of $("pngscale").options) {
+    const scale = Number(option.value);
+    option.textContent = `${scale}× · ${pngPixelSize(48 * scale)}`;
+  }
+}
+
+function pngPixelSize(pxPerEmValue = pxPerEm()) {
+  // as `sizeSvg` computes it, from the viewBox in font units
+  const width = Math.ceil(rendering.width / rendering.unitsPerEm * pxPerEmValue);
+  const height = Math.ceil(rendering.height / rendering.unitsPerEm * pxPerEmValue);
+  return `${width} × ${height} px`;
 }
 
 /** Indents MathML for reading and editing; token elements stay on one line. */
@@ -991,8 +1001,6 @@ function updateDisplay() {
   const img = $("imgout");
   if (img.src !== next.url) img.src = next.url;   // the old image stays until the new one loads
   $("out").style.setProperty("--w", next.w);
-  $("pxinfo").textContent = format() === "png" && images.png.url
-    ? `PNG ${images.png.width} × ${images.png.height} px` : "";
 }
 
 /** Prepares the PNG (rasterizing takes a moment, so let the input settle briefly). */
