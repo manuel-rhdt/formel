@@ -36,14 +36,35 @@ export function oneLine(text) {
  * The renderer paints everything in `black`, so recoloring is a replacement of that keyword.
  * `bg` of `null` keeps the background transparent.
  */
-export function styleSvg(rawSvg, { fg = DEFAULTS.fg, bg = null, alt = "" } = {}) {
+let svgIdCounter = 0;
+
+/**
+ * Applies the chosen colors and makes an SVG produced by mathwasm self-describing.
+ *
+ * The renderer paints everything in `black`, so recoloring is a replacement of that keyword.
+ * `bg` of `null` keeps the background transparent.
+ *
+ * `alt` becomes the title (the accessible name). With `mathml`, the SVG also gets a `desc`
+ * pointing at the embedded MathML in `<metadata>`: an image cannot expose a formula's structure
+ * to a screen reader, but the file can still carry the expression for tools and for assistive
+ * technology that understands MathML. Ids are unique per call, so several of these SVGs can be
+ * inlined into one document.
+ */
+export function styleSvg(rawSvg, { fg = DEFAULTS.fg, bg = null, alt = "", mathml = "" } = {}) {
   let svg = rawSvg.replaceAll('"black"', `"${fg}"`);
   const label = escapeXml(oneLine(alt));
   const open = svg.match(/^<svg\s([^>]*)>/);
   if (!open) return svg;
 
+  const id = `m${++svgIdCounter}`;
   let extra = "";
-  if (label) extra += `<title>${label}</title>`;
+  if (label) extra += `<title id="${id}t">${label}</title>`;
+  let labelled = "";
+  if (mathml) {
+    extra += `<desc id="${id}d">Vector rendering of a formula. The MathML it was typeset from is in the metadata element.</desc>`;
+    extra += `<metadata>${mathml.replace(/^<math\b/, '<math xmlns="http://www.w3.org/1998/Math/MathML"')}</metadata>`;
+    labelled = ` aria-labelledby="${id}t" aria-describedby="${id}d"`;
+  }
   if (bg) {
     const box = open[1].match(/viewBox="([^"]+)"/);
     if (box) {
@@ -51,7 +72,7 @@ export function styleSvg(rawSvg, { fg = DEFAULTS.fg, bg = null, alt = "" } = {})
       extra += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${bg}"/>`;
     }
   }
-  const attrs = label ? `${open[1]} role="img" aria-label="${label}"` : open[1];
+  const attrs = label ? `${open[1]} role="img" aria-label="${label}"${labelled}` : open[1];
   return `<svg ${attrs}>${extra}${svg.slice(open[0].length)}`;
 }
 
