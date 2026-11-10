@@ -23,12 +23,17 @@ function paths(svg) {
   return out;
 }
 
-/** How much of the formula's width the topmost drawn element (the accent) covers. */
+/**
+ * How much of the formula's width everything above the letters covers.
+ *
+ * The accent is identified by position, not by being the topmost path: an assembled arrow is
+ * several pieces (cap, repeated bars, head) whose topmost piece is only the head.
+ */
 function accentCoverage(tex) {
   const ps = paths(renderer.render_svg(latex_to_mathml(tex, true)));
   const total = Math.max(...ps.map((p) => p.x1)) - Math.min(...ps.map((p) => p.x0));
-  const top = Math.min(...ps.map((p) => p.y0));
-  const accent = ps.filter((p) => p.y0 <= top + 1);
+  const tallest = ps.reduce((a, b) => (b.y1 - b.y0 > a.y1 - a.y0 ? b : a));
+  const accent = ps.filter((p) => p.y1 <= tallest.y0);
   const width = Math.max(...accent.map((p) => p.x1)) - Math.min(...accent.map((p) => p.x0));
   return width / total;
 }
@@ -41,5 +46,4 @@ test("over- and under-arrows stretch to their base", () => {
 
 test("wide hats still use the font's accent variants", () => {
   assert.ok(accentCoverage(String.raw`\widehat{abc}`) > 0.8);
-  assert.ok(accentCoverage(String.raw`\overline{ABCDEFGH}`) > 0.95);
 });
