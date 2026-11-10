@@ -86,7 +86,7 @@
   <span class="hint">Drag into another app:</span>
   <span id="dragsvg" class="chip" draggable="true">⠿ SVG (vector)</span>
   <span id="dragpng" class="chip" draggable="true">⠿ PNG</span>
-  <span class="hint">(dragging out files works in Chromium browsers)</span>
+  <span class="hint">(works in Chromium browsers; if an app pastes nothing or code, use Download SVG or Copy PNG)</span>
 </div>
 
 <details id="embed" open>
@@ -381,14 +381,15 @@ const copySvg = () => guarded("Copy SVG", async () => {
     throw new Error("the clipboard API is not available (it needs https or localhost)");
   }
   const { svg } = sized();
-  const items = { "text/plain": new Blob([svg], { type: "text/plain" }) };
-  // Where the browser can put real SVG on the clipboard, do that too, so that apps can paste
-  // it as a vector image. Everywhere else the SVG source goes on as text.
-  if (ClipboardItem.supports?.("image/svg+xml")) {
-    items["image/svg+xml"] = new Blob([svg], { type: "image/svg+xml" });
-  }
-  await navigator.clipboard.write([new ClipboardItem(items)]);
-  status(items["image/svg+xml"] ? "Copied SVG (image and source)" : "Copied SVG source as text");
+  // Where the browser can put real SVG on the clipboard, do only that: with a text flavor next
+  // to it, apps such as LibreOffice Writer may paste the source code instead of the image.
+  // Everywhere else the SVG source goes on as text.
+  const asImage = ClipboardItem.supports?.("image/svg+xml");
+  const item = asImage
+    ? { "image/svg+xml": new Blob([svg], { type: "image/svg+xml" }) }
+    : { "text/plain": new Blob([svg], { type: "text/plain" }) };
+  await navigator.clipboard.write([new ClipboardItem(item)]);
+  status(asImage ? "Copied SVG as an image" : "This browser can only copy the SVG source as text; use Download SVG or Copy PNG to get an image");
 });
 
 const downloadSvg = () => saveBlob(new Blob([sized().svg], { type: "image/svg+xml" }), "formula.svg");
@@ -421,15 +422,18 @@ function prepareDragFiles() {
 
 function onDragStart(kind) {
   return (e) => {
-    if (!rendering) return e.preventDefault();
-    const url = urls[kind];
-    e.dataTransfer.effectAllowed = "copy";
-    if (url) {
-      // Chromium turns this into a file when dropped on the desktop or into other apps.
-      const [type, name] = kind === "svg" ? ["image/svg+xml", "formula.svg"] : ["image/png", "formula.png"];
-      e.dataTransfer.setData("DownloadURL", `${type}:${name}:${url}`);
+    const url = rendering && urls[kind];
+    // Only offer the file. Any text flavor (say, the SVG source) would be preferred by apps like
+    // LibreOffice Writer, which would then insert the code instead of the image.
+    if (!url) {
+      e.preventDefault();
+      status(kind === "png" ? "The PNG is still being prepared; try again in a moment" : "Nothing to drag yet", true);
+      return;
     }
-    e.dataTransfer.setData("text/plain", kind === "svg" ? sized().svg : (rendering.alt || "formula"));
+    e.dataTransfer.effectAllowed = "copy";
+    const [type, name] = kind === "svg" ? ["image/svg+xml", "formula.svg"] : ["image/png", "formula.png"];
+    // Chromium turns this into a file when dropped on the desktop or into other apps.
+    e.dataTransfer.setData("DownloadURL", `${type}:${name}:${url}`);
   };
 }
 
