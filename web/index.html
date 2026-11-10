@@ -599,6 +599,16 @@ function currentState() {
   };
 }
 
+let hashTimer = 0;
+function scheduleHashUpdate() {
+  clearTimeout(hashTimer);
+  hashTimer = setTimeout(() => {
+    try {
+      history.replaceState(null, "", `#${encodeState(currentState())}`);
+    } catch { /* e.g. sandboxed iframes */ }
+  }, 300);
+}
+
 function applyState(state, hasSource) {
   setRadio("mode", state.mode);
   if (hasSource) saved[state.mode] = state.source;
@@ -649,6 +659,7 @@ function styled() {
 function render() {
   if (!renderer) return;
   const source = $("src").value;
+  scheduleHashUpdate();
   if (!source.trim()) {
     valid = false;
     clearError();
@@ -1316,7 +1327,7 @@ $("examples").addEventListener("change", (e) => {
   replaceSource(text, name);
 });
 
-const recolor = () => refreshOutput();
+const recolor = () => { refreshOutput(); scheduleHashUpdate(); };
 $("fg").addEventListener("input", recolor);
 $("bg").addEventListener("click", () => { setRadio("bgmode", "color"); updateBgUi(); recolor(); });
 $("bg").addEventListener("input", () => { setRadio("bgmode", "color"); updateBgUi(); recolor(); });
@@ -1325,9 +1336,9 @@ for (const input of document.querySelectorAll("input[name=bgmode]")) {
 }
 function updateBgUi() { $("bg").classList.toggle("off", radio("bgmode") === "none"); }
 
-$("zoomin").addEventListener("click", () => setZoom(zoom + 0.5));
-$("zoomout").addEventListener("click", () => setZoom(zoom - 0.5));
-$("zoomval").addEventListener("click", () => setZoom(3));
+$("zoomin").addEventListener("click", () => { setZoom(zoom + 0.5); scheduleHashUpdate(); });
+$("zoomout").addEventListener("click", () => { setZoom(zoom - 0.5); scheduleHashUpdate(); });
+$("zoomval").addEventListener("click", () => { setZoom(3); scheduleHashUpdate(); });
 
 for (const input of document.querySelectorAll("input[name=format]")) {
   input.addEventListener("change", () => { updateFormatUi(); schedulePng(); updateDisplay(); updateSnippet(); });
@@ -1335,10 +1346,12 @@ for (const input of document.querySelectorAll("input[name=format]")) {
 $("textsize").addEventListener("input", () => {
   if (!$("textsize").validity.valid || !$("textsize").value) return;   // wait for a usable number
   refreshOutput();
+  scheduleHashUpdate();
 });
 $("textsize").addEventListener("change", () => {
   $("textsize").value = textSize();
   refreshOutput();
+  scheduleHashUpdate();
 });
 $("dpi").addEventListener("change", () => {
   store.set("mathrender.dpi", $("dpi").value);
@@ -1350,12 +1363,10 @@ $("snippetkind").addEventListener("change", updateSnippet);
 $("copy").addEventListener("click", copyImage);
 $("download").addEventListener("click", downloadImage);
 $("copyhtml").addEventListener("click", copyHtml);
-// The link is built on demand and never written to the address bar: editing a formula must not
-// rewrite the URL of the page you opened.
 $("copylink").addEventListener("click", () => guarded("Copy link", async () => {
-  const url = `${location.href.split("#")[0]}#${encodeState(currentState())}`;
-  await navigator.clipboard.writeText(url);
-  toast("Copied a link that reopens this formula");
+  history.replaceState(null, "", `#${encodeState(currentState())}`);
+  await navigator.clipboard.writeText(location.href);
+  toast("Copied link to this formula");
 }));
 $("copysnippet").addEventListener("click", () => guarded("Copy snippet", async () => {
   await navigator.clipboard.writeText($("snippet").value);
