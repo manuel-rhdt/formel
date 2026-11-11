@@ -26,5 +26,14 @@ mathml_parser = ["quick-xml"]
 # SVG output of laid-out documents (`svg_renderer`)
 svg = ["dep:svg"]
 
+# Size over speed: the module is what the demo downloads. `panic = "abort"` also needs no unwinding
+# tables; `strip` drops the `name` section (keep a debug build if you need symbolised panics).
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
 [workspace]
 members = ["mathimg", "mathwasm"]
