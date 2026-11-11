@@ -6,16 +6,29 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+check() {  # TEMP: does the browser engine accept each stage?
+  node -e "
+    const fs=require('fs'); const b=fs.readFileSync('$1');
+    let ok=false, err='';
+    try { new WebAssembly.Module(b); ok=true; } catch(e) { err=e.message; }
+    console.log('$1', 'bytes='+b.length, 'valid='+ok, err);
+  " || true
+}
+
 cargo build -p mathwasm --target wasm32-unknown-unknown --release
+check target/wasm32-unknown-unknown/release/mathwasm.wasm
 wasm-bindgen --target web --no-typescript --out-dir web/pkg \
   target/wasm32-unknown-unknown/release/mathwasm.wasm
 
 # Shrink the module after wasm-bindgen has added its glue. `--all-features` is required, otherwise
 # wasm-opt rejects the `i32.trunc_sat` instructions that float-to-int conversions compile to.
 wasm=web/pkg/mathwasm_bg.wasm
+check "$wasm"
 if command -v wasm-opt >/dev/null 2>&1; then
   wasm-opt -Oz --all-features "$wasm" -o "$wasm.opt"
+  check "$wasm.opt"
   mv "$wasm.opt" "$wasm"
+  check "$wasm"
 fi
 
 # The header states the download size, so compute it from the file just built rather than keeping a
