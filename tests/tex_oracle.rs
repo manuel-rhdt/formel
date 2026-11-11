@@ -105,14 +105,13 @@ const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
     ("underline", "verified: accent glyph bottom 348 vs TeX's rule at 405"),
     // TeX adds no italic correction before a fraction; MathML Core does, as a fraction is not slanted.
     ("italic-corr-letter-fraction", "verified: `f`'s italic correction (90) added before a fraction, TeX adds none"),
-    ("sqrt-index-tall", "unexplained: 4.5 units wider, root degree"),
 ];
 
-/// The cases whose glyph positions are compared with TeX's: the accents, whose horizontal position
-/// (the top accent attachment of the base against that of the accent) shows nowhere in the size of
-/// the formula. The other cases are not compared glyph by glyph yet: they differ in places, for
-/// example in how a fraction centres its numerator.
-const GLYPH_CHECKED: &str = "accent-";
+/// The cases (by name prefix) whose glyph positions are compared with TeX's. Accents: their
+/// horizontal position (the top accent attachment of the base against that of the accent) shows
+/// nowhere in the size of the formula. Fractions: so does how the numerator and the denominator
+/// are centred. The other cases are not compared glyph by glyph yet.
+const GLYPH_CHECKED: &[&str] = &["accent-", "frac-", "paren-nested-fraction", "sqrt-of-fraction"];
 
 /// Cases among those that are not where TeX puts their glyphs (see `glyph_positions_match_tex`),
 /// with why.
@@ -285,7 +284,7 @@ fn glyph_positions_match_tex() {
     let mathml: BTreeMap<&str, &str> = rows(MATHML).map(|r| (r[0], r[1])).collect();
 
     let mut unexpected = vec![];
-    for row in rows(CASES).filter(|r| r[0].starts_with(GLYPH_CHECKED)) {
+    for row in rows(CASES).filter(|r| GLYPH_CHECKED.iter().any(|prefix| r[0].starts_with(prefix))) {
         let name = row[0];
         let ours = layout_glyphs(mathml[name]);
         let difference = glyph_difference(tex.get(name).map_or(&[], |g| g), &ours);

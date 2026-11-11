@@ -1,9 +1,9 @@
 <svg role="img" viewBox="-10 -10 15904.797 3584.26" xmlns="http://www.w3.org/2000/svg">
 <title>x equals the fraction with numerator negative b plus or minus the square root of b squared minus 4 a c and denominator 2 a comma phi equals 1 plus the fraction with numerator 1 and denominator 1 plus the fraction with numerator 1 and denominator 1 plus the fraction with numerator 1 and denominator 1 plus dot dot dot</title>
 <g fill="#1f2328" stroke="none">
-<rect height="76" width="3200.9043" x="12654.3125" y="1428"/>
-<rect height="76" width="1718.86" x="14136.356" y="2332.08"/>
-<rect height="54.72" width="966.86" x="14888.357" y="2982.7402"/>
+<rect height="76" width="3310.4844" x="12574.3125" y="1428"/>
+<rect height="76" width="1806.04" x="14078.757" y="2332.08"/>
+<rect height="54.72" width="1042.84" x="14841.957" y="2982.7402"/>
 <g transform="translate(15456.757, 3557.3003) scale(0.58, -0.58)">
 <path d="M617 127 C578 127 548 96 548 58 C548 19 578 -12 617 -12 C657 -12 687 19 687 58 C687 96 657 127 617 127 Z M368 127 C329 127 299 96 299 58 C299 19 329 -12 368 -12 C408 -12 438 19 438 58 C438 96 408 127 368 127 Z M119 127 C80 127 50 96 50 58 C50 19 80 -12 119 -12 C159 -12 189 19 189 58 C189 96 159 127 119 127 Z"/>
 </g>
@@ -13,7 +13,7 @@
 <g transform="translate(14841.957, 3557.3003) scale(0.58, -0.58)">
 <path d="M276 0 L368 0 L368 689 L287 689 L80 561 L120 496 L276 591 Z"/>
 </g>
-<g transform="translate(15241.867, 2887.7002) scale(0.58, -0.58)">
+<g transform="translate(15200.977, 2887.7002) scale(0.58, -0.58)">
 <path d="M276 0 L368 0 L368 689 L287 689 L80 561 L120 496 L276 591 Z"/>
 </g>
 <g transform="translate(14481.957, 3211.7002) scale(0.72, -0.72)">
@@ -22,7 +22,7 @@
 <g transform="translate(14078.757, 3211.7002) scale(0.72, -0.72)">
 <path d="M276 0 L368 0 L368 689 L287 689 L80 561 L120 496 L276 591 Z"/>
 </g>
-<g transform="translate(14834.507, 2200.08) scale(0.72, -0.72)">
+<g transform="translate(14780.177, 2200.08) scale(0.72, -0.72)">
 <path d="M276 0 L368 0 L368 689 L287 689 L80 561 L120 496 L276 591 Z"/>
 </g>
 <g transform="translate(13356.535, 2650.08) scale(1.0, -1.0)">
@@ -31,7 +31,7 @@
 <g transform="translate(12574.3125, 2650.08) scale(1.0, -1.0)">
 <path d="M276 0 L368 0 L368 689 L287 689 L80 561 L120 496 L276 591 Z"/>
 </g>
-<g transform="translate(14030.765, 1166.0) scale(1.0, -1.0)">
+<g transform="translate(13949.555, 1166.0) scale(1.0, -1.0)">
 <path d="M276 0 L368 0 L368 689 L287 689 L80 561 L120 496 L276 591 Z"/>
 </g>
 <g transform="translate(11852.09, 1746.0) scale(1.0, -1.0)">
@@ -49,11 +49,11 @@
 <g transform="translate(7866.6445, 1746.0) scale(1.0, -1.0)">
 <path d="M119 127 C80 127 50 96 50 58 C50 34 61 13 78 0 L38 -166 L104 -166 L171 -13 C184 16 189 36 189 58 C189 96 159 127 119 127 Z"/>
 </g>
-<rect height="76" width="6179.089" x="1687.5557" y="1428"/>
-<g transform="translate(4776.6, 2446.0) scale(1.0, -1.0)">
+<rect height="76" width="6241.089" x="1625.5557" y="1428"/>
+<g transform="translate(4741.6, 2446.0) scale(1.0, -1.0)">
 <path d="M333 466 C368 466 391 461 419 449 L378 158 C337 103 296 61 237 61 C181 61 148 101 148 189 C148 307 199 466 333 466 Z M331 539 C126 539 50 334 50 190 C50 69 110 -12 218 -12 C280 -12 334 23 375 76 C382 19 415 -5 468 -12 L494 51 C461 64 457 83 462 120 L516 494 C456 523 399 539 331 539 Z"/>
 </g>
-<g transform="translate(4216.6, 2446.0) scale(1.0, -1.0)">
+<g transform="translate(4181.6, 2446.0) scale(1.0, -1.0)">
 <path d="M258 701 C163 701 99 667 45 600 L107 552 C150 603 187 625 253 625 C328 625 373 579 373 504 C373 395 315 319 59 73 L59 0 L474 0 L485 77 L164 77 C389 282 469 383 469 508 C469 617 391 701 258 701 Z"/>
 </g>
 <g transform="translate(3649.0, 1028.0) scale(1.0, -1.0)">

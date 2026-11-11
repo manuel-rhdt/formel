@@ -89,21 +89,16 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             denominator.origin.y = shift_down;
         }
 
-        // center numerator and denominator
-        let center_difference = numerator.metrics.ink_center() - denominator.metrics.ink_center();
-        if center_difference < 0.0 {
-            numerator.origin.x -= center_difference;
-        } else {
-            denominator.origin.x += center_difference;
-        }
+        // Centre the numerator and the denominator by their margin boxes (MathML Core 3.3.2, and TeX
+        // does the same), not by their ink: the fraction is as wide as the wider one, and the bar
+        // spans all of it.
+        let width = numerator.metrics.advance.max(denominator.metrics.advance);
+        numerator.origin.x = (width - numerator.metrics.advance) / 2.0;
+        denominator.origin.x = (width - denominator.metrics.advance) / 2.0;
 
         if thickness > 0.0 {
-            let left = (numerator.origin.x + numerator.metrics.ink_left)
-                .min(denominator.origin.x + denominator.metrics.ink_left);
-            let right = (numerator.origin.x + numerator.metrics.ink_right())
-                .max(denominator.origin.x + denominator.metrics.ink_right());
-            let mut rule = LBox::rule(right - left, thickness);
-            rule.origin = Point::new(left, -axis_height);
+            let mut rule = LBox::rule(width, thickness);
+            rule.origin = Point::new(0.0, -axis_height);
             children.push(numerator);
             children.push(rule);
             children.push(denominator);

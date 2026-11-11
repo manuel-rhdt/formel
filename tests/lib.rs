@@ -212,3 +212,29 @@ fn operators_are_never_slanted_in_a_row() {
     let f = width("<mi>f</mi>");
     assert!((width(&format!("<mrow><mi>f</mi>{integral}</mrow>")) - f - alone - 90.0).abs() < 1e-2);
 }
+
+/// MathML Core 3.3.2 (and TeX): the numerator and the denominator are centred by their margin
+/// boxes, and the bar is as wide as the wider one. Not by their ink: that would shift the narrower
+/// part by the difference of the side bearings and the italic overhang of the two.
+#[test]
+fn fractions_centre_their_parts_by_advance() {
+    layout_xml("<mfrac><mi>a</mi><mi>b</mi></mfrac>", |doc, layout| {
+        let frac = doc.node(doc.root().unwrap()).children[0];
+        let parts = &doc.node(frac).children;
+        let (numerator, denominator) = (layout(parts[0]), layout(parts[1]));
+        // in Latin Modern Math the italic `a` is 529 units wide and `b` 429
+        assert!((numerator.size.width - 529.0).abs() < 1e-2);
+        assert!((denominator.size.width - 429.0).abs() < 1e-2);
+        assert!(numerator.location.x.abs() < 1e-2, "{:?}", numerator.location);
+        assert!((denominator.location.x - 50.0).abs() < 1e-2, "{:?}", denominator.location);
+        let bar = layout(frac)
+            .fragments
+            .iter()
+            .find_map(|f| match f {
+                Fragment::Rule(rect) => Some(*rect),
+                _ => None,
+            })
+            .expect("fraction bar");
+        assert!(bar.origin.x.abs() < 1e-2 && (bar.size.width - 529.0).abs() < 1e-2, "{bar:?}");
+    })
+}
