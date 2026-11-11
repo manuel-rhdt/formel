@@ -11,6 +11,8 @@ categories = ["text-processing", "graphics", "wasm"]
 build = "build.rs"
 edition = "2024"
 rust-version = "1.85"
+# The web demo (with its fonts), the README images and the CI configuration are not part of the library.
+exclude = ["web/", "docs/", ".github/"]
 
 [dependencies]
 quick-xml = { version = "0.42", optional = true }
