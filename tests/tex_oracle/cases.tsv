@@ -1,0 +1,168 @@
+# name <TAB> mode (d = display, t = text) <TAB> LaTeX
+# Corner cases where the MathML/OpenType rules leave room for interpretation, so a second opinion helps.
+# Regenerate golden.tsv with: python3 formel-wasm/tests/tex_oracle/generate.py
+frac-display	d	\frac{a}{b}
+frac-text	t	\frac{a}{b}
+frac-in-superscript	t	x^{\frac{a}{b}}
+frac-nested	d	\frac{a}{\frac{b}{c}}
+frac-with-sum	d	\frac{\sum_{i=1}^{n} x_i}{n}
+sqrt-simple	t	\sqrt{x}
+sqrt-index	t	\sqrt[3]{x}
+sqrt-of-fraction	d	\sqrt{\frac{a}{b}}
+sqrt-index-tall	d	\sqrt[n]{\frac{1}{2}}
+sqrt-of-sum	d	\sqrt{\sum_{i}^{n} x_i}
+sum-display	d	\sum_{i=0}^{n} i
+sum-text	t	\sum_{i=0}^{n} i
+sum-sub-only	d	\sum_{i} i
+sum-nolimits	d	\sum\nolimits_{i=0}^{n} i
+int-display	d	\int_0^1 x\,dx
+int-text	t	\int_0^1 x\,dx
+int-limits	d	\int\limits_0^1 x
+lim-display	d	\lim_{x\to 0} f(x)
+lim-text	t	\lim_{x\to 0} f(x)
+paren-small	t	\left(x\right)
+paren-fraction	d	\left(\frac{a}{b}\right)
+paren-nested-fraction	d	\left(\frac{a}{\frac{b}{c}}\right)
+paren-brace	d	\left\{\frac{a}{b}\right\}
+bar-evaluation	d	\left.\frac{a}{b}\right|_{x=0}
+paren-superscript	t	\left(x\right)^2
+scripts-both	t	x_i^2
+scripts-nested-sub	t	a_{b_c}
+scripts-nested-sup	t	x^{y^z}
+scripts-sup-in-sub	t	x_{i^2}
+scripts-italic-f	t	f^2
+scripts-italic-f-sub	t	f_2
+scripts-prime	t	f'(x)
+scripts-prime-sup	t	x'^2
+prescripts	t	{}^{14}_{6}\mathrm{C}
+accent-hat-lower	t	\hat{x}
+accent-hat-upper	t	\hat{A}
+accent-hat-with-script	t	\hat{x}_i
+accent-tilde-upper	t	\tilde{A}
+accent-bar	t	\bar{x}
+accent-vec	t	\vec{x}
+accent-widehat	t	\widehat{abc}
+accent-dot	t	\dot{x}
+accent-double	t	\hat{\hat{x}}
+overline	t	\overline{x+y}
+underline	t	\underline{x+y}
+overbrace	d	\overbrace{x+y+z}^{n}
+underbrace	d	\underbrace{x+y+z}_{n}
+overset	t	\overset{a}{=}
+space-binary	t	a+b
+space-relation	t	a=b
+space-unary	t	-x
+space-after-relation	t	a=-b
+space-comma	t	a,b
+space-function	t	\sin x
+space-function-paren	t	\sin(x)
+space-cdot	t	a\cdot b
+space-ellipsis	t	a,\ldots,b
+binom	d	\binom{n}{k}
+binom-text	t	\binom{n}{k}
+matrix-2x2	d	\begin{pmatrix}a&b\\c&d\end{pmatrix}
+cases	d	f(x)=\begin{cases}1&x>0\\0&x\le 0\end{cases}
+italic-corr-italic-then-italic	t	fx
+italic-corr-italic-then-paren	t	f(x)
+italic-corr-italic-then-upright	t	f\mathrm{x}
+italic-corr-italic-then-space	t	f\,x
+italic-corr-upright-then-italic	t	\mathrm{n}x
+italic-corr-upright-then-upright	t	\mathrm{n}\mathrm{x}
+italic-corr-upright-then-space	t	\mathrm{n}\,x
+italic-corr-upright-then-paren	t	\mathrm{n}(x)
+italic-corr-upright-then-op	t	\mathrm{n}+x
+accent-ddot	t	\ddot{x}
+accent-acute	t	\acute{x}
+accent-grave	t	\grave{x}
+accent-breve	t	\breve{x}
+accent-check	t	\check{x}
+accent-mathring	t	\mathring{x}
+accent-bar-upper	t	\bar{A}
+accent-dot-upper	t	\dot{A}
+accent-vec-upper	t	\vec{A}
+accent-widehat-two	t	\widehat{ab}
+accent-widehat-long	t	\widehat{abcdefg}
+accent-widehat-wide	t	\widehat{x+y+z+w}
+italic-corr-letters-abc	t	abc
+italic-corr-letters-abcdefg	t	abcdefg
+italic-corr-letter-digit	t	f2
+italic-corr-letter-group	t	f{xy}
+italic-corr-letter-binary	t	f+x
+italic-corr-letter-relation	t	f=x
+italic-corr-letter-letter-both	t	fg
+italic-corr-letter-fraction	t	f\frac{a}{b}
+italic-corr-letter-greek	t	f\alpha
+brace-over-bare	d	\overbrace{x+y+z}
+brace-under-bare	d	\underbrace{x+y+z}
+brace-over-bare-text	t	\overbrace{x+y+z}
+brace-under-bare-text	t	\underbrace{x+y+z}
+brace-over-label-text	t	\overbrace{x+y+z}^{n}
+brace-under-label-text	t	\underbrace{x+y+z}_{n}
+bigop-sum-ord-after	t	\sum x
+bigop-sum-paren-after	t	\sum(x)
+bigop-sum-sub-paren-after	t	\sum_i (x)
+bigop-sum-digit-after	t	\sum 2
+bigop-sum-relation-after	t	\sum=x
+bigop-ord-before-sum	t	x\sum y
+bigop-binary-before-sum	t	x+\sum y
+bigop-sum-sum	t	\sum\sum
+bigop-prod-ord-after	t	\prod x
+bigop-int-ord-after	t	\int x
+bigop-int-paren-after	t	\int(x)
+bigop-ord-before-int	t	x\int y
+bigop-oint-ord-after	t	\oint x
+bigop-bigcup-ord-after	t	\bigcup x
+bigop-sum-display-ord-after	d	\sum x
+bigop-int-display-ord-after	d	\int x
+op-times	t	a\times b
+op-ast	t	a\ast b
+op-circ	t	a\circ b
+op-otimes	t	a\otimes b
+op-bullet	t	a\bullet b
+op-pm	t	a\pm b
+op-minus	t	a-b
+op-cap	t	a\cap b
+op-wedge	t	a\wedge b
+op-oplus	t	a\oplus b
+op-setminus	t	a\setminus b
+op-prefix-pm	t	\pm x
+op-prefix-minus-sign	t	-x
+op-forall	t	\forall x
+op-exists	t	\exists x
+op-neg	t	\neg x
+op-nabla	t	\nabla f
+op-partial	t	\partial x
+op-to	t	a\to b
+op-mapsto	t	a\mapsto b
+op-sim	t	a\sim b
+op-neq	t	a\neq b
+op-in	t	a\in b
+op-subset	t	a\subset b
+op-leq	t	a\leq b
+op-approx	t	a\approx b
+op-div	t	a\div b
+op-slash	t	a/b
+op-colon	t	a:b
+op-vert	t	a\mid b
+op-bang	t	n!
+op-prime-ops	t	a\perp b
+op-star	t	a\star b
+op-dagger	t	a\dagger b
+fence-bar-tall	d	\left|\frac{a}{b}\right|
+fence-doublebar-tall	d	\left\|\frac{a}{b}\right\|
+fence-floor-tall	d	\left\lfloor\frac{a}{b}\right\rfloor
+fence-ceil-tall	d	\left\lceil\frac{a}{b}\right\rceil
+fence-angle-tall	d	\left\langle\frac{a}{b}\right\rangle
+fence-bracket-tall	d	\left[\frac{a}{b}\right]
+fence-bar-small	t	|x|
+fence-doublebar-small	t	\|x\|
+fence-vert-small	t	\vert x\vert
+fence-angle-small	t	\langle x\rangle
+fence-brace-small	t	\{x\}
+fence-floor-small	t	\lfloor x\rfloor
+arrow-xrightarrow	t	a\xrightarrow{abc}b
+arrow-overrightarrow	t	\overrightarrow{abc}
+arrow-overleftarrow	t	\overleftarrow{abc}
+arrow-longrightarrow	t	a\longrightarrow b
+arrow-rightleft	t	a\leftrightarrow b
+arrow-hookrightarrow	t	a\hookrightarrow b

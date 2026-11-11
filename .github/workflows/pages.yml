@@ -50,7 +50,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Run tests
-        run: cargo test --workspace --exclude mathimg
+        # --all-features: several test files are compiled out without `mathml_parser` and `svg`
+        run: cargo test --workspace --exclude mathimg --all-features
 
       - name: Test the demo's JavaScript helpers
         run: node --test web/test/export.test.mjs
