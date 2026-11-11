@@ -42,6 +42,19 @@ pub struct Lexicon {
     /// Symbols spoken differently in the underscript of a large operator (`x → 0` under `lim`
     /// reads "x approaches 0"). Takes precedence over `symbols` there.
     pub limit_symbols: Table,
+    /// Symbols spoken differently on the left of a set-builder (`{x ∈ ℝ : …}` reads "x in
+    /// ℝ").
+    pub set_symbols: Table,
+    /// Symbols spoken differently in the arguments of a function (`P(A ∣ B)` reads "given").
+    pub argument_symbols: Table,
+    /// Ordinal words for the order of a derivative (`2` → "second").
+    pub ordinals: Table,
+    /// Numerators spoken as words in a common fraction (`3` → "three").
+    pub cardinals: Table,
+    /// Denominators of common fractions: `(denominator, singular, plural)`, e.g.
+    /// `("4", "quarter", "quarters")`. A fraction of two numbers from `cardinals` and this
+    /// table reads "three quarters"; any other reads "11 over 2".
+    pub fraction_denominators: &'static [(&'static str, &'static str, &'static str)],
     /// What to say for silent symbols when one is spoken on its own.
     pub silent_names: Table,
     /// Function names and letters (`sin` → "sine", `α` → "alpha"). Capitals of a letter listed
@@ -89,7 +102,11 @@ pub struct Phrases {
     /// `<menclose>` with a notation missing from [`Lexicon::enclosures`]: `{0}` = its content.
     pub enclosed: &'static str,
 
-    /// Both parts are single tokens: `{0}` = numerator, `{1}` = denominator.
+    /// A common fraction: `{0}` = numerator word, `{1}` = denominator word (singular after a
+    /// numerator of 1).
+    pub common_fraction: &'static str,
+    /// Both parts are single tokens, or a token with a power from [`Lexicon::powers`]
+    /// ("1 over n squared"): `{0}` = numerator, `{1}` = denominator.
     pub fraction_simple: &'static str,
     pub fraction: &'static str,
     /// `{0}` = radicand.
@@ -119,6 +136,38 @@ pub struct Phrases {
     pub large_operator_over: &'static str,
     /// `{0}` = operator name, `{1}` = lower limit, `{2}` = upper limit.
     pub large_operator_both: &'static str,
+    /// `\binom{n}{k}`: `{0}` = top, `{1}` = bottom.
+    pub binomial: &'static str,
+    /// `{1, 2, 3}`: `{0}` = the members.
+    pub set: &'static str,
+    /// `{x : x > 0}`: `{0}` = the members, `{1}` = the condition.
+    pub set_builder: &'static str,
+    /// `{}`.
+    pub empty_set: &'static str,
+    /// `{` before a table: `{0}` = number of cases, `{1}` = the cases joined by `row_separator`.
+    pub cases: &'static str,
+    /// `{0}` = case number, `{1}` = the case.
+    pub case: &'static str,
+    /// A case with a condition: `{0}` = value, `{1}` = condition.
+    pub case_condition: &'static str,
+    /// A case whose condition starts with text (`if x > 0`, `otherwise`).
+    pub case_text: &'static str,
+    /// The kind of `dy/dx`.
+    pub derivative: &'static str,
+    /// The kind of `∂u/∂x`.
+    pub partial_derivative: &'static str,
+    /// `{0}` = ordinal from [`Lexicon::ordinals`], `{1}` = kind.
+    pub ordinal_derivative: &'static str,
+    /// `dy/dx`: `{0}` = kind, `{1}` = function, `{2}` = variable.
+    pub derivative_of: &'static str,
+    /// Between the variables of a mixed partial derivative ("x and y").
+    pub variable_separator: &'static str,
+    /// `d/dx`: `{0}` = kind, `{1}` = variable. Followed by [`Phrases::operand`] when an
+    /// operand follows.
+    pub derivative_operator: &'static str,
+    /// Between a large operator and the expression it applies to ("the sum from 1 to n *of*
+    /// x sub i"), so the listener hears where the limits end.
+    pub operand: &'static str,
 
     /// `{0}` = base, `{1}` = name from [`Lexicon::accents`].
     pub accent: &'static str,
@@ -237,9 +286,25 @@ impl Source for MathDocument {
 
 #[derive(Debug, Clone, Copy, Default)]
 struct Context {
-    /// Inside the underscript of a large operator.
-    limit: bool,
+    /// Words that take precedence over [`Lexicon::symbols`] in this subtree: the underscript of
+    /// a large operator, the members of a set-builder, the arguments of a function.
+    symbols: Option<Table>,
 }
+
+/// What a parenthesized argument follows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Callee {
+    /// An invisible function application (U+2061), which says "of" itself.
+    Application,
+    /// A function by convention: `f`, `g`, `h`.
+    NamedFunction,
+    /// A capital or non-Latin letter or a function name, which may also be a factor
+    /// (`A(B + C)`). A lowercase Latin letter other than `f`, `g`, `h` is not a callee.
+    Function,
+}
+
+/// Letters read as functions before any parenthesized argument.
+const FUNCTION_LETTERS: &[&str] = &["f", "g", "h"];
 
 /// Fence pairs recognised in a row. Structural, not spoken: the words are in the lexicon.
 const FENCE_PAIRS: &[(&str, &str)] = &[
@@ -374,7 +439,18 @@ impl<S: Source> Speaker<'_, S> {
             }
             Merror => fill(p.error, &[&self.row_or_blank(&children, ctx)]),
             Mfrac => {
-                let template = if self.all_simple(&[child(0), child(1)]) {
+                if let (Some(top), Some(bottom)) = (child(0), child(1)) {
+                    if let Some(derivative) = self.derivative(top, bottom, ctx) {
+                        return Some(derivative);
+                    }
+                    if let Some(common) = self.common_fraction(top, bottom) {
+                        return Some(common);
+                    }
+                }
+                let simple = [child(0), child(1)]
+                    .iter()
+                    .all(|c| c.is_some_and(|c| self.is_fraction_operand(c)));
+                let template = if simple {
                     p.fraction_simple
                 } else {
                     p.fraction
@@ -443,9 +519,8 @@ impl<S: Source> Speaker<'_, S> {
     }
 
     fn lookup_symbol(&self, key: &str, ctx: Context) -> Option<&'static str> {
-        ctx.limit
-            .then(|| lookup(self.lexicon.limit_symbols, key))
-            .flatten()
+        ctx.symbols
+            .and_then(|table| lookup(table, key))
             .or_else(|| lookup(self.lexicon.symbols, key))
             .or_else(|| lookup(self.lexicon.identifiers, key))
     }
@@ -547,8 +622,52 @@ impl<S: Source> Speaker<'_, S> {
         self.source.element(node).is_some_and(MathElement::is_token)
     }
 
-    fn all_simple(&self, nodes: &[Option<S::Id>]) -> bool {
-        nodes.iter().all(|n| n.is_some_and(|n| self.is_simple(n)))
+    /// A part of a fraction that needs no "numerator ... denominator" around it: a token, or a
+    /// token with a named power. "n squared" ends by itself; "x to the n" would not ("x to the
+    /// n over 2" could be x to the n/2), so other powers don't qualify.
+    fn is_fraction_operand(&self, node: S::Id) -> bool {
+        if self.is_simple(node) {
+            return true;
+        }
+        let node = self.unwrap(node);
+        if self.source.element(node) != Some(MathElement::Msup) {
+            return false;
+        }
+        match self.source.children(node)[..] {
+            [base, exponent] => {
+                self.is_simple(base)
+                    && self
+                        .flat_key(exponent)
+                        .is_some_and(|k| lookup(self.lexicon.powers, &k).is_some())
+            }
+            _ => false,
+        }
+    }
+
+    /// A large operator, with or without limits (`∑`, `lim` under `x → 0`, `∫` with scripts).
+    fn is_large_operator(&self, node: S::Id) -> bool {
+        use MathElement::*;
+        let node = self.unwrap(node);
+        match self.source.element(node) {
+            Some(Munder | Mover | Munderover | Msub | Msup | Msubsup) => self
+                .large_operator(self.source.children(node).first().copied())
+                .is_some(),
+            Some(Mi | Mo) => self.large_operator(Some(node)).is_some(),
+            Some(Mfrac) => self.is_derivative_operator(node),
+            _ => false,
+        }
+    }
+
+    /// Whether `node`, right after a large operator, is what the operator applies to: not an
+    /// operator or relation (`∑ = …`), except an opening fence. An invisible function
+    /// application is not an operand either; it says "of" itself.
+    fn is_operand(&self, node: S::Id) -> bool {
+        match self.source.element(node) {
+            Some(MathElement::Mo) => self
+                .token_key(node)
+                .is_some_and(|k| FENCE_PAIRS.iter().any(|(open, _)| *open == k)),
+            _ => true,
+        }
     }
 
     /// The plain text of a single token (possibly wrapped in rows), for table lookups.
@@ -559,6 +678,22 @@ impl<S: Source> Speaker<'_, S> {
         }
         let text = self.source.text(node)?;
         Some(plain(&text).0)
+    }
+
+    /// The plain text of a token, or of a row of tokens (`−1` written as `<mo>−</mo><mn>1</mn>`),
+    /// for table lookups.
+    fn flat_key(&self, node: S::Id) -> Option<String> {
+        let node = self.unwrap(node);
+        if let Some(key) = self.token_key(node) {
+            return Some(key);
+        }
+        if self.source.element(node) != Some(MathElement::Mrow) {
+            return None;
+        }
+        self.visible(&self.source.children(node))
+            .into_iter()
+            .map(|child| self.token_key(child))
+            .collect()
     }
 
     /// The fence text of an `<mo>` child of a row.
@@ -588,6 +723,10 @@ impl<S: Source> Speaker<'_, S> {
                 parts.push(self.phrases().negative.to_owned());
             } else if let Some(speech) = self.spoken(child, ctx) {
                 parts.push(speech);
+                let next = children[i + 1..].iter().find(|&&n| self.is_visible(n));
+                if self.is_large_operator(child) && next.is_some_and(|&n| self.is_operand(n)) {
+                    parts.push(self.phrases().operand.to_owned());
+                }
             }
             if self.is_visible(child) {
                 prev = Some(child);
@@ -598,7 +737,7 @@ impl<S: Source> Speaker<'_, S> {
     }
 
     /// A fenced group starting at `children[i]` that is spoken as a whole: the index of its
-    /// closing fence and its speech.
+    /// last node and its speech.
     fn fenced_run(
         &self,
         children: &[S::Id],
@@ -611,8 +750,13 @@ impl<S: Source> Speaker<'_, S> {
         let mut depth = 0;
         let mut j = i + 1;
         let end = loop {
-            let key = self.fence_key(*children.get(j)?);
-            match key.as_deref() {
+            let Some(&node) = children.get(j) else {
+                // No closing fence: `{` before a table is a list of cases.
+                return self
+                    .cases(&open, &children[i + 1..], ctx)
+                    .map(|speech| (children.len() - 1, speech));
+            };
+            match self.fence_key(node).as_deref() {
                 Some(k) if k == close && depth == 0 => break j,
                 Some(k) if k == close => depth -= 1,
                 Some(k) if k == open => depth += 1,
@@ -632,18 +776,27 @@ impl<S: Source> Speaker<'_, S> {
         prev: Option<S::Id>,
         ctx: Context,
     ) -> Option<String> {
+        let p = self.phrases();
         let visible = self.visible(inner);
         if let [only] = visible[..] {
             let only = self.unwrap(only);
-            if self.source.element(only) == Some(MathElement::Mtable) {
-                if let Some(&(_, _, kind)) = self
-                    .lexicon
-                    .table_fences
-                    .iter()
-                    .find(|(o, c, _)| *o == open && *c == close)
-                {
-                    return Some(self.table(only, kind, ctx));
+            match self.source.element(only) {
+                Some(MathElement::Mtable) => {
+                    if let Some(&(_, _, kind)) = self
+                        .lexicon
+                        .table_fences
+                        .iter()
+                        .find(|(o, c, _)| *o == open && *c == close)
+                    {
+                        return Some(self.table(only, kind, ctx));
+                    }
                 }
+                Some(MathElement::Mfrac) if (open, close) == ("(", ")") && self.is_stack(only) => {
+                    let parts = self.source.children(only);
+                    let part = |i: usize| self.speak_opt(parts.get(i).copied(), ctx);
+                    return Some(fill(p.binomial, &[&part(0), &part(1)]));
+                }
+                _ => {}
             }
         }
         if let Some(&(_, _, template)) = self
@@ -654,37 +807,341 @@ impl<S: Source> Speaker<'_, S> {
         {
             return Some(fill(template, &[&self.row_or_blank(inner, ctx)]));
         }
-        // `f(x)` with a function application: "f of x", not "f of open paren x close paren".
-        let after_function =
-            prev.is_some_and(|p| self.fence_key(p).as_deref() == Some(FUNCTION_APPLICATION));
-        if (open, close) == ("(", ")") && after_function {
-            if let [only] = visible[..] {
-                if self.is_simple(only) {
-                    return self.spoken(only, ctx);
-                }
-            }
+        if (open, close) == ("{", "}") {
+            return Some(self.set(inner, ctx));
+        }
+        if (open, close) == ("(", ")") {
+            return self.call(prev, inner, ctx);
         }
         None
     }
 
-    /// A row child that is itself a fenced row, right after a function application.
-    fn after_function(&self, child: S::Id, prev: Option<S::Id>, ctx: Context) -> Option<String> {
-        let prev = prev?;
-        if self.fence_key(prev).as_deref() != Some(FUNCTION_APPLICATION) {
+    /// Parentheses right after something that takes an argument.
+    ///
+    /// - after a function application or a function (`sin`, a single letter, `f^{-1}`), a
+    ///   single term drops its parentheses: "f of x", "sine of 2 x";
+    /// - `f`, `g` and `h` are read as functions whatever the argument: "f of open paren x plus
+    ///   1 close paren" (a single other letter may be a factor: `a(b + c)`);
+    /// - inside the arguments of a function, `∣` reads "given" ([`Lexicon::argument_symbols`]).
+    fn call(&self, prev: Option<S::Id>, inner: &[S::Id], ctx: Context) -> Option<String> {
+        let p = self.phrases();
+        let callee = self.callee(prev?)?;
+        let args = Context {
+            symbols: Some(self.lexicon.argument_symbols),
+        };
+        let applied = callee == Callee::Application;
+        let of = |speech: String| {
+            if applied {
+                speech
+            } else {
+                format!("{} {speech}", p.operand)
+            }
+        };
+        if self.is_term(inner) {
+            return Some(of(self.row_or_blank(inner, args)));
+        }
+        let parenthesized = || {
+            let words = |key: &str| self.symbol_words(key, ctx).unwrap_or_default();
+            join(
+                vec![words("("), self.row_or_blank(inner, args), words(")")],
+                " ",
+            )
+            .unwrap_or_default()
+        };
+        match callee {
+            Callee::Application | Callee::NamedFunction => Some(of(parenthesized())),
+            Callee::Function => Some(parenthesized()),
+        }
+    }
+
+    /// How `prev` takes a parenthesized argument after it, if it does.
+    fn callee(&self, prev: S::Id) -> Option<Callee> {
+        use MathElement::*;
+        if self.fence_key(prev).as_deref() == Some(FUNCTION_APPLICATION) {
+            return Some(Callee::Application);
+        }
+        let mut node = self.unwrap(prev);
+        // `f^{-1}`, `sin^2`, `f_n`
+        if let Some(Msup | Msub | Msubsup) = self.source.element(node) {
+            node = self.unwrap(*self.source.children(node).first()?);
+        }
+        if self.source.element(node) != Some(Mi) {
             return None;
         }
+        let key = self.token_key(node)?;
+        let mut chars = key.chars();
+        let single = chars.next().filter(|_| chars.next().is_none());
+        if FUNCTION_LETTERS.contains(&key.as_str()) {
+            Some(Callee::NamedFunction)
+        } else if single.is_some_and(|c| !c.is_ascii_lowercase())
+            || (single.is_none() && lookup(self.lexicon.identifiers, &key).is_some())
+        {
+            // `F(b)`, `P(A)`, `φ(x)`, `sin(x)`; not `b(…)`, usually a product.
+            Some(Callee::Function)
+        } else {
+            None
+        }
+    }
+
+    /// A single term: no operators other than function applications ("2 x", "n log n").
+    fn is_term(&self, nodes: &[S::Id]) -> bool {
+        let visible = self.visible(nodes);
+        !visible.is_empty()
+            && visible.iter().all(|&n| {
+                self.source.element(n) != Some(MathElement::Mo)
+                    || self.fence_key(n).as_deref() == Some(FUNCTION_APPLICATION)
+            })
+    }
+
+    /// `<mfrac linethickness="0">`.
+    fn is_stack(&self, node: S::Id) -> bool {
+        self.source
+            .attribute(node, "linethickness")
+            .and_then(|t| {
+                let t = t.trim();
+                let number = t.trim_end_matches(|c: char| c.is_ascii_alphabetic() || c == '%');
+                number.parse::<f32>().ok()
+            })
+            .is_some_and(|t| t == 0.0)
+    }
+
+    /// `{ ... }`: a set, or with `:` or `∣` a set-builder.
+    fn set(&self, inner: &[S::Id], ctx: Context) -> String {
+        let p = self.phrases();
+        let split = inner.iter().position(|&n| {
+            self.source.element(n) == Some(MathElement::Mo)
+                && matches!(self.fence_key(n).as_deref(), Some(":" | "∣"))
+        });
+        match split {
+            Some(s) => {
+                let members = Context {
+                    symbols: Some(self.lexicon.set_symbols),
+                };
+                fill(
+                    p.set_builder,
+                    &[
+                        &self.row_or_blank(&inner[..s], members),
+                        &self.row_or_blank(&inner[s + 1..], ctx),
+                    ],
+                )
+            }
+            None => match self.row(inner, ctx) {
+                Some(members) => fill(p.set, &[&members]),
+                None => p.empty_set.to_owned(),
+            },
+        }
+    }
+
+    /// `{` followed by nothing but a table: "2 cases; case 1: x, if x is positive; ...".
+    fn cases(&self, open: &str, rest: &[S::Id], ctx: Context) -> Option<String> {
+        if open != "{" {
+            return None;
+        }
+        let [table] = self.visible(rest)[..] else {
+            return None;
+        };
+        let table = self.unwrap(table);
+        if self.source.element(table) != Some(MathElement::Mtable) {
+            return None;
+        }
+        let p = self.phrases();
+        let rows = self.visible(&self.source.children(table));
+        let cases: Vec<String> = rows
+            .iter()
+            .enumerate()
+            .map(|(index, &row)| {
+                let cells = match self.source.element(row) {
+                    Some(MathElement::Mtr) => self.source.children(row),
+                    _ => vec![row],
+                };
+                let spoken = |i: usize| cells.get(i).map(|&c| self.cell(c, ctx));
+                let case = match (spoken(0), spoken(1)) {
+                    (Some(value), Some(condition)) => {
+                        // `\text{if } x > 0` and `\text{otherwise}` bring their own word.
+                        let template = if self.starts_with_text(cells[1]) {
+                            p.case_text
+                        } else {
+                            p.case_condition
+                        };
+                        fill(template, &[&value, &condition])
+                    }
+                    (Some(value), None) => value,
+                    _ => p.blank.to_owned(),
+                };
+                fill(p.case, &[&(index + 1).to_string(), &case])
+            })
+            .collect();
+        Some(fill(
+            p.cases,
+            &[&rows.len().to_string(), &cases.join(p.row_separator)],
+        ))
+    }
+
+    fn starts_with_text(&self, node: S::Id) -> bool {
+        let mut node = node;
+        loop {
+            match self.source.element(node) {
+                Some(MathElement::Mtext) => return true,
+                Some(MathElement::Mtd | MathElement::Mrow | MathElement::Mstyle) => {
+                    match self.visible(&self.source.children(node)).first() {
+                        Some(&first) => node = first,
+                        None => return false,
+                    }
+                }
+                _ => return false,
+            }
+        }
+    }
+
+    /// A row child that is itself a parenthesized row, right after something that takes an
+    /// argument: `f⁡(x)` written as `<mi>f</mi><mo>⁡</mo><mrow><mo>(</mo>…</mrow>`.
+    fn after_function(&self, child: S::Id, prev: Option<S::Id>, ctx: Context) -> Option<String> {
+        let prev = prev?;
         if !matches!(self.source.element(child), Some(MathElement::Mrow)) {
             return None;
         }
         let children = self.visible(&self.source.children(child));
         let (first, rest) = children.split_first()?;
         let (last, inner) = rest.split_last()?;
-        let open = self.fence_key(*first)?;
-        let close = self.fence_key(*last)?;
-        if (open.as_str(), close.as_str()) != ("(", ")") {
+        if (
+            self.fence_key(*first)?.as_str(),
+            self.fence_key(*last)?.as_str(),
+        ) != ("(", ")")
+        {
             return None;
         }
-        self.fenced(&open, &close, inner, Some(prev), ctx)
+        self.call(Some(prev), inner, ctx)
+    }
+
+    /// `1/2` → "one half", `3/4` → "three quarters", for numbers in the lexicon's tables.
+    fn common_fraction(&self, numerator: S::Id, denominator: S::Id) -> Option<String> {
+        let number = |node: S::Id| {
+            let node = self.unwrap(node);
+            (self.source.element(node) == Some(MathElement::Mn))
+                .then(|| self.token_key(node))
+                .flatten()
+        };
+        let (top, bottom) = (number(numerator)?, number(denominator)?);
+        let count = lookup(self.lexicon.cardinals, &top)?;
+        let &(_, singular, plural) = self
+            .lexicon
+            .fraction_denominators
+            .iter()
+            .find(|(d, _, _)| *d == bottom)?;
+        let name = if top == "1" { singular } else { plural };
+        Some(fill(self.phrases().common_fraction, &[count, name]))
+    }
+
+    // ----- derivatives -----
+
+    /// `d` or `∂`, possibly with an order (`∂²`): (is partial, order).
+    fn differential(&self, node: S::Id) -> Option<(bool, Option<String>)> {
+        let node = self.unwrap(node);
+        let (base, order) = match self.source.element(node) {
+            Some(MathElement::Msup) => match self.source.children(node)[..] {
+                [base, order] => (base, Some(self.token_key(order)?)),
+                _ => return None,
+            },
+            _ => (node, None),
+        };
+        match self.token_key(base)?.as_str() {
+            "d" | "ⅆ" => Some((false, order)),
+            "∂" => Some((true, order)),
+            _ => None,
+        }
+    }
+
+    /// The parts of `d^n y / d x^n` and `∂²f / ∂x ∂y`: (partial, order, function, variables).
+    #[allow(clippy::type_complexity)]
+    fn derivative_parts(
+        &self,
+        numerator: S::Id,
+        denominator: S::Id,
+    ) -> Option<(bool, Option<String>, Vec<S::Id>, Vec<S::Id>)> {
+        let row = |node: S::Id| {
+            let node = self.unwrap(node);
+            match self.source.element(node) {
+                Some(MathElement::Mrow) => self.visible(&self.source.children(node)),
+                _ => vec![node],
+            }
+        };
+        let top = row(numerator);
+        let (&d_top, function) = top.split_first()?;
+        let (partial, order) = self.differential(d_top)?;
+        // The denominator: pairs of a differential and a variable, `dx^2` carrying an order.
+        let bottom = row(denominator);
+        if bottom.is_empty() || bottom.len() % 2 != 0 {
+            return None;
+        }
+        let mut variables = Vec::new();
+        let mut powers = Vec::new();
+        for pair in bottom.chunks(2) {
+            let (partial_bottom, None) = self.differential(pair[0])? else {
+                return None;
+            };
+            if partial != partial_bottom {
+                return None;
+            }
+            let variable = self.unwrap(pair[1]);
+            let (variable, power) = match self.source.element(variable) {
+                Some(MathElement::Msup) => match self.source.children(variable)[..] {
+                    [base, power] => (base, Some(self.token_key(power)?)),
+                    _ => return None,
+                },
+                _ => (variable, None),
+            };
+            if !self.is_simple(variable) {
+                return None;
+            }
+            variables.push(variable);
+            powers.push(power);
+        }
+        // The orders must agree: `d²/dx²`, or `∂²/∂x∂y` with one variable per order.
+        let consistent = match (&order, &powers[..]) {
+            (order, [power]) => order == power,
+            (Some(order), _) => {
+                powers.iter().all(Option::is_none) && *order == variables.len().to_string()
+            }
+            (None, _) => false,
+        };
+        consistent.then(|| (partial, order, function.to_vec(), variables))
+    }
+
+    /// `dy/dx` or `d/dx`, as speech, or `None` for any other fraction.
+    fn derivative(&self, numerator: S::Id, denominator: S::Id, ctx: Context) -> Option<String> {
+        let p = self.phrases();
+        let (partial, order, function, variables) =
+            self.derivative_parts(numerator, denominator)?;
+        let mut kind = if partial {
+            p.partial_derivative
+        } else {
+            p.derivative
+        }
+        .to_owned();
+        if let Some(order) = order {
+            let ordinal = lookup(self.lexicon.ordinals, &order)?;
+            kind = fill(p.ordinal_derivative, &[ordinal, &kind]);
+        }
+        let variables: Vec<String> = variables.iter().map(|&v| self.speak(v, ctx)).collect();
+        let variable = variables.join(p.variable_separator);
+        Some(match self.row(&function, ctx) {
+            Some(function) => fill(p.derivative_of, &[&kind, &function, &variable]),
+            None => fill(p.derivative_operator, &[&kind, &variable]),
+        })
+    }
+
+    /// `d/dx`: a derivative with nothing to differentiate in its numerator.
+    fn is_derivative_operator(&self, node: S::Id) -> bool {
+        let node = self.unwrap(node);
+        if self.source.element(node) != Some(MathElement::Mfrac) {
+            return false;
+        }
+        match self.source.children(node)[..] {
+            [top, bottom] => self
+                .derivative_parts(top, bottom)
+                .is_some_and(|(_, _, function, _)| function.is_empty()),
+            _ => false,
+        }
     }
 
     fn is_prefix_minus(&self, child: S::Id, prev: Option<S::Id>, rest: &[S::Id]) -> bool {
@@ -743,7 +1200,14 @@ impl<S: Source> Speaker<'_, S> {
         ctx: Context,
     ) -> String {
         let p = self.phrases();
-        let under = under.map(|u| self.speak(u, Context { limit: true }));
+        let under = under.map(|u| {
+            self.speak(
+                u,
+                Context {
+                    symbols: Some(self.lexicon.limit_symbols),
+                },
+            )
+        });
         let over = over.map(|o| self.speak(o, ctx));
         match (under, over) {
             (Some(u), Some(o)) => fill(p.large_operator_both, &[name, &u, &o]),
@@ -766,7 +1230,7 @@ impl<S: Source> Speaker<'_, S> {
         let p = self.phrases();
         let base_speech = self.speak_opt(base, ctx);
         let power = sup
-            .and_then(|s| self.token_key(s))
+            .and_then(|s| self.flat_key(s))
             .and_then(|k| lookup(self.lexicon.powers, &k));
         let sup_simple = sup.is_some_and(|s| self.is_simple(s));
         match (sub, sup) {
@@ -953,6 +1417,21 @@ mod tests {
             (p.large_operator_under, 3),
             (p.large_operator_over, 2),
             (p.large_operator_both, 3),
+            (p.operand, 0),
+            (p.common_fraction, 2),
+            (p.binomial, 2),
+            (p.set, 1),
+            (p.set_builder, 2),
+            (p.empty_set, 0),
+            (p.cases, 2),
+            (p.case, 2),
+            (p.case_condition, 2),
+            (p.case_text, 2),
+            (p.derivative, 0),
+            (p.partial_derivative, 0),
+            (p.ordinal_derivative, 2),
+            (p.derivative_of, 3),
+            (p.derivative_operator, 2),
             (p.accent, 2),
             (p.under, 2),
             (p.over, 2),

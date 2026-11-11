@@ -140,11 +140,217 @@ mod golden {
     }
 
     #[test]
+    fn common_fractions() {
+        let frac = |a: &str, b: &str| say(&format!("<mfrac><mn>{a}</mn><mn>{b}</mn></mfrac>"));
+        assert_eq!(frac("1", "2"), "one half");
+        assert_eq!(frac("3", "2"), "three halves");
+        assert_eq!(frac("2", "3"), "two thirds");
+        assert_eq!(frac("3", "4"), "three quarters");
+        assert_eq!(frac("1", "10"), "one tenth");
+        assert_eq!(frac("9", "8"), "nine eighths");
+        // outside the tables: "over"
+        assert_eq!(frac("11", "2"), "11 over 2");
+        assert_eq!(frac("1", "12"), "1 over 12");
+        assert_eq!(frac("0.5", "2"), "0.5 over 2");
+        assert_eq!(frac("1", "1"), "1 over 1");
+        assert_eq!(say("<mfrac><mi>a</mi><mn>2</mn></mfrac>"), "a over 2");
+        assert_eq!(say("<mfrac><mn>1</mn><mi>x</mi></mfrac>"), "1 over x");
+        // in context: a sign, a product, a mixed number
+        assert_eq!(
+            say("<mo>-</mo><mfrac><mn>1</mn><mn>2</mn></mfrac>"),
+            "negative one half"
+        );
+        assert_eq!(
+            say("<mfrac><mn>1</mn><mn>2</mn></mfrac><mi>m</mi><msup><mi>v</mi><mn>2</mn></msup>"),
+            "one half m v squared"
+        );
+        assert_eq!(
+            say("<mn>2</mn><mo>&#x2064;</mo><mfrac><mn>3</mn><mn>4</mn></mfrac>"),
+            "2 and three quarters"
+        );
+    }
+
+    #[test]
     fn fractions() {
         assert_eq!(say("<mfrac><mi>a</mi><mi>b</mi></mfrac>"), "a over b");
+        // a named power ends by itself, so it is still a simple part
+        assert_eq!(
+            say("<mfrac><mn>1</mn><msup><mi>n</mi><mn>2</mn></msup></mfrac>"),
+            "1 over n squared"
+        );
+        // "x to the n over 2" would be ambiguous
+        assert_eq!(
+            say("<mfrac><msup><mi>x</mi><mi>n</mi></msup><mn>2</mn></mfrac>"),
+            "the fraction with numerator x to the n and denominator 2"
+        );
         assert_eq!(
             say("<mfrac><mrow><mi>a</mi><mo>+</mo><mn>1</mn></mrow><mn>2</mn></mfrac>"),
             "the fraction with numerator a plus 1 and denominator 2"
+        );
+    }
+
+    /// The Basel problem, as math-core writes it for
+    /// `\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}`.
+    #[test]
+    fn basel_problem() {
+        let xml = "<math display=\"block\"><munderover><mo lspace=\"0\">∑</mo><mrow><mi>n</mi>\
+            <mo lspace=\"0\" rspace=\"0\">=</mo><mn>1</mn></mrow><mi>∞</mi></munderover><mfrac><mn>1</mn>\
+            <msup><mi>n</mi><mn>2</mn></msup></mfrac><mo>=</mo><mfrac><msup><mi>π</mi><mn>2</mn></msup>\
+            <mn>6</mn></mfrac></math>";
+        assert_eq!(
+            say(xml),
+            "the sum from n equals 1 to infinity of 1 over n squared equals pi squared over 6"
+        );
+    }
+
+    #[test]
+    fn derivatives() {
+        assert_eq!(
+            say(
+                "<mfrac><mrow><mi>d</mi><mi>y</mi></mrow><mrow><mi>d</mi><mi>x</mi></mrow></mfrac>"
+            ),
+            "the derivative of y with respect to x"
+        );
+        assert_eq!(
+            say("<mfrac><mi>d</mi><mrow><mi>d</mi><mi>x</mi></mrow></mfrac><mi>f</mi>"),
+            "the derivative with respect to x of f"
+        );
+        assert_eq!(
+            say(
+                "<mfrac><mrow><msup><mi>∂</mi><mn>2</mn></msup><mi>u</mi></mrow>\
+                 <mrow><mi>∂</mi><msup><mi>x</mi><mn>2</mn></msup></mrow></mfrac>"
+            ),
+            "the second partial derivative of u with respect to x"
+        );
+        assert_eq!(
+            say(
+                "<mfrac><mrow><msup><mi>∂</mi><mn>2</mn></msup><mi>f</mi></mrow>\
+                 <mrow><mi>∂</mi><mi>x</mi><mi>∂</mi><mi>y</mi></mrow></mfrac>"
+            ),
+            "the second partial derivative of f with respect to x and y"
+        );
+        // mismatched orders and mixed d/∂ are plain fractions
+        assert_eq!(
+            say(
+                "<mfrac><mrow><msup><mi>d</mi><mn>2</mn></msup><mi>y</mi></mrow><mrow><mi>d</mi><mi>x</mi></mrow></mfrac>"
+            ),
+            "the fraction with numerator d squared y and denominator d x"
+        );
+        assert_eq!(
+            say(
+                "<mfrac><mrow><mi>∂</mi><mi>y</mi></mrow><mrow><mi>d</mi><mi>x</mi></mrow></mfrac>"
+            ),
+            "the fraction with numerator partial y and denominator d x"
+        );
+    }
+
+    #[test]
+    fn binomial() {
+        assert_eq!(
+            say("<mo>(</mo><mfrac linethickness='0'><mi>n</mi><mi>k</mi></mfrac><mo>)</mo>"),
+            "n choose k"
+        );
+        assert_eq!(
+            say("<mo>(</mo><mfrac linethickness='0pt'><mi>n</mi><mi>k</mi></mfrac><mo>)</mo>"),
+            "n choose k"
+        );
+        // a fraction in parentheses is not a binomial
+        assert_eq!(
+            say("<mo>(</mo><mfrac><mi>n</mi><mi>k</mi></mfrac><mo>)</mo>"),
+            "open paren n over k close paren"
+        );
+    }
+
+    #[test]
+    fn cases() {
+        let xml = "<mo>{</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mi>x</mi><mo>&gt;</mo><mn>0</mn></mtd></mtr>\
+            <mtr><mtd><mn>0</mn></mtd><mtd><mtext>otherwise</mtext></mtd></mtr></mtable>";
+        assert_eq!(
+            say(xml),
+            "2 cases; case 1: 1, if x is greater than 0; case 2: 0, otherwise; end cases"
+        );
+        // with a trailing invisible separator, as math-core writes it
+        assert_eq!(
+            say("<mo>{</mo><mtable><mtr><mtd><mn>1</mn></mtd></mtr></mtable><mo>&#x2063;</mo>"),
+            "1 cases; case 1: 1; end cases"
+        );
+    }
+
+    #[test]
+    fn sets() {
+        assert_eq!(
+            say(
+                "<mo>{</mo><mi>x</mi><mo>∈</mo><mi>ℝ</mi><mo>:</mo><mi>x</mi><mo>&gt;</mo><mn>0</mn><mo>}</mo>"
+            ),
+            "the set of all x in double-struck capital R such that x is greater than 0"
+        );
+        assert_eq!(
+            say("<mo>{</mo><mi>x</mi><mo>∣</mo><mi>x</mi><mo>&gt;</mo><mn>0</mn><mo>}</mo>"),
+            "the set of all x such that x is greater than 0"
+        );
+        assert_eq!(
+            say("<mo>{</mo><mn>1</mn><mo>,</mo><mn>2</mn><mo>}</mo>"),
+            "the set 1 comma 2"
+        );
+        assert_eq!(say("<mo>{</mo><mo>}</mo>"), "the empty set");
+        // outside a set, ∈ and ∣ keep their names
+        assert_eq!(
+            say("<mi>x</mi><mo>∈</mo><mi>A</mi>"),
+            "x is an element of capital A"
+        );
+        assert_eq!(say("<mi>a</mi><mo>∣</mo><mi>b</mi>"), "a divides b");
+    }
+
+    #[test]
+    fn function_calls() {
+        assert_eq!(say("<mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo>"), "f of x");
+        assert_eq!(
+            say("<mi>f</mi><mo>(</mo><mi>x</mi><mo>+</mo><mn>1</mn><mo>)</mo>"),
+            "f of open paren x plus 1 close paren"
+        );
+        assert_eq!(
+            say("<mi>F</mi><mo>(</mo><mi>b</mi><mo>)</mo>"),
+            "capital F of b"
+        );
+        assert_eq!(say("<mi>φ</mi><mo>(</mo><mi>x</mi><mo>)</mo>"), "phi of x");
+        assert_eq!(
+            say(
+                "<mi>sin</mi><mo>&#x2061;</mo><mrow><mo>(</mo><mn>2</mn><mi>x</mi><mo>)</mo></mrow>"
+            ),
+            "sine of 2 x"
+        );
+        // a lowercase letter before parentheses is usually a factor
+        assert_eq!(
+            say("<mi>a</mi><mo>(</mo><mi>b</mi><mo>)</mo>"),
+            "a open paren b close paren"
+        );
+        assert_eq!(
+            say("<mi>n</mi><mo>(</mo><mi>n</mi><mo>+</mo><mn>1</mn><mo>)</mo>"),
+            "n open paren n plus 1 close paren"
+        );
+        // ∣ in the arguments of a function is "given"
+        assert_eq!(
+            say("<mi>P</mi><mo>(</mo><mi>A</mi><mo>∣</mo><mi>B</mi><mo>)</mo>"),
+            "capital P open paren capital A given capital B close paren"
+        );
+    }
+
+    #[test]
+    fn named_powers() {
+        assert_eq!(say("<msup><mn>90</mn><mo>∘</mo></msup>"), "90 degrees");
+        assert_eq!(
+            say(
+                "<msup><mi>f</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mo>(</mo><mi>x</mi><mo>)</mo>"
+            ),
+            "f inverse of x"
+        );
+        assert_eq!(
+            say("<msup><mi>A</mi><mi>T</mi></msup>"),
+            "capital A transpose"
+        );
+        assert_eq!(
+            say("<msup><mn>10</mn><mrow><mo>−</mo><mn>3</mn></mrow></msup>"),
+            "10 to the power negative 3, end exponent"
         );
     }
 
@@ -216,11 +422,11 @@ mod golden {
             say(
                 "<munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msub><mi>x</mi><mi>i</mi></msub>"
             ),
-            "the sum from i equals 1 to n x sub i"
+            "the sum from i equals 1 to n of x sub i"
         );
         assert_eq!(
             say("<msubsup><mo>∫</mo><mn>0</mn><mn>1</mn></msubsup><mi>f</mi>"),
-            "the integral from 0 to 1 f"
+            "the integral from 0 to 1 of f"
         );
         assert_eq!(
             say(
@@ -232,7 +438,19 @@ mod golden {
             say("<munder><mi>max</mi><mi>x</mi></munder>"),
             "the maximum over x"
         );
-        assert_eq!(say("<mo>∑</mo><mi>x</mi>"), "the sum x");
+        assert_eq!(say("<mo>∑</mo><mi>x</mi>"), "the sum of x");
+        // "of" only before an operand: not before a relation, not doubled by a function
+        // application, but before an opening fence
+        assert_eq!(
+            say("<mo>∑</mo><mo>=</mo><mi>S</mi>"),
+            "the sum equals capital S"
+        );
+        assert_eq!(
+            say(
+                "<munder><mo>∑</mo><mi>i</mi></munder><mo>(</mo><mi>a</mi><mo>+</mo><mi>b</mi><mo>)</mo>"
+            ),
+            "the sum over i of open paren a plus b close paren"
+        );
         // outside a limit, an arrow is an arrow
         assert_eq!(
             say("<mi>f</mi><mo>:</mo><mi>A</mi><mo>→</mo><mi>B</mi>"),

@@ -135,8 +135,8 @@ impl MathRenderer {
         let root = document.root().expect("checked above");
         let root_layout = &typeset.layouts[&root];
         let margin = svg_renderer::MARGIN;
-        let alt = authored_alt_text(mathml)
-            .unwrap_or_else(|| speech::speak_document(&document, root));
+        let alt =
+            authored_alt_text(mathml).unwrap_or_else(|| speech::speak_document(&document, root));
         let svg = svg_renderer::render_to_string_with(
             &document,
             &typeset.layouts,
@@ -263,14 +263,22 @@ mod tests {
         let mut count = 0;
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
-            if !matches!(path.extension().and_then(|e| e.to_str()), Some("otf" | "ttf")) {
+            if !matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("otf" | "ttf")
+            ) {
                 continue;
             }
             let name = path.display().to_string();
             let font = std::fs::read(&path).unwrap();
-            let renderer = MathRenderer::new(&font).unwrap_or_else(|_| panic!("{name}: no MATH table"));
+            let renderer =
+                MathRenderer::new(&font).unwrap_or_else(|_| panic!("{name}: no MATH table"));
             let svg = convert_latex(r"\sum_{i=0}^n \frac{x_i}{\sqrt{2}} \left(a+b\right)", true)
-                .and_then(|m| renderer.render_svg(&m).map_err(|_| "render failed".to_string()))
+                .and_then(|m| {
+                    renderer
+                        .render_svg(&m)
+                        .map_err(|_| "render failed".to_string())
+                })
                 .unwrap_or_else(|e| panic!("{name}: {e}"));
             assert!(svg.contains("<path"), "{name}");
             count += 1;
@@ -286,11 +294,16 @@ mod tests {
             .unwrap_or_else(|_| panic!());
         let svg = result.svg();
         let (w, h) = (result.width(), result.height());
-        assert!(svg.contains(&format!("{} {}", w, h)), "viewBox should match: {svg}");
+        assert!(
+            svg.contains(&format!("{} {}", w, h)),
+            "viewBox should match: {svg}"
+        );
         // the baseline is inside the box, and a fraction has stuff below it
         assert!(result.baseline() > 0.0 && result.baseline() < h);
         // a lone `x` sits on the baseline, so there is hardly anything below it
-        let x = r.render("<math><mi>x</mi></math>", false).unwrap_or_else(|_| panic!());
+        let x = r
+            .render("<math><mi>x</mi></math>", false)
+            .unwrap_or_else(|_| panic!());
         assert!(x.height() - x.baseline() < 0.3 * r.units_per_em() as f32);
     }
 
@@ -298,15 +311,23 @@ mod tests {
     fn math_is_inline_unless_display_block() {
         let r = renderer();
         let size = |mathml: &str| {
-            let out = r.render(mathml, false).unwrap_or_else(|_| panic!("{mathml}"));
+            let out = r
+                .render(mathml, false)
+                .unwrap_or_else(|_| panic!("{mathml}"));
             (out.width(), out.height())
         };
         let sum = "<munderover><mo>∑</mo><mi>a</mi><mi>b</mi></munderover>";
         let inline = size(&format!("<math>{sum}</math>"));
         let block = size(&format!("<math display=\"block\">{sum}</math>"));
-        assert_eq!(inline, size(&format!("<math display=\"inline\">{sum}</math>")));
+        assert_eq!(
+            inline,
+            size(&format!("<math display=\"inline\">{sum}</math>"))
+        );
         // inline: small operator with limits at the side; display: large with limits stacked
-        assert!(inline.1 < block.1 && inline.0 > block.0, "{inline:?} {block:?}");
+        assert!(
+            inline.1 < block.1 && inline.0 > block.0,
+            "{inline:?} {block:?}"
+        );
         // and the LaTeX switch maps onto it (math-core sets the operator spacing, so compare
         // only the heights)
         let latex = |display| size(&convert_latex(r"\sum_a^b", display).unwrap()).1;
@@ -393,7 +414,10 @@ pub fn latex_error_range(latex: &str, display: bool) -> Option<Vec<u32>> {
     let utf16 = |byte: usize| {
         let byte = byte.min(latex.len());
         // a range may in principle end inside a character; round down to a boundary
-        let byte = (0..=byte).rev().find(|&b| latex.is_char_boundary(b)).unwrap_or(0);
+        let byte = (0..=byte)
+            .rev()
+            .find(|&b| latex.is_char_boundary(b))
+            .unwrap_or(0);
         latex[..byte].encode_utf16().count() as u32
     };
     Some(vec![utf16(error.0.start), utf16(error.0.end)])
@@ -529,7 +553,10 @@ fn decode_entities(text: &str) -> String {
 /// One character reference body: `#8722`, `#x2212` or a name.
 fn decode_reference(body: &str) -> Option<char> {
     if let Some(number) = body.strip_prefix('#') {
-        let code = match number.strip_prefix('x').or_else(|| number.strip_prefix('X')) {
+        let code = match number
+            .strip_prefix('x')
+            .or_else(|| number.strip_prefix('X'))
+        {
             Some(hexadecimal) => u32::from_str_radix(hexadecimal, 16).ok()?,
             None => number.parse::<u32>().ok()?,
         };
@@ -579,7 +606,10 @@ fn convert_latex_raw(latex: &str, display: bool) -> Result<LatexResult, String> 
 fn adapt_for_this_renderer(mathml: String) -> String {
     mathml
         .replace("\u{332}</mo></mover>", "\u{305}</mo></mover>")
-        .replace("<mtable", "<mtable columnspacing=\"0em\" rowspacing=\"0em\"")
+        .replace(
+            "<mtable",
+            "<mtable columnspacing=\"0em\" rowspacing=\"0em\"",
+        )
 }
 
 #[cfg(test)]
@@ -670,6 +700,105 @@ mod latex_tests {
 mod latex_alt_tests {
     use super::*;
 
+    /// LaTeX → math-core → speech, end to end. A change in math-core's output that breaks how a
+    /// construct is recognised shows up here.
+    #[test]
+    fn latex_speech() {
+        let cases = [
+            (
+                r"\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}",
+                "the sum from n equals 1 to infinity of 1 over n squared equals pi squared over 6",
+            ),
+            (
+                r"\int_a^b f(x)\,dx = F(b) - F(a)",
+                "the integral from a to b of f of x d x equals capital F of b minus capital F of a",
+            ),
+            (
+                r"\lim_{x \to 0} \frac{\sin x}{x} = 1",
+                "the limit as x approaches 0 of the fraction with numerator sine of x and denominator x equals 1",
+            ),
+            (
+                r"\frac{d}{dx} f(x)",
+                "the derivative with respect to x of f of x",
+            ),
+            (
+                r"\frac{dy}{dx} = 2x",
+                "the derivative of y with respect to x equals 2 x",
+            ),
+            (
+                r"\frac{d^2 y}{dx^2}",
+                "the second derivative of y with respect to x",
+            ),
+            (
+                r"\frac{\partial^2 f}{\partial x \partial y}",
+                "the second partial derivative of f with respect to x and y",
+            ),
+            (
+                r"i\hbar \frac{\partial}{\partial t}\Psi = \hat H \Psi",
+                "i h bar the partial derivative with respect to t of capital psi equals capital H hat capital psi",
+            ),
+            (r"\binom{n}{k}", "n choose k"),
+            (
+                r"E = \frac{1}{2} m v^2",
+                "capital E equals one half m v squared",
+            ),
+            (
+                r"\frac{1}{2} + \frac{3}{4} = \frac{5}{4}",
+                "one half plus three quarters equals five quarters",
+            ),
+            (r"\tfrac{11}{12}", "11 over 12"),
+            (
+                r"|x| = \begin{cases} x & x \ge 0 \\ -x & x < 0 \end{cases}",
+                "the absolute value of x equals 2 cases; case 1: x, if x is greater than or equal to 0; \
+              case 2: negative x, if x is less than 0; end cases",
+            ),
+            (
+                r"\begin{cases} 1 & \text{if } x > 0 \\ 0 & \text{otherwise} \end{cases}",
+                "2 cases; case 1: 1, if x is greater than 0; case 2: 0, otherwise; end cases",
+            ),
+            (
+                r"\{ x \in \mathbb{R} : x > 0 \}",
+                "the set of all x in double-struck capital R such that x is greater than 0",
+            ),
+            (r"\{1, 2, 3\}", "the set 1 comma 2 comma 3"),
+            (
+                r"P(A \mid B)",
+                "capital P open paren capital A given capital B close paren",
+            ),
+            (r"f(x) = \sin(2x)", "f of x equals sine of 2 x"),
+            (r"g(f(x))", "g of open paren f of x close paren"),
+            (r"a(b + c)", "a open paren b plus c close paren"),
+            (
+                r"a \equiv b \pmod{n}",
+                "a is equivalent to b open paren mod n close paren",
+            ),
+            (
+                r"f^{-1}(x) + A^T",
+                "f inverse of x plus capital A transpose",
+            ),
+            (r"90^\circ", "90 degrees"),
+            (
+                r"x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}",
+                "x equals the fraction with numerator negative b plus or minus the square root of b \
+              squared minus 4 a c and denominator 2 a",
+            ),
+            (
+                r"\begin{pmatrix} a & b \\ c & d \end{pmatrix}",
+                "the 2 by 2 matrix; row 1: a, b; row 2: c, d; end matrix",
+            ),
+        ];
+        let mut failures = Vec::new();
+        for (latex, expected) in cases {
+            let spoken = alt_text(&convert_latex(latex, true).unwrap());
+            if spoken != expected {
+                failures.push(format!(
+                    "{latex}\n  got:      {spoken}\n  expected: {expected}"
+                ));
+            }
+        }
+        assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+    }
+
     #[test]
     fn latex_source_is_kept_as_an_annotation() {
         assert_eq!(
@@ -695,11 +824,21 @@ mod latex_alt_tests {
     #[test]
     fn annotation_changes_nothing_visible() {
         let r = tests::renderer();
-        for latex in [r"\frac{a}{b}", r"\sum_{i=1}^n x_i", r"\begin{pmatrix}a&b\\c&d\end{pmatrix}"] {
-            let plain = convert_latex_raw(latex, true).unwrap().map(adapt_for_this_renderer).unwrap();
+        for latex in [
+            r"\frac{a}{b}",
+            r"\sum_{i=1}^n x_i",
+            r"\begin{pmatrix}a&b\\c&d\end{pmatrix}",
+        ] {
+            let plain = convert_latex_raw(latex, true)
+                .unwrap()
+                .map(adapt_for_this_renderer)
+                .unwrap();
             let annotated = convert_latex(latex, true).unwrap();
             let (a, b) = (r.render(&plain, false), r.render(&annotated, false));
-            let (a, b) = (a.unwrap_or_else(|_| panic!()), b.unwrap_or_else(|_| panic!()));
+            let (a, b) = (
+                a.unwrap_or_else(|_| panic!()),
+                b.unwrap_or_else(|_| panic!()),
+            );
             assert_eq!(a.svg(), b.svg(), "{latex}");
             assert_eq!(a.alt(), b.alt(), "{latex}");
         }
@@ -709,7 +848,9 @@ mod latex_alt_tests {
     #[test]
     fn latex_formula_is_named_by_speech() {
         let mathml = convert_latex(r"\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}", true).unwrap();
-        let out = tests::renderer().render(&mathml, false).unwrap_or_else(|_| panic!("render failed"));
+        let out = tests::renderer()
+            .render(&mathml, false)
+            .unwrap_or_else(|_| panic!("render failed"));
         assert_eq!(
             out.alt(),
             "the fraction with numerator negative b plus or minus the square root of b squared \
