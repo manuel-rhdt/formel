@@ -17,7 +17,7 @@
 
 use std::collections::BTreeMap;
 
-use formel::host::{MathFont, MathStyle};
+use formel::host::{Fragment, MathFont, MathStyle};
 use formel::mathmlparser;
 use formel::standalone::StyleOptions;
 
@@ -27,6 +27,7 @@ use crate::util::TEST_FONT;
 const CASES: &str = include_str!("tex_oracle/cases.tsv");
 const MATHML: &str = include_str!("tex_oracle/mathml.tsv");
 const GOLDEN: &str = include_str!("tex_oracle/golden.tsv");
+const GLYPHS: &str = include_str!("tex_oracle/glyphs.tsv");
 
 /// Allowed difference in font units (1000 per em). TeX rounds to 1/65536pt; this leaves room for
 /// f32 arithmetic and for the half-unit rounding of glyph metrics.
@@ -44,13 +45,15 @@ const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
     // MathML Core keeps an operator's lspace/rspace at the edge of the formula, TeX drops it:
     // a lone `=` is 1334 wide here and 778 in TeX.
     ("overset", "verified: relation spacing kept at the edges of the formula, TeX drops it"),
-    // Only a single glyph has an italic correction (MathML Core), so `sin` has none. What is left
-    // is the italic correction of a lone upright `n`: MathML Core treats a glyph with a nonzero
-    // correction as slanted and adds it before the next upright box, LuaTeX adds none.
-    ("italic-corr-upright-then-italic", "verified: MathML Core adds a lone `n`'s italic correction (7), TeX adds none"),
-    ("italic-corr-upright-then-space", "verified: MathML Core adds a lone `n`'s italic correction (7), TeX adds none"),
-    ("italic-corr-upright-then-paren", "verified: MathML Core adds a lone `n`'s italic correction (7), TeX adds none"),
-    ("italic-corr-upright-then-op", "verified: MathML Core adds a lone `n`'s italic correction (7), TeX adds none"),
+    // The italic correction of a letter. TeX adds it before the next letter or sign, whatever that
+    // is, except before explicit glue (`\,`). MathML Core adds it before the next child of a row
+    // that is not slanted, that is, not a glyph with a correction of its own, and so also before
+    // an explicit space. A letter followed by an upright `x` (which has a correction of 16) is
+    // the first case: TeX adds the correction of the first letter (7 for `n`, 90 for `f`), Core not.
+    ("italic-corr-upright-then-space", "verified: Core adds the italic correction of `n` (7) before the explicit space, TeX not"),
+    ("italic-corr-upright-then-upright", "verified: TeX adds the italic correction of `n` (7) before an upright x, Core not"),
+    ("italic-corr-italic-then-upright", "verified: TeX adds the italic correction of `f` (90) before an upright x, Core not"),
+    ("lim-text", "unexplained: TeX is 5 units wider"),
     ("italic-corr-italic-then-space", "verified: MathML Core adds `f`'s italic correction (90) before the explicit space, TeX adds none"),
     // TeX sets the limit of \lim like that of a large operator (LowerLimitGapMin, 167). `lim` is an
     // `<mi>`, so MathML uses UnderbarVerticalGap (120): 167 - 120 = 47.
@@ -103,6 +106,24 @@ const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
     // TeX adds no italic correction before a fraction; MathML Core does, as a fraction is not slanted.
     ("italic-corr-letter-fraction", "verified: `f`'s italic correction (90) added before a fraction, TeX adds none"),
     ("sqrt-index-tall", "unexplained: 4.5 units wider, root degree"),
+];
+
+/// The cases whose glyph positions are compared with TeX's: the accents, whose horizontal position
+/// (the top accent attachment of the base against that of the accent) shows nowhere in the size of
+/// the formula. The other cases are not compared glyph by glyph yet: they differ in places, for
+/// example in how a fraction centres its numerator.
+const GLYPH_CHECKED: &str = "accent-";
+
+/// Cases among those that are not where TeX puts their glyphs (see `glyph_positions_match_tex`),
+/// with why.
+const KNOWN_GLYPH_DIFFERENCES: &[(&str, &str)] = &[
+    // The combining circumflex has variants 365, 645, 769, 920, 1101, 1321, 1582 and 1897 wide.
+    // TeX takes the largest that is not wider than the base, MathML Core the smallest that is at
+    // least as wide. `abc` is 1405 wide: TeX takes 1321 (glyph 2315), here 1582 (glyph 2325); `ab`
+    // is 958 wide: 920 (2295) against 1101 (2305). Where the base is wider than the largest
+    // variant both take that one.
+    ("accent-widehat", "verified: wide hat variant 1582 (covers the base) vs TeX's 1321 (fits in it)"),
+    ("accent-widehat-two", "verified: wide hat variant 1101 (covers the base) vs TeX's 920 (fits in it)"),
 ];
 
 #[derive(Debug, Clone, Copy)]
@@ -177,6 +198,106 @@ fn layout_matches_tex() {
         }
     }
     println!("name  (formel - TeX: width height depth, font units)\n{table}");
+    assert!(unexpected.is_empty(), "\n{}\n", unexpected.join("\n"));
+}
+
+/// A glyph of a formula: its glyph index in the font, x from the left edge of the formula and y
+/// up from its baseline, in font units.
+type Glyph = (u32, f32, f32);
+
+/// Every glyph that the layout of `mathml` draws, with its position.
+fn layout_glyphs(mathml: &str) -> Vec<Glyph> {
+    TEST_FONT.with(|font| {
+        let doc = mathmlparser::parse(mathml.as_bytes()).expect("valid MathML");
+        let options = StyleOptions {
+            font_size: font.units_per_em() as f32,
+            math_style: MathStyle::Compact,
+        };
+        let result = formel::layout(&doc, font, options);
+        let root = doc.root().unwrap();
+        let baseline = result.layouts[&root].baseline;
+        let mut glyphs = vec![];
+        // locations are relative to the parent, y points down
+        let mut stack = vec![(root, 0.0, 0.0)];
+        while let Some((node, parent_x, parent_y)) = stack.pop() {
+            let Some(layout) = result.layouts.get(&node) else { continue };
+            let (x, y) = (parent_x + layout.location.x, parent_y + layout.location.y);
+            for fragment in &layout.fragments {
+                if let Fragment::Glyphs { origin, glyphs: run, .. } = fragment {
+                    for g in run {
+                        glyphs.push((
+                            g.glyph as u32,
+                            x + origin.x + g.offset.x,
+                            baseline - (y + origin.y + g.offset.y),
+                        ));
+                    }
+                }
+            }
+            stack.extend(doc.node(node).children.iter().map(|&child| (child, x, y)));
+        }
+        glyphs
+    })
+}
+
+/// How the glyphs of the layout differ from TeX's, if they do: other glyphs, or one that is
+/// more than TOLERANCE away from where TeX has it. The glyphs are paired by glyph index, in
+/// order from left to right.
+fn glyph_difference(tex: &[Glyph], ours: &[Glyph]) -> Option<String> {
+    let by_index = |glyphs: &[Glyph]| {
+        let mut map: BTreeMap<u32, Vec<(f32, f32)>> = BTreeMap::new();
+        for &(index, x, y) in glyphs {
+            map.entry(index).or_default().push((x, y));
+        }
+        for positions in map.values_mut() {
+            positions.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        }
+        map
+    };
+    let (tex, ours) = (by_index(tex), by_index(ours));
+    let indices = |m: &BTreeMap<u32, Vec<(f32, f32)>>| {
+        m.iter().flat_map(|(i, p)| std::iter::repeat_n(*i, p.len())).collect::<Vec<_>>()
+    };
+    if indices(&tex) != indices(&ours) {
+        return Some(format!("other glyphs: TeX {:?}, formel {:?}", indices(&tex), indices(&ours)));
+    }
+    let mut worst: Option<(f32, String)> = None;
+    for (index, positions) in &tex {
+        for (t, o) in positions.iter().zip(&ours[index]) {
+            let off = (o.0 - t.0).abs().max((o.1 - t.1).abs());
+            if off > TOLERANCE && worst.as_ref().is_none_or(|(w, _)| off > *w) {
+                worst = Some((
+                    off,
+                    format!("glyph {index}: TeX at ({:.1}, {:.1}), formel at ({:.1}, {:.1})", t.0, t.1, o.0, o.1),
+                ));
+            }
+        }
+    }
+    worst.map(|(_, message)| message)
+}
+
+#[test]
+fn glyph_positions_match_tex() {
+    let mut tex: BTreeMap<&str, Vec<Glyph>> = BTreeMap::new();
+    for row in rows(GLYPHS) {
+        let n = |i: usize| row[i].parse::<f32>().unwrap();
+        tex.entry(row[0]).or_default().push((row[1].parse().unwrap(), n(2), n(3)));
+    }
+    let mathml: BTreeMap<&str, &str> = rows(MATHML).map(|r| (r[0], r[1])).collect();
+
+    let mut unexpected = vec![];
+    for row in rows(CASES).filter(|r| r[0].starts_with(GLYPH_CHECKED)) {
+        let name = row[0];
+        let ours = layout_glyphs(mathml[name]);
+        let difference = glyph_difference(tex.get(name).map_or(&[], |g| g), &ours);
+        let known = KNOWN_GLYPH_DIFFERENCES.iter().find(|(n, _)| *n == name);
+        match (difference, known) {
+            (Some(message), None) => unexpected.push(format!("{name}: {message}")),
+            (None, Some(_)) => unexpected.push(format!(
+                "{name}: the glyphs match TeX now, remove it from KNOWN_GLYPH_DIFFERENCES"
+            )),
+            _ => {}
+        }
+    }
     assert!(unexpected.is_empty(), "\n{}\n", unexpected.join("\n"));
 }
 

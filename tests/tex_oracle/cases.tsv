@@ -168,3 +168,21 @@ arrow-overleftarrow	t	\overleftarrow{abc}
 arrow-longrightarrow	t	a\longrightarrow b
 arrow-rightleft	t	a\leftrightarrow b
 arrow-hookrightarrow	t	a\hookrightarrow b
+accent-top-hat-f	t	\hat{f}
+accent-top-vec-f	t	\vec{f}
+accent-top-tilde-j	t	\tilde{j}
+accent-top-bar-cap-t	t	\bar{T}
+accent-top-hat-cap-t	t	\hat{T}
+accent-top-vec-cap-f	t	\vec{F}
+accent-top-hat-g	t	\hat{g}
+accent-top-dot-y	t	\dot{y}
+accent-top-acute-e	t	\acute{e}
+accent-top-breve-g	t	\breve{g}
+accent-top-check-cap-s	t	\check{S}
+accent-top-hat-alpha	t	\hat{\alpha}
+accent-top-tilde-beta	t	\tilde{\beta}
+accent-top-hat-upright	t	\hat{\mathrm{A}}
+accent-top-bar-digit	t	\bar{2}
+accent-top-hat-xy	t	\hat{xy}
+accent-top-vec-cap-ab	t	\vec{AB}
+accent-top-bar-fx	t	\bar{fx}
