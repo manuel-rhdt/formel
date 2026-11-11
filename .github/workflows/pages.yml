@@ -3,6 +3,8 @@ name: Deploy demo to GitHub Pages
 on:
   push:
     branches: [master]
+  # Build (but don't deploy) on pull requests, so a size change is verified before merge.
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -13,6 +15,11 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: true
+
+env:
+  # Pinned and checksummed so the module size cannot drift silently underneath us.
+  BINARYEN_VERSION: version_133
+  BINARYEN_SHA256: 2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489
 
 jobs:
   build:
@@ -30,6 +37,16 @@ jobs:
         with:
           tool: wasm-bindgen@0.2.100
 
+      - name: Install wasm-opt
+        run: |
+          url="https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz"
+          curl -sSLo binaryen.tar.gz "$url"
+          echo "${BINARYEN_SHA256}  binaryen.tar.gz" | sha256sum -c -
+          tar xzf binaryen.tar.gz
+          echo "$PWD/binaryen-${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+          # $GITHUB_PATH only applies to later steps, so check the binary by path here.
+          "$PWD/binaryen-${BINARYEN_VERSION}/bin/wasm-opt" --version
+
       - uses: Swatinem/rust-cache@v2
 
       - name: Run tests
@@ -38,6 +55,8 @@ jobs:
       - name: Test the demo's JavaScript helpers
         run: node --test web/test/export.test.mjs
 
+      # Size build: the release profile in Cargo.toml (opt-level=z, LTO, one codegen unit,
+      # panic=abort, strip) plus wasm-opt -Oz. ~35% smaller than a plain `cargo build --release`.
       - name: Build the demo
         run: web/build.sh
 
@@ -49,6 +68,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
