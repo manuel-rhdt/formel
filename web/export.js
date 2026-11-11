@@ -31,7 +31,7 @@ export function oneLine(text) {
 }
 
 /**
- * Applies the chosen colors and adds an accessible name to an SVG produced by mathwasm.
+ * Applies the chosen colors and adds an accessible name to an SVG produced by formel-wasm.
  *
  * The renderer paints everything in `black`, so recoloring is a replacement of that keyword.
  * `bg` of `null` keeps the background transparent.
@@ -58,7 +58,7 @@ export function mathmlForXml(mathml) {
 }
 
 /**
- * Applies the chosen colors and makes an SVG produced by mathwasm self-describing.
+ * Applies the chosen colors and makes an SVG produced by formel-wasm self-describing.
  *
  * The renderer paints everything in `black`, so recoloring is a replacement of that keyword.
  * `bg` of `null` keeps the background transparent.

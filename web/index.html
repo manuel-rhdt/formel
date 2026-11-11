@@ -367,7 +367,7 @@
 <input id="fontfile" type="file" accept=".otf,.ttf,font/otf,font/ttf" hidden>
 
 <script type="module">
-import init, { MathRenderer, latex_to_mathml, latex_error_range } from "./pkg/mathwasm.js";
+import init, { MathRenderer, latex_to_mathml, latex_error_range } from "./pkg/formel_wasm.js";
 import {
   styleSvg, sizeSvg, snippets, encodeState, decodeState, oneLine, svgDataUri, htmlImage, escapeXml,
   svgInPoints, pixelsPerEm, setPngResolution, TEXT_SIZE_RANGE,
@@ -650,15 +650,13 @@ function toMathML(source) {
   return latex_to_mathml(source, radio("display") === "block");
 }
 
-/** Alternative text: the LaTeX source, or the text content of the MathML. */
-function altText(source, mathml) {
-  if (isLatex()) return oneLine(source);
-  try {
-    const text = new DOMParser().parseFromString(mathml, "text/xml").documentElement.textContent;
-    return oneLine(text) || "formula";
-  } catch {
-    return "formula";
-  }
+/**
+ * Alternative text, in either input mode: the module's accessible name — the author's `alttext`
+ * or annotation, else the formula read aloud ("the square root of x"). Not the LaTeX source:
+ * screen readers spell that out symbol by symbol. The source stays in the exported SVG's metadata.
+ */
+function altText(spoken) {
+  return oneLine(spoken) || "formula";
 }
 
 function isDisplay(mathml) {
@@ -700,7 +698,7 @@ function render() {
     const r = renderer.render(mathml, false);
     rendering = {
       svg: r.svg, width: r.width, height: r.height, baseline: r.baseline, unitsPerEm: renderer.units_per_em(),
-      mathml, alt: altText(source, mathml), display: isDisplay(mathml),
+      mathml, alt: altText(r.alt), display: isDisplay(mathml),
     };
     r.free();
   } catch (e) {

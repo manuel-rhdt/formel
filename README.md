@@ -9,7 +9,7 @@ provides, so a well-made math font gives you good output without any hand-tuned 
 
 **[Try it in the browser →](https://manuel-rhdt.github.io/formel/)** Type LaTeX or MathML, compare the
 bundled fonts (or drop in your own), and copy or download the result as SVG or PNG. The demo is this crate
-compiled to WebAssembly (`mathwasm/`, `web/`); nothing leaves your machine.
+compiled to WebAssembly (`formel-wasm/`, `web/`); nothing leaves your machine.
 
 ## Gallery
 

@@ -51,6 +51,24 @@ mod tests {
         assert_eq!(doc.node(mo).text.as_deref(), Some("\u{2212}"));
     }
 
+    /// Spaces next to an entity reference are content; only the ends of a token are trimmed.
+    #[test]
+    fn parse_keeps_spaces_around_entities() {
+        let token_text = |xml: &str| {
+            let doc = parse(xml.as_bytes()).unwrap();
+            let token = doc.node(doc.root().unwrap()).children[0];
+            doc.node(token).text.clone().unwrap()
+        };
+        assert_eq!(token_text("<mtext>a &lt; b &amp; c</mtext>"), "a < b & c");
+        assert_eq!(token_text("<mtext>if &amp;\n  only</mtext>"), "if &\n  only");
+        assert_eq!(token_text("<mtext>  &amp;  </mtext>"), "&");
+        assert_eq!(token_text("<mi>\n  x\n</mi>"), "x");
+        assert_eq!(token_text("<mtext>a<!-- c --> b</mtext>"), "a b");
+        assert_eq!(token_text("<mtext>x <![CDATA[<]]> y</mtext>"), "x < y");
+        // A no-break space is content, not XML whitespace.
+        assert_eq!(token_text("<mtext>&#xA0;a</mtext>"), "\u{a0}a");
+    }
+
     #[test]
     fn parse_rejects_mismatched_tags() {
         assert!(parse("<mrow><mi>x</mi></mfrac>".as_bytes()).is_err());

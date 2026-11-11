@@ -542,3 +542,86 @@ fn every_element_kind_speaks_on_its_own() {
         assert_well_formed(&speak_document(&doc, node), &(name, element));
     }
 }
+
+#[cfg(all(feature = "svg", feature = "mathml_parser"))]
+mod svg {
+    use super::*;
+    use formel::host::MathFont;
+    use formel::mathmlparser;
+    use formel::svg_renderer::{self, A11y, Flags};
+
+    fn render(xml: &str, a11y: A11y<'_>) -> String {
+        let doc = mathmlparser::parse(xml.as_bytes()).expect("valid MathML");
+        TEST_FONT.with(|font| {
+            let units_per_em = font.units_per_em() as f32;
+            let options = StyleOptions {
+                font_size: units_per_em,
+                ..Default::default()
+            };
+            let result = formel::layout(&doc, font, options);
+            svg_renderer::render_to_string_with(
+                &doc,
+                &result.layouts,
+                font.face(),
+                units_per_em,
+                Flags::default(),
+                a11y,
+            )
+        })
+    }
+
+    /// The `<title>` must be the first child of `<svg>` for assistive technology.
+    fn title(svg: &str) -> Option<&str> {
+        let open = svg.find('>')? + 1;
+        let rest = svg[open..].trim_start().strip_prefix("<title>")?;
+        Some(&rest[..rest.find("</title>")?])
+    }
+
+    #[test]
+    fn spoken_by_default() {
+        let svg = render("<msqrt><mi>x</mi></msqrt>", A11y::default());
+        assert!(svg.contains(r#"role="img""#), "{svg}");
+        assert_eq!(title(&svg), Some("the square root of x"));
+    }
+
+    #[test]
+    fn author_alttext_wins_over_speech() {
+        let svg = render(
+            r#"<math alttext=" root of  x "><msqrt><mi>x</mi></msqrt></math>"#,
+            A11y::SPOKEN,
+        );
+        assert_eq!(title(&svg), Some("root of x"));
+        let svg = render(r#"<math alttext=" "><mi>x</mi></math>"#, A11y::SPOKEN);
+        assert_eq!(title(&svg), Some("x"));
+    }
+
+    #[test]
+    fn explicit_title_and_none() {
+        let svg = render("<mi>x</mi>", A11y::titled("ex"));
+        assert_eq!(title(&svg), Some("ex"));
+        let svg = render("<mi>x</mi>", A11y::NONE);
+        assert!(!svg.contains("<title>") && !svg.contains("role="), "{svg}");
+    }
+
+    #[test]
+    fn plain_render_is_named() {
+        let doc = mathmlparser::parse("<mfrac><mi>a</mi><mi>b</mi></mfrac>".as_bytes()).unwrap();
+        let svg = TEST_FONT.with(|font| {
+            let result = formel::layout(&doc, font, StyleOptions::default());
+            svg_renderer::render_to_string(
+                &doc,
+                &result.layouts,
+                font.face(),
+                font.units_per_em() as f32,
+                Flags::default(),
+            )
+        });
+        assert_eq!(title(&svg), Some("a over b"));
+    }
+
+    #[test]
+    fn title_is_escaped() {
+        let svg = render("<mtext>a &lt; b &amp; c</mtext>", A11y::SPOKEN);
+        assert_eq!(title(&svg), Some("a &lt; b &amp; c"));
+    }
+}

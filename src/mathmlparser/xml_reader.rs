@@ -21,8 +21,10 @@ struct OpenElement {
 /// If the input isn't a single `<math>` element, its top-level elements are wrapped into an
 /// implicit `<math>` root. Entities are resolved with the HTML/MathML entity table.
 pub fn parse<R: BufRead>(input: R) -> Result<MathDocument> {
+    // No `trim_text`: quick-xml reports text and entity references as separate events, so
+    // trimming each event would eat the spaces around an entity (`a &lt; b` became `a<b`).
+    // `finish` trims a token's whole text instead.
     let mut reader = Reader::from_reader(input);
-    reader.config_mut().trim_text(true);
     let mut buffer = Vec::new();
     let mut document = MathDocument::new();
     let mut stack: Vec<OpenElement> = Vec::new();

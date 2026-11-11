@@ -1,7 +1,7 @@
 //! WebAssembly bindings for `formel`.
 //!
 //! ```js
-//! import init, { MathRenderer } from "./pkg/mathwasm.js";
+//! import init, { MathRenderer } from "./pkg/formel_wasm.js";
 //! await init();
 //! const font = new Uint8Array(await (await fetch("font.otf")).arrayBuffer());
 //! const renderer = new MathRenderer(font);
@@ -10,6 +10,7 @@
 
 use formel::mathmlparser;
 use formel::shaper::Shaper;
+use formel::speech;
 use formel::standalone::StyleOptions;
 use formel::svg_renderer;
 use wasm_bindgen::prelude::*;
@@ -134,14 +135,15 @@ impl MathRenderer {
         let root = document.root().expect("checked above");
         let root_layout = &typeset.layouts[&root];
         let margin = svg_renderer::MARGIN;
-        let alt = alt_text(mathml);
+        let alt = authored_alt_text(mathml)
+            .unwrap_or_else(|| speech::speak_document(&document, root));
         let svg = svg_renderer::render_to_string_with(
             &document,
             &typeset.layouts,
             self.shaper.face(),
             units_per_em,
             flags,
-            svg_renderer::A11y { title: &alt },
+            svg_renderer::A11y::titled(&alt),
         );
         Ok(Rendering {
             svg,
@@ -185,16 +187,20 @@ mod tests {
             "x squared"
         );
         assert_eq!(alt_text("<math><mi>x</mi></math>"), "x");
-        // Character references are decoded, so the name reads "x−1" and not "x&#x2212;1".
+        // Without an author's name, the formula is read from its structure.
         assert_eq!(
             alt_text("<math><mi>x</mi><mo>&#x2212;</mo><mn>1</mn></math>"),
-            "x\u{2212}1"
+            "x minus 1"
         );
-        // The fallback is deliberately crude — concatenated text, no operator names. Anything that
-        // cares about the wording supplies an annotation instead.
         assert_eq!(
-            alt_text("<math><mi>x</mi><mo>+</mo><mn>1</mn></math>"),
-            "x+1"
+            alt_text("<math><msqrt><mi>x</mi><mo>+</mo><mn>1</mn></msqrt></math>"),
+            "the square root of x plus 1"
+        );
+        // Markup that does not parse still gets its text content, with references decoded
+        // ("x−1", not "x&#x2212;1").
+        assert_eq!(
+            alt_text("<math><mi>x</mi><mo>&#x2212;</mo><mn>1</mn></mrow>"),
+            "x\u{2212}1"
         );
         assert_eq!(alt_text(""), "");
     }
@@ -340,7 +346,43 @@ pub fn latex_to_mathml(latex: &str, display: bool) -> Result<String, JsError> {
 fn convert_latex(latex: &str, display: bool) -> Result<String, String> {
     convert_latex_raw(latex, display)?
         .map(adapt_for_this_renderer)
+        .map(|mathml| with_tex_annotation(mathml, latex))
         .map_err(|e| format!("LaTeX error: {e}"))
+}
+
+/// Keeps the LaTeX source in the MathML, the standard way: the content goes into
+/// `<semantics>` with an `<annotation encoding="application/x-tex">`.
+///
+/// `<math display="block"><mi>x</mi></math>` becomes
+/// `<math display="block"><semantics><mrow><mi>x</mi></mrow><annotation
+/// encoding="application/x-tex">x</annotation></semantics></math>`.
+///
+/// Renderers (this one included) lay out only the first child of `<semantics>`, and the
+/// accessible name ignores this annotation, which is not `text/plain`, so neither changes. An
+/// empty formula is left alone.
+fn with_tex_annotation(mathml: String, latex: &str) -> String {
+    let Some(open_end) = mathml.find('>').map(|i| i + 1) else {
+        return mathml;
+    };
+    let Some(close_start) = mathml.rfind("</math>") else {
+        return mathml;
+    };
+    if !mathml.starts_with("<math") || close_start < open_end {
+        return mathml;
+    }
+    let content = &mathml[open_end..close_start];
+    if content.trim().is_empty() {
+        return mathml;
+    }
+    let tex = latex
+        .trim()
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    format!(
+        "{}<semantics><mrow>{content}</mrow><annotation encoding=\"application/x-tex\">{tex}</annotation></semantics></math>",
+        &mathml[..open_end]
+    )
 }
 
 /// Where in `latex` the conversion fails, as `[start, end]` in UTF-16 code units (the indices
@@ -360,14 +402,27 @@ pub fn latex_error_range(latex: &str, display: bool) -> Option<Vec<u32>> {
 /// The accessible name for a formula.
 ///
 /// The author's own text wins: an `<annotation encoding="text/plain">` inside `<semantics>`, or an
-/// `alttext` attribute on `<math>` — MathML defines both for exactly this. Failing that, the text
-/// content of the expression is used, which is at least what a screen reader would read out of the
-/// markup. This runs on the raw string, before parsing, so a document that fails to parse still gets
-/// a name.
+/// `alttext` attribute on `<math>` — MathML defines both for exactly this. Failing that, the
+/// formula is read aloud from its structure ([`formel::speech`]: "x plus 1", "the square root of
+/// x"). Only markup that does not parse falls back to its bare text content, so even that gets a
+/// name.
 pub fn alt_text(mathml: &str) -> String {
-    annotation_text(mathml)
-        .or_else(|| attribute_value(mathml, "alttext"))
+    authored_alt_text(mathml)
+        .or_else(|| {
+            let document = mathmlparser::parse(mathml.as_bytes()).ok()?;
+            let root = document.root()?;
+            // Nothing to read: an empty name, not "blank".
+            if document.node(root).children.is_empty() {
+                return None;
+            }
+            Some(speech::speak_document(&document, root))
+        })
         .unwrap_or_else(|| text_content(mathml))
+}
+
+/// The author's accessible name: a `text/plain` annotation or the `alttext` of `<math>`.
+fn authored_alt_text(mathml: &str) -> Option<String> {
+    annotation_text(mathml).or_else(|| attribute_value(mathml, "alttext"))
 }
 
 /// The body of the first `<annotation>` whose encoding is `text/plain`.
@@ -608,5 +663,58 @@ mod latex_tests {
             )
             .unwrap_or_else(|_| panic!());
         assert!(view_box_width(&aligned) < view_box_width(&padded) - 500.0);
+    }
+}
+
+#[cfg(test)]
+mod latex_alt_tests {
+    use super::*;
+
+    #[test]
+    fn latex_source_is_kept_as_an_annotation() {
+        assert_eq!(
+            convert_latex("x", true).unwrap(),
+            "<math display=\"block\"><semantics><mrow><mi>x</mi></mrow>\
+             <annotation encoding=\"application/x-tex\">x</annotation></semantics></math>"
+        );
+        // escaped for XML, and parsed back to the original source
+        let mathml = convert_latex(r" a < b \& c > d ", false).unwrap();
+        assert!(
+            mathml.ends_with(
+                r#"<annotation encoding="application/x-tex">a &lt; b \&amp; c &gt; d</annotation></semantics></math>"#
+            ),
+            "{mathml}"
+        );
+        let document = mathmlparser::parse(mathml.as_bytes()).unwrap();
+        assert!(document.root().is_some());
+        // nothing to annotate
+        assert_eq!(convert_latex("", false).unwrap(), "<math></math>");
+    }
+
+    /// The annotation changes neither the drawing nor the accessible name.
+    #[test]
+    fn annotation_changes_nothing_visible() {
+        let r = tests::renderer();
+        for latex in [r"\frac{a}{b}", r"\sum_{i=1}^n x_i", r"\begin{pmatrix}a&b\\c&d\end{pmatrix}"] {
+            let plain = convert_latex_raw(latex, true).unwrap().map(adapt_for_this_renderer).unwrap();
+            let annotated = convert_latex(latex, true).unwrap();
+            let (a, b) = (r.render(&plain, false), r.render(&annotated, false));
+            let (a, b) = (a.unwrap_or_else(|_| panic!()), b.unwrap_or_else(|_| panic!()));
+            assert_eq!(a.svg(), b.svg(), "{latex}");
+            assert_eq!(a.alt(), b.alt(), "{latex}");
+        }
+    }
+
+    /// LaTeX input is named by speech, not by its source.
+    #[test]
+    fn latex_formula_is_named_by_speech() {
+        let mathml = convert_latex(r"\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}", true).unwrap();
+        let out = tests::renderer().render(&mathml, false).unwrap_or_else(|_| panic!("render failed"));
+        assert_eq!(
+            out.alt(),
+            "the fraction with numerator negative b plus or minus the square root of b squared \
+             minus 4 a c and denominator 2 a",
+            "{mathml}"
+        );
     }
 }

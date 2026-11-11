@@ -1,5 +1,5 @@
 [package]
-name = "mathwasm"
+name = "formel-wasm"
 version = "0.1.0"
 authors = ["Manuel Reinhardt <manuel.jr16@gmail.com>"]
 edition = "2024"

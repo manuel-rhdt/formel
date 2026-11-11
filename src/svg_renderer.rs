@@ -24,16 +24,34 @@ pub struct Flags {
     pub show_logical_bounds: bool,
 }
 
-/// What makes the SVG self-describing. An empty `title` writes nothing, so a plain render stays
-/// exactly as it was.
+/// What makes the SVG self-describing.
 ///
-/// `title` becomes the SVG's `<title>`, which is the accessible name an assistive technology reads
-/// for the image, and turns on `role="img"`. No `id` and no `aria-labelledby` are written: several
-/// SVGs are often inlined into one document, and duplicated ids would break that.
+/// The title becomes the SVG's `<title>`, which is the accessible name an assistive technology
+/// reads for the image, and turns on `role="img"`. No `id` and no `aria-labelledby` are written:
+/// several SVGs are often inlined into one document, and duplicated ids would break that.
+///
+/// The default ([`A11y::SPOKEN`]) names every SVG: with the `alttext` of `<math>` if the author
+/// gave one, and otherwise with the formula read aloud by [`speech`](crate::speech)
+/// ("the square root of b squared minus 4 a c").
 #[derive(Debug, Default, Clone, Copy)]
 pub struct A11y<'a> {
-    /// The accessible name, e.g. "x equals minus b plus or minus the square root of b squared".
-    pub title: &'a str,
+    /// `None`: the author's `alttext`, else the spoken formula. `Some(title)`: exactly that
+    /// title; `Some("")` writes no title and no role.
+    pub title: Option<&'a str>,
+}
+
+impl A11y<'static> {
+    /// Name the SVG after the author's `alttext` or the spoken formula (the default).
+    pub const SPOKEN: A11y<'static> = A11y { title: None };
+    /// Write no title and no role.
+    pub const NONE: A11y<'static> = A11y { title: Some("") };
+}
+
+impl<'a> A11y<'a> {
+    /// Name the SVG `title`.
+    pub fn titled(title: &'a str) -> Self {
+        A11y { title: Some(title) }
+    }
 }
 
 /// Renders a laid-out document to an SVG file. See [`render_to_string`].
@@ -124,9 +142,17 @@ fn build_document(
     );
 
     // The title has to be the first child, so it goes in before anything is drawn.
-    if !a11y.title.is_empty() {
+    let title = match a11y.title {
+        Some(title) => title.trim().to_owned(),
+        None => document
+            .attribute(root, "alttext")
+            .map(|alt| alt.split_whitespace().collect::<Vec<_>>().join(" "))
+            .filter(|alt| !alt.is_empty())
+            .unwrap_or_else(|| crate::speech::speak_document(document, root)),
+    };
+    if !title.is_empty() {
         svg_document.assign("role", "img");
-        svg_document.append(Title::new(a11y.title));
+        svg_document.append(Title::new(title));
     }
 
     let mut ink_group = Group::new().set("stroke", "none").set("fill", "#FFE6E6");
