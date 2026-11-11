@@ -1,11 +1,12 @@
 # formel
 
-A Rust library that lays out mathematical formulas (MathML in, positioned glyphs out) using
+A Rust library that lays out mathematical formulas using
 **OpenType MATH fonts** and [rustybuzz](https://github.com/harfbuzz/rustybuzz) for unicode shaping.
 It implements the typesetting rules from the OpenType MATH specification and
 [MathML Core](https://www.w3.org/TR/mathml-core/): script and fraction placement, stretchy operators,
 radicals, tables, accents, italic corrections, math kerning and more, comparable in quality to
-modern unicode TeX engines, like LuaTeX and XeTeX.
+modern unicode TeX engines, like LuaTeX and XeTeX. The output, i.e. the glyph positions and sizes, can be
+directly consumed by users of the rust library. A simple SVG renderer is provided, too.
 
 **[Try it in the browser →](https://manuel-rhdt.github.io/formel/)** Type LaTeX or MathML, compare the
 bundled fonts (or drop in your own), and copy or download the result as SVG or PNG. The demo is this crate
