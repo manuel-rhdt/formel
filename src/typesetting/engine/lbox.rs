@@ -166,10 +166,12 @@ impl<Id: Copy> LBox<Id> {
             ink_right = Some(ink_right.map_or(right, |r| r.max(right)));
         }
         let ink_left = ink_left.unwrap_or(0);
-        let italic_correction = run
-            .glyphs
-            .last()
-            .map_or(0, |(_, glyph)| glyph.italic_correction);
+        // MathML Core (layout of `<mtext>`, reused by `<mi>`, `<mn>` and `<ms>`): only a single glyph
+        // has an italic correction.
+        let italic_correction = match run.glyphs.as_slice() {
+            [(_, glyph)] => glyph.italic_correction,
+            _ => 0,
+        };
         let accent = match run.glyphs.as_slice() {
             [(pen, glyph)] if glyph.top_accent_attachment != 0 => {
                 (pen.x + glyph.top_accent_attachment) as f32 * s

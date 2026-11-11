@@ -134,3 +134,81 @@ fn function_application_respects_an_explicit_rspace() {
     assert!(default > zero + 1.0);
     assert!((zero - times).abs() < 1e-2);
 }
+
+/// MathML Core (layout of `<mtext>`, shared by `<mi>`, `<mn>` and `<ms>`): only text made of a
+/// single glyph has an italic correction. The `n` of `sin` has an entry in the MATH table, but
+/// `sin` as a whole must not be treated as slanted.
+#[test]
+fn only_a_single_glyph_has_an_italic_correction() {
+    let width = |xml: &str| {
+        let mut width = 0.0;
+        layout_xml(xml, |doc, layout| width = layout(doc.root().unwrap()).size.width);
+        width
+    };
+    // An empty `<mspace/>` is not slanted, so it receives the italic correction of what precedes
+    // it in the row: appending one shows how much correction a token carries.
+    let correction = |token: &str| {
+        width(&format!("<mrow>{token}<mspace/></mrow>")) - width(&format!("<mrow>{token}</mrow>"))
+    };
+    // a lone upright `n` has a correction of 7 units in Latin Modern Math
+    assert!((correction("<mi mathvariant=\"normal\">n</mi>") - 7.0).abs() < 1e-2);
+    // the same letter at the end of a longer text does not
+    assert!(correction("<mi>sin</mi>").abs() < 1e-2);
+    assert!(correction("<mi mathvariant=\"normal\">in</mi>").abs() < 1e-2);
+    assert!(correction("<mtext>sin</mtext>").abs() < 1e-2);
+}
+
+/// Fonts draw the spacing forms of accents (`¯`, `˙`, `´`, ...) lower than the combining accents,
+/// which are made to sit over a base. TeX uses the combining ones, so an accent over a base is the
+/// combining accent whichever form the MathML names.
+#[test]
+fn spacing_accents_are_drawn_as_combining_accents() {
+    let size = |accent: char| {
+        // not stretchy, as LaTeX converters write them: only the glyph is compared
+        let xml = format!(
+            "<mover accent=\"true\"><mi>x</mi><mo stretchy=\"false\">{accent}</mo></mover>"
+        );
+        let mut size = None;
+        layout_xml(&xml, |doc, layout| {
+            let layout = layout(doc.root().unwrap());
+            size = Some((layout.size.width, layout.size.height));
+        });
+        size.unwrap()
+    };
+    for (spacing, combining) in [
+        ('`', '\u{300}'),
+        ('\u{B4}', '\u{301}'),
+        ('\u{AF}', '\u{304}'),
+        ('\u{2D8}', '\u{306}'),
+        ('\u{2D9}', '\u{307}'),
+        ('\u{A8}', '\u{308}'),
+        ('\u{2DA}', '\u{30A}'),
+        ('\u{2C7}', '\u{30C}'),
+    ] {
+        assert_eq!(size(spacing), size(combining), "{spacing:?} vs {combining:?}");
+    }
+}
+
+/// MathML Core 3.3.1.2: a child of a row is slanted if it is not an embellished operator and has
+/// an italic correction. A large operator has a big one (for its scripts), but it must neither
+/// push the next child away nor be spared the correction of the letter before it.
+#[test]
+fn operators_are_never_slanted_in_a_row() {
+    let width = |xml: &str| {
+        let mut width = 0.0;
+        layout_xml(xml, |doc, layout| width = layout(doc.root().unwrap()).size.width);
+        width
+    };
+    let integral = r#"<mo lspace="0" rspace="0">&#x222B;</mo>"#;
+    let alone = width(integral);
+    // the integral sign has an italic correction of 332 units in Latin Modern Math, but nothing
+    // after it receives it
+    assert!((width(&format!("<mrow>{integral}<mspace/></mrow>")) - alone).abs() < 1e-2);
+    let paren = r#"<mo stretchy="false" lspace="0" rspace="0">(</mo>"#;
+    assert!(
+        (width(&format!("<mrow>{integral}{paren}</mrow>")) - alone - width(paren)).abs() < 1e-2
+    );
+    // while the italic correction of the `f` before it (90 units) is applied
+    let f = width("<mi>f</mi>");
+    assert!((width(&format!("<mrow><mi>f</mi>{integral}</mrow>")) - f - alone - 90.0).abs() < 1e-2);
+}

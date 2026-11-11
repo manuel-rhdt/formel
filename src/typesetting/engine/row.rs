@@ -97,13 +97,17 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 }
             }
             cursor += lspace;
-            // apply italic correction if the current box is upright
-            if child_box.metrics.italic_correction == 0.0 {
+            // MathML Core 3.3.1.2: a child is slanted if it is not an embellished operator and has
+            // an italic correction. The one before a slanted child is dropped, an operator is never
+            // slanted: the correction of a large operator (the integral sign has a big one) is
+            // for the scripts attached to it, not for what follows.
+            let is_operator = properties[i].is_some();
+            if is_operator || child_box.metrics.italic_correction == 0.0 {
                 cursor += previous_italic_correction;
             }
             child_box.origin.x = cursor;
             cursor += child_box.metrics.advance + rspace;
-            previous_italic_correction = if rspace == 0.0 {
+            previous_italic_correction = if rspace == 0.0 && !is_operator {
                 child_box.metrics.italic_correction
             } else {
                 0.0
@@ -243,10 +247,11 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         }
     }
 
-    /// The text to draw for an accent over a base. Fonts draw ASCII characters and arrows in
-    /// their normal position on the line, not as accents above a base, so `^`, `~` and the arrows
-    /// are replaced by their combining accents, which have the right shapes and the wide
-    /// variants for stretching. Characters the font doesn't have are kept.
+    /// The text to draw for an accent over a base. Fonts draw the spacing forms of accents (`^`,
+    /// `~`, `¯`, `´`, `˙`, ...) and the arrows in their normal position on the line, not as
+    /// accents above a base, so they are replaced by the combining accents. Those have the right
+    /// shapes, sit higher (in Latin Modern Math `\u{304}` is 20 units above `¯`, `\u{301}` 35 above
+    /// `´`), and have the wide variants for stretching. Characters the font doesn't have are kept.
     fn accent_text(
         &self,
         font: &ScaledFont<T::Font>,
@@ -256,8 +261,16 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
     ) -> String {
         let mut chars = text.chars();
         let replacement = match (chars.next(), chars.next()) {
-            (Some('^' | '\u{2C6}'), None) => '\u{302}', // circumflex
-            (Some('~' | '\u{2DC}'), None) => '\u{303}', // tilde
+            (Some('`'), None) => '\u{300}',                // grave
+            (Some('\u{B4}'), None) => '\u{301}',           // acute
+            (Some('^' | '\u{2C6}'), None) => '\u{302}',    // circumflex
+            (Some('~' | '\u{2DC}'), None) => '\u{303}',    // tilde
+            (Some('\u{AF}'), None) => '\u{304}',           // macron
+            (Some('\u{2D8}'), None) => '\u{306}',          // breve
+            (Some('\u{2D9}'), None) => '\u{307}',          // dot above
+            (Some('\u{A8}'), None) => '\u{308}',           // diaeresis
+            (Some('\u{2DA}'), None) => '\u{30A}',          // ring above
+            (Some('\u{2C7}'), None) => '\u{30C}',          // caron
             (Some('\u{2192}'), None) => '\u{20D7}',     // right arrow
             (Some('\u{2190}'), None) => '\u{20D6}',     // left arrow
             (Some('\u{2194}'), None) => '\u{20E1}',     // left right arrow
