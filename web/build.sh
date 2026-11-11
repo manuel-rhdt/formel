@@ -25,7 +25,7 @@ wasm-bindgen --target web --no-typescript --out-dir web/pkg \
 wasm=web/pkg/mathwasm_bg.wasm
 check "$wasm"
 if command -v wasm-opt >/dev/null 2>&1; then
-  wasm-opt -Oz --enable-nontrapping-float-to-int "$wasm" -o "$wasm.opt"
+  wasm-opt -Oz --enable-mutable-globals --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int --enable-multivalue --enable-reference-types --enable-extended-const "$wasm" -o "$wasm.opt"
   check "$wasm.opt"
   mv "$wasm.opt" "$wasm"
   check "$wasm"
