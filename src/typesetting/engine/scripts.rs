@@ -473,6 +473,19 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             shift = gap;
         }
 
+        // Accents are placed the way TeX and OpenType do it: the baseline of the accent is aligned
+        // with the baseline of the base, raised by how far the base is taller than
+        // AccentBaseHeight. The accent glyph is designed for that (its ink bottom is a little above
+        // AccentBaseHeight over its own baseline), and so provides the gap to the base.
+        //
+        // This deliberately deviates from MathML Core (3.4.2.4), which replaces that rule by a more
+        // general one that also works for arbitrary overscripts, not only for glyphs designed for
+        // baseline alignment: the bottom of the overscript must be at least AccentBaseHeight above
+        // the baseline of the base. The price is that browsers following it draw the accent with
+        // little or no gap above the base (https://github.com/w3c/mathml-core/issues/301), whereas
+        // Firefox keeps the TeX rule. We prefer the result of TeX, and expect an accent to be a glyph
+        // made for it (see `accent_text`, which maps spacing accents to their combining forms).
+        // The `accent-*` cases of `tests/tex_oracle.rs` check it against LuaTeX.
         let baseline_offset = if as_accent {
             if as_over {
                 let accent_base_height = constant(MathConstant::AccentBaseHeight);
