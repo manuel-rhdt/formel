@@ -18,6 +18,7 @@ fonts' own `name` tables.
 | `stixtwo-math.otf` | STIX Two Math | 2001-2021 The STIX Fonts Project Authors (https://github.com/stipub/stixfonts) | SIL Open Font License 1.1 |
 | `firamath-regular.otf` | Fira Math | 2018-2020 Xiangdong Zeng | SIL Open Font License 1.1 |
 | `notosans-math.ttf` | Noto Sans Math | 2022 Google LLC | SIL Open Font License 1.1 |
+| `lisnoti-regular.ttf` | Lisnoti | Derived from Noto Sans, Noto Sans Symbols and Noto Sans Math (The Noto Project Authors; Google LLC); modifications copyright 2024-2026 Tim Gordon, Reserved Font Name "Lisnoti" | SIL Open Font License 1.1 |
 
 - GUST Font License: [GUST-FONT-LICENSE.txt](GUST-FONT-LICENSE.txt)
   (the full text is at <https://tug.org/fonts/licenses/>)
