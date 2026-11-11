@@ -1,4 +1,4 @@
-//! WebAssembly bindings for `math-render`.
+//! WebAssembly bindings for `formel`.
 //!
 //! ```js
 //! import init, { MathRenderer } from "./pkg/mathwasm.js";
@@ -8,10 +8,10 @@
 //! container.innerHTML = renderer.render_svg("<math><mi>x</mi></math>");
 //! ```
 
-use math_render::mathmlparser;
-use math_render::shaper::Shaper;
-use math_render::standalone::StyleOptions;
-use math_render::svg_renderer;
+use formel::mathmlparser;
+use formel::shaper::Shaper;
+use formel::standalone::StyleOptions;
+use formel::svg_renderer;
 use wasm_bindgen::prelude::*;
 
 /// The result of [`MathRenderer::render`]: the SVG and where the baseline is in it.
@@ -77,7 +77,7 @@ impl MathRenderer {
 
     /// The font's design units per em. The SVG is sized in these units.
     pub fn units_per_em(&self) -> u32 {
-        use math_render::host::MathFont;
+        use formel::host::MathFont;
         self.shaper.units_per_em()
     }
 
@@ -103,7 +103,7 @@ impl MathRenderer {
 
 impl MathRenderer {
     fn render_inner(&self, mathml: &str, debug: bool) -> Result<Rendering, JsError> {
-        use math_render::host::MathFont;
+        use formel::host::MathFont;
 
         let document = mathmlparser::parse(mathml.as_bytes())
             .map_err(|e| JsError::new(&format!("could not parse MathML: {e}")))?;
@@ -116,9 +116,9 @@ impl MathRenderer {
         let units_per_em = self.shaper.units_per_em() as f32;
         let options = StyleOptions {
             font_size: units_per_em,
-            math_style: math_render::host::MathStyle::Compact,
+            math_style: formel::host::MathStyle::Compact,
         };
-        let typeset = math_render::layout(&document, &self.shaper, options);
+        let typeset = formel::layout(&document, &self.shaper, options);
         let flags = svg_renderer::Flags {
             show_logical_bounds: debug,
             ..Default::default()

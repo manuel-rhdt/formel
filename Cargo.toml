@@ -1,7 +1,13 @@
 [package]
-name = "math-render"
+name = "formel"
 version = "0.1.0"
 authors = ["Manuel Reinhardt <manuel.jr16@gmail.com>"]
+description = "Lay out mathematical formulas from MathML with a font's OpenType MATH table"
+license = "MIT"
+repository = "https://github.com/manuel-rhdt/formel"
+readme = "README.md"
+keywords = ["mathml", "typesetting", "math", "formula", "svg"]
+categories = ["text-processing", "graphics", "wasm"]
 build = "build.rs"
 edition = "2024"
 rust-version = "1.85"

@@ -4,11 +4,11 @@
 //! cargo run --example render_svg --features mathml_parser,svg -- tests/testfiles/frac.xml out.svg
 //! ```
 
-use math_render::host::MathFont;
-use math_render::mathmlparser;
-use math_render::shaper::Shaper;
-use math_render::standalone::StyleOptions;
-use math_render::svg_renderer::{self, Flags};
+use formel::host::MathFont;
+use formel::mathmlparser;
+use formel::shaper::Shaper;
+use formel::standalone::StyleOptions;
+use formel::svg_renderer::{self, Flags};
 
 const FONT: &[u8] = include_bytes!("../tests/testfiles/latinmodern-math.otf");
 
@@ -29,7 +29,7 @@ fn main() {
         font_size: units_per_em,
         ..Default::default()
     };
-    let typeset = math_render::layout(&document, &font, options);
+    let typeset = formel::layout(&document, &font, options);
 
     svg_renderer::render(
         &document,

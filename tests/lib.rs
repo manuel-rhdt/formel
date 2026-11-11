@@ -1,8 +1,8 @@
 #![cfg(feature = "mathml_parser")]
 
-use math_render::host::{Fragment, MathElement, MathFont, NodeLayout, Rect};
-use math_render::mathmlparser;
-use math_render::standalone::{MathDocument, StyleOptions};
+use formel::host::{Fragment, MathElement, MathFont, NodeLayout, Rect};
+use formel::mathmlparser;
+use formel::standalone::{MathDocument, StyleOptions};
 
 mod util;
 use crate::util::TEST_FONT;
@@ -15,7 +15,7 @@ fn layout_xml(xml: &str, f: impl FnOnce(&MathDocument, &dyn Fn(usize) -> NodeLay
             font_size: font.units_per_em() as f32,
             ..Default::default()
         };
-        let result = math_render::layout(&doc, font, options);
+        let result = formel::layout(&doc, font, options);
         f(&doc, &|id| result.layouts[&id].clone());
     })
 }
