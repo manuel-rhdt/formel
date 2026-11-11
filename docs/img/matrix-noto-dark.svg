@@ -1,45 +1,46 @@
-<svg viewBox="-10 -10 21901.844 4761" xmlns="http://www.w3.org/2000/svg">
+<svg role="img" viewBox="-10 -10 21846.29 4761" xmlns="http://www.w3.org/2000/svg">
+<title>capital A equals the 3 by 3 matrix; row 1: a sub 11, dot dot dot, a sub 1 n, end sub; row 2: vertical dots, diagonal dots, vertical dots; row 3: a sub m 1, end sub, dot dot dot, a sub m n, end sub; end matrix comma the absolute value of x equals 2 cases; case 1: x, if x is greater than or equal to 0; case 2: negative x, if x is less than 0; end cases</title>
 <g fill="#e6edf3" stroke="none">
-<g transform="translate(20908.844, 3649.5) scale(1.0, -1.0)">
+<g transform="translate(20853.29, 3649.5) scale(1.0, -1.0)">
 <path d="M285 -10 Q164 -10 106.5 87.5 Q49 185 49 358 Q49 474 72.5 556 Q96 638 148 681.5 Q200 725 285 725 Q405 725 464 628.5 Q523 532 523 358 Q523 243 499 160.5 Q475 78 423 34 Q371 -10 285 -10 Z M285 65 Q365 65 399.5 137.5 Q434 210 434 358 Q434 504 399.5 577 Q365 650 285 650 Q204 650 170.5 577 Q137 504 137 358 Q137 211 170.5 138 Q204 65 285 65 Z"/>
 </g>
-<g transform="translate(20059.066, 3649.5) scale(1.0, -1.0)">
+<g transform="translate(20003.51, 3649.5) scale(1.0, -1.0)">
 <path d="M521 42 L50 249 L50 299 L521 534 L521 456 L144 278 L521 120 L521 42 Z"/>
 </g>
-<g transform="translate(19214.29, 3649.5) scale(1.0, -1.0)">
+<g transform="translate(19158.732, 3649.5) scale(1.0, -1.0)">
 <path d="M0 0 L232 276 L116 536 L205 536 L288 338 L445 536 L547 536 L324 272 L447 0 L358 0 L267 208 L102 0 L0 0 Z"/>
 </g>
-<g transform="translate(18352.29, 3649.5) scale(1.0, -1.0)">
+<g transform="translate(18296.732, 3649.5) scale(1.0, -1.0)">
 <path d="M85 0 L85 536 L173 536 L173 0 L85 0 Z M130 625 Q108 625 93 639 Q78 653 78 681 Q78 710 93 723.5 Q108 737 130 737 Q150 737 165.5 723.5 Q181 710 181 681 Q181 653 165.5 639 Q150 625 130 625 Z"/>
 </g>
-<g transform="translate(18610.29, 3649.5) scale(1.0, -1.0)">
+<g transform="translate(18554.732, 3649.5) scale(1.0, -1.0)">
 <path d="M109 0 L109 468 L15 468 L15 509 L109 539 L109 570 Q109 674 155 719.5 Q201 765 283 765 Q315 765 341.5 759.5 Q368 754 387 747 L364 678 Q348 683 327 688 Q306 693 284 693 Q240 693 218.5 663.5 Q197 634 197 571 L197 536 L332 536 L332 468 L197 468 L197 0 L109 0 Z"/>
 </g>
-<g transform="translate(18954.29, 3649.5) scale(1.0, -1.0)">
+<g transform="translate(18898.732, 3649.5) scale(1.0, -1.0)">
 <path d=""/>
 </g>
-<g transform="translate(16232.288, 3649.5) scale(1.0, -1.0)">
+<g transform="translate(16176.732, 3649.5) scale(1.0, -1.0)">
 <path d="M0 0 L232 276 L116 536 L205 536 L288 338 L445 536 L547 536 L324 272 L447 0 L358 0 L267 208 L102 0 L0 0 Z"/>
 </g>
 <g transform="translate(15604.732, 3649.5) scale(1.0, -1.0)">
 <path d="M51 242 L51 313 L521 313 L521 242 L51 242 Z"/>
 </g>
-<g transform="translate(20909.844, 1846.5) scale(1.0, -1.0)">
+<g transform="translate(20854.29, 1846.5) scale(1.0, -1.0)">
 <path d="M285 -10 Q164 -10 106.5 87.5 Q49 185 49 358 Q49 474 72.5 556 Q96 638 148 681.5 Q200 725 285 725 Q405 725 464 628.5 Q523 532 523 358 Q523 243 499 160.5 Q475 78 423 34 Q371 -10 285 -10 Z M285 65 Q365 65 399.5 137.5 Q434 210 434 358 Q434 504 399.5 577 Q365 650 285 650 Q204 650 170.5 577 Q137 504 137 358 Q137 211 170.5 138 Q204 65 285 65 Z"/>
 </g>
-<g transform="translate(20059.066, 1846.5) scale(1.0, -1.0)">
+<g transform="translate(20003.51, 1846.5) scale(1.0, -1.0)">
 <path d="M51 -38 L51 33 L521 33 L521 -38 L51 -38 Z M51 81 L51 159 L428 317 L51 495 L51 573 L522 338 L522 288 L51 81 Z"/>
 </g>
-<g transform="translate(19214.29, 1846.5) scale(1.0, -1.0)">
+<g transform="translate(19158.732, 1846.5) scale(1.0, -1.0)">
 <path d="M0 0 L232 276 L116 536 L205 536 L288 338 L445 536 L547 536 L324 272 L447 0 L358 0 L267 208 L102 0 L0 0 Z"/>
 </g>
-<g transform="translate(18352.29, 1846.5) scale(1.0, -1.0)">
+<g transform="translate(18296.732, 1846.5) scale(1.0, -1.0)">
 <path d="M85 0 L85 536 L173 536 L173 0 L85 0 Z M130 625 Q108 625 93 639 Q78 653 78 681 Q78 710 93 723.5 Q108 737 130 737 Q150 737 165.5 723.5 Q181 710 181 681 Q181 653 165.5 639 Q150 625 130 625 Z"/>
 </g>
-<g transform="translate(18610.29, 1846.5) scale(1.0, -1.0)">
+<g transform="translate(18554.732, 1846.5) scale(1.0, -1.0)">
 <path d="M109 0 L109 468 L15 468 L15 509 L109 539 L109 570 Q109 674 155 719.5 Q201 765 283 765 Q315 765 341.5 759.5 Q368 754 387 747 L364 678 Q348 683 327 688 Q306 693 284 693 Q240 693 218.5 663.5 Q197 634 197 571 L197 536 L332 536 L332 468 L197 468 L197 0 L109 0 Z"/>
 </g>
-<g transform="translate(18954.29, 1846.5) scale(1.0, -1.0)">
+<g transform="translate(18898.732, 1846.5) scale(1.0, -1.0)">
 <path d=""/>
 </g>
 <g transform="translate(15604.732, 1846.5) scale(1.0, -1.0)">

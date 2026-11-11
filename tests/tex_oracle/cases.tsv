@@ -1,6 +1,7 @@
 # name <TAB> mode (d = display, t = text) <TAB> LaTeX
 # Corner cases where the MathML/OpenType rules leave room for interpretation, so a second opinion helps.
-# Regenerate golden.tsv with: python3 formel-wasm/tests/tex_oracle/generate.py
+# The LaTeX is only what TeX measures (golden.tsv, from generate.py); formel lays out the MathML of the
+# case in mathml.tsv, which needs a row of its own for every case here.
 frac-display	d	\frac{a}{b}
 frac-text	t	\frac{a}{b}
 frac-in-superscript	t	x^{\frac{a}{b}}
@@ -60,7 +61,9 @@ space-cdot	t	a\cdot b
 space-ellipsis	t	a,\ldots,b
 binom	d	\binom{n}{k}
 binom-text	t	\binom{n}{k}
+matrix-bare	d	\begin{matrix}a&b\\c&d\end{matrix}
 matrix-2x2	d	\begin{pmatrix}a&b\\c&d\end{pmatrix}
+cases-bare	d	\def\arraystretch{1.2}\begin{array}{@{}l@{\quad}l@{}}1&x>0\\0&x\le 0\end{array}
 cases	d	f(x)=\begin{cases}1&x>0\\0&x\le 0\end{cases}
 italic-corr-italic-then-italic	t	fx
 italic-corr-italic-then-paren	t	f(x)
@@ -160,7 +163,6 @@ fence-vert-small	t	\vert x\vert
 fence-angle-small	t	\langle x\rangle
 fence-brace-small	t	\{x\}
 fence-floor-small	t	\lfloor x\rfloor
-arrow-xrightarrow	t	a\xrightarrow{abc}b
 arrow-overrightarrow	t	\overrightarrow{abc}
 arrow-overleftarrow	t	\overleftarrow{abc}
 arrow-longrightarrow	t	a\longrightarrow b

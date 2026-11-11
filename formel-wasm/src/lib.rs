@@ -595,7 +595,7 @@ fn convert_latex_raw(latex: &str, display: bool) -> Result<LatexResult, String> 
         .map(|result| result.mathml))
 }
 
-/// math-core targets browsers implementing MathML Core. Two details differ from what this
+/// math-core targets browsers implementing MathML Core. Three details differ from what this
 /// renderer expects:
 ///
 /// - `\overline` is an accent over the base written with U+0332 COMBINING LOW LINE. That glyph
@@ -603,13 +603,97 @@ fn convert_latex_raw(latex: &str, display: bool) -> Result<LatexResult, String> 
 ///   COMBINING OVERLINE for accents over a base.
 /// - MathML Core tables have no spacing between rows and columns other than the cell padding,
 ///   whereas the MathML 3 defaults used here add 0.8em and 0.5ex on top of it.
+/// - After `\sin`, `\lim` and the like it writes the thin space as `lspace="0.1667em"` on the
+///   invisible function application operator U+2061, which browsers need. This renderer already
+///   puts a thin space after that operator (except before an opening fence, as TeX does), so the
+///   attribute would add the space twice.
+/// - TeX adds the italic correction of a letter before the next letter (`b` and `c` in `abc`).
+///   MathML Core adds it before the next child of a row only if that child is not slanted, so
+///   between two slanted letters there is none. [`separate_letters`] puts an empty `<mspace/>`
+///   between them: it is not slanted, so it receives the correction, and it takes no room itself.
 fn adapt_for_this_renderer(mathml: String) -> String {
-    mathml
+    separate_letters(&mathml)
+        .replace(
+            "<mo lspace=\"0.1667em\">&ApplyFunction;</mo>",
+            "<mo>&ApplyFunction;</mo>",
+        )
         .replace("\u{332}</mo></mover>", "\u{305}</mo></mover>")
         .replace(
             "<mtable",
             "<mtable columnspacing=\"0em\" rowspacing=\"0em\"",
         )
+}
+
+/// Puts `<mspace/>` between two neighbouring single-character `<mi>`s of a row, as in `abc`, so
+/// that the first one's italic correction is applied (see [`adapt_for_this_renderer`]).
+///
+/// Only children of elements that lay out their children as a row are separated: in
+/// `<msub><mi>x</mi><mi>i</mi></msub>` or `<munderover>` the two letters are the arguments of the
+/// element, and a third child would break it. Only the bare `<mi>x</mi>` form is matched: letters
+/// with attributes (`mathvariant="normal"`) are upright, and so are words like `<mi>sin</mi>`.
+/// Whether a letter has a correction is up to the font; where it has none, the marker changes
+/// nothing.
+fn separate_letters(mathml: &str) -> String {
+    /// Elements that lay all their children out in a row (`<msqrt>` and the rest by inferred
+    /// `<mrow>`).
+    const ROWS: [&str; 9] = [
+        "math", "mrow", "mstyle", "msqrt", "mtd", "mpadded", "mphantom", "menclose", "merror",
+    ];
+    /// The length of the `<mi>x</mi>` at the start of `markup`, for one character `x` that is
+    /// not markup or an entity.
+    fn bare_letter(markup: &str) -> Option<usize> {
+        let letter = markup.strip_prefix("<mi>")?.chars().next()?;
+        let end = "<mi>".len() + letter.len_utf8();
+        (!matches!(letter, '<' | '>' | '&') && markup[end..].starts_with("</mi>"))
+            .then_some(end + "</mi>".len())
+    }
+
+    let mut out = String::with_capacity(mathml.len() + 32);
+    // the open elements, each with whether its latest child is a bare letter
+    let mut open: Vec<(&str, bool)> = vec![("", false)];
+    let mut rest = mathml;
+    while !rest.is_empty() {
+        let Some(tag_start) = rest.find('<') else {
+            out.push_str(rest);
+            break;
+        };
+        if tag_start > 0 {
+            // text between tags: not a letter element
+            out.push_str(&rest[..tag_start]);
+            open.last_mut().expect("root").1 = false;
+            rest = &rest[tag_start..];
+        }
+        if let Some(len) = bare_letter(rest) {
+            let (parent, after_letter) = open.last_mut().expect("root");
+            if *after_letter && ROWS.contains(parent) {
+                out.push_str("<mspace/>");
+            }
+            *after_letter = true;
+            out.push_str(&rest[..len]);
+            rest = &rest[len..];
+            continue;
+        }
+        let Some(tag_end) = rest.find('>') else {
+            out.push_str(rest);
+            break;
+        };
+        let tag = &rest[..=tag_end];
+        if tag.starts_with("</") {
+            if open.len() > 1 {
+                open.pop();
+            }
+            open.last_mut().expect("root").1 = false;
+        } else {
+            open.last_mut().expect("root").1 = false;
+            if !tag.ends_with("/>") && !tag.starts_with("<!") && !tag.starts_with("<?") {
+                let name = tag[1..].split(|c: char| c.is_whitespace() || c == '>').next();
+                open.push((name.unwrap_or(""), false));
+            }
+        }
+        out.push_str(tag);
+        rest = &rest[tag_end + 1..];
+    }
+    out
 }
 
 #[cfg(test)]
@@ -634,6 +718,42 @@ mod latex_tests {
             .map(|n| n.parse().unwrap())
             .collect();
         numbers[2]
+    }
+
+    #[test]
+    fn neighbouring_letters_are_separated_for_their_italic_correction() {
+        assert_eq!(
+            separate_letters("<math><mi>a</mi><mi>b</mi><mi>c</mi></math>"),
+            "<math><mi>a</mi><mspace/><mi>b</mi><mspace/><mi>c</mi></math>"
+        );
+        // Greek and other multi-byte letters count as one, and so do rows of other elements
+        assert_eq!(
+            separate_letters("<msqrt><mi>f</mi><mi>α</mi></msqrt>"),
+            "<msqrt><mi>f</mi><mspace/><mi>α</mi></msqrt>"
+        );
+        assert_eq!(
+            separate_letters("<mrow><mi>a</mi><mi>b</mi><mo>+</mo><mi>c</mi><mi>d</mi></mrow>"),
+            "<mrow><mi>a</mi><mspace/><mi>b</mi><mo>+</mo><mi>c</mi><mspace/><mi>d</mi></mrow>"
+        );
+        // not where the letters are arguments of an element rather than a row
+        for unchanged in [
+            "<msub><mi>x</mi><mi>i</mi></msub>",
+            "<msubsup><mi>x</mi><mi>i</mi><mi>j</mi></msubsup>",
+            "<mfrac><mi>a</mi><mi>b</mi></mfrac>",
+            "<munderover><mo>∑</mo><mi>a</mi><mi>b</mi></munderover>",
+            "<mroot><mi>x</mi><mi>n</mi></mroot>",
+            // not between a letter and anything else, or around words and upright letters
+            "<mrow><mi>f</mi><mn>2</mn></mrow>",
+            "<mrow><mi>f</mi><mo>+</mo><mi>x</mi></mrow>",
+            "<mrow><mi>f</mi><mrow><mi>x</mi></mrow></mrow>",
+            "<mrow><mi>sin</mi><mi>x</mi></mrow>",
+            "<mrow><mi>x</mi><mi>sin</mi></mrow>",
+            "<mrow><mi mathvariant=\"normal\">n</mi><mi>x</mi></mrow>",
+            "<mrow><mi>x</mi><mi mathvariant=\"normal\">n</mi></mrow>",
+            "<mrow><mi>&amp;</mi><mi>x</mi></mrow>",
+        ] {
+            assert_eq!(separate_letters(unchanged), unchanged);
+        }
     }
 
     #[test]
