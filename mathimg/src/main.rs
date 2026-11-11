@@ -9,11 +9,11 @@ use std::path::{Path, PathBuf};
 
 
 
-use math_render::mathmlparser;
-use math_render::svg_renderer;
-use math_render::host::MathFont;
-use math_render::shaper::Shaper;
-use math_render::standalone::StyleOptions;
+use formel::mathmlparser;
+use formel::svg_renderer;
+use formel::host::MathFont;
+use formel::shaper::Shaper;
+use formel::standalone::StyleOptions;
 
 use fontconfig::{list_fonts, Pattern};
 
@@ -186,7 +186,7 @@ fn main() {
         font_size: units_per_em,
         ..Default::default()
     };
-    let typeset = math_render::layout(document, &shaper, options);
+    let typeset = formel::layout(document, &shaper, options);
     match args.flag_output_format {
         Some(Format::Svg) => {
             let flags = svg_renderer::Flags {

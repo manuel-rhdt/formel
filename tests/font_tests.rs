@@ -1,7 +1,7 @@
 
 mod util;
 
-use math_render::host::MathConstant;
+use formel::host::MathConstant;
 use crate::util::TEST_FONT;
 
 #[test]

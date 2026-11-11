@@ -6,7 +6,7 @@ edition = "2024"
 rust-version = "1.85"
 
 [dependencies]
-math-render = { path = "..", version = "0.1.0", features = ["mathml_parser", "svg"] }
+formel = { path = "..", version = "0.1.0", features = ["mathml_parser", "svg"] }
 docopt = "1.1"
 serde = { version = "1", features = ["derive"] }
 rustybuzz = "0.20"

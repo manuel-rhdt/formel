@@ -1,4 +1,4 @@
-use math_render::shaper::Shaper;
+use formel::shaper::Shaper;
 
 pub fn get_bytes() -> &'static [u8] {
     include_bytes!("testfiles/latinmodern-math.otf")

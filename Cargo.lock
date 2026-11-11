@@ -168,7 +168,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "math-render"
+name = "formel"
 version = "0.1.0"
 dependencies = [
  "bitflags",
@@ -186,7 +186,7 @@ dependencies = [
  "docopt",
  "fontconfig",
  "fontconfig-sys",
- "math-render",
+ "formel",
  "rustybuzz",
  "serde",
 ]
@@ -196,7 +196,7 @@ name = "mathwasm"
 version = "0.1.0"
 dependencies = [
  "math-core",
- "math-render",
+ "formel",
  "wasm-bindgen",
 ]
 

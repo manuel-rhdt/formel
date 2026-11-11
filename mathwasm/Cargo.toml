@@ -10,6 +10,6 @@ description = "WebAssembly bindings: render MathML to SVG in the browser"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-math-render = { path = "..", version = "0.1.0", features = ["mathml_parser", "svg"] }
+formel = { path = "..", version = "0.1.0", features = ["mathml_parser", "svg"] }
 wasm-bindgen = "=0.2.100"
 math-core = "0.9"

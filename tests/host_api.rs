@@ -5,11 +5,11 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 
-use math_render::host::{
+use formel::host::{
     Edges, Fragment, MathComputedStyle, MathElement, MathLayoutHost, MathShift, MathStyle,
     MathTree, NodeKind, NodeLayout, Rect, axis_height, layout_math,
 };
-use math_render::shaper::Shaper;
+use formel::shaper::Shaper;
 
 mod util;
 
@@ -534,8 +534,8 @@ impl Radical {
     fn rect(&self, node: Id) -> Rect {
         self.doc.absolute_rect(self.root, node)
     }
-    fn constant(&self, c: math_render::host::MathConstant) -> f32 {
-        use math_render::host::MathFont;
+    fn constant(&self, c: formel::host::MathConstant) -> f32 {
+        use formel::host::MathFont;
         let scale = 20.0 / self.doc.font.units_per_em() as f32;
         self.doc.font.math_constant(c) as f32 * scale
     }
@@ -543,7 +543,7 @@ impl Radical {
 
 #[test]
 fn radical_kern_before_degree() {
-    use math_render::host::MathConstant::RadicalKernBeforeDegree;
+    use formel::host::MathConstant::RadicalKernBeforeDegree;
     let r = radical("1em", "3em", "1em");
     assert_close(
         r.rect(r.index).origin.x - r.rect(r.radical).origin.x,
@@ -564,7 +564,7 @@ fn radical_kern_after_degree() {
 
 #[test]
 fn radical_degree_bottom_raise_percent() {
-    use math_render::host::MathConstant::RadicalDegreeBottomRaisePercent;
+    use formel::host::MathConstant::RadicalDegreeBottomRaisePercent;
     let mut r = radical("10em", "3em", "1em");
     // The bottom edge of the index, not its baseline, is raised: give it a depth.
     r.doc.set_attr(r.index, "depth", "0.5em");
