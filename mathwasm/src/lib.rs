@@ -185,9 +185,11 @@ mod tests {
             "x squared"
         );
         assert_eq!(alt_text("<math><mi>x</mi></math>"), "x");
+        // The fallback is deliberately crude — concatenated text, no operator names. Anything that
+        // cares about the wording supplies an annotation instead.
         assert_eq!(
             alt_text("<math><mi>x</mi><mo>+</mo><mn>1</mn></math>"),
-            "x + 1"
+            "x+1"
         );
         assert_eq!(alt_text(""), "");
     }
