@@ -75,14 +75,20 @@ export function styleSvg(rawSvg, { fg = DEFAULTS.fg, bg = null, alt = "", mathml
   const open = svg.match(/^<svg\s([^>]*)>/);
   if (!open) return svg;
 
+  // The renderer writes its own `<title>` when it was given an accessible name. Keep that one: a
+  // second title would override it, and its ids are per document while the caller's are per call.
+  const titled = /<title[\s>]/.test(svg);
+
   const id = `m${++svgIdCounter}`;
   let extra = "";
-  if (label) extra += `<title id="${id}t">${label}</title>`;
+  if (label && !titled) extra += `<title id="${id}t">${label}</title>`;
   let labelled = "";
   if (mathml) {
     extra += `<desc id="${id}d">Vector rendering of a formula. The MathML it was typeset from is in the metadata element.</desc>`;
     extra += `<metadata>${mathmlForXml(mathml).replace(/^<math\b/, '<math xmlns="http://www.w3.org/1998/Math/MathML"')}</metadata>`;
-    labelled = ` aria-labelledby="${id}t" aria-describedby="${id}d"`;
+    labelled = titled
+      ? ` aria-describedby="${id}d"`
+      : ` aria-labelledby="${id}t" aria-describedby="${id}d"`;
   }
   if (bg) {
     const box = open[1].match(/viewBox="([^"]+)"/);
@@ -91,7 +97,11 @@ export function styleSvg(rawSvg, { fg = DEFAULTS.fg, bg = null, alt = "", mathml
       extra += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${bg}"/>`;
     }
   }
-  const attrs = label ? `${open[1]} role="img" aria-label="${label}"${labelled}` : open[1];
+  const attrs = label && !titled
+    ? `${open[1]} role="img" aria-label="${label}"${labelled}`
+    : labelled
+      ? `${open[1]}${labelled}`
+      : open[1];
   return `<svg ${attrs}>${extra}${svg.slice(open[0].length)}`;
 }
 

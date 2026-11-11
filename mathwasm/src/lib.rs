@@ -22,6 +22,7 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub struct Rendering {
     svg: String,
+    alt: String,
     width: f32,
     height: f32,
     baseline: f32,
@@ -33,6 +34,13 @@ impl Rendering {
     #[wasm_bindgen(getter)]
     pub fn svg(&self) -> String {
         self.svg.clone()
+    }
+
+    /// The formula's accessible name: the author's own text when the MathML carries one, otherwise
+    /// its text content. Empty when the expression has no text at all.
+    #[wasm_bindgen(getter)]
+    pub fn alt(&self) -> String {
+        self.alt.clone()
     }
 
     /// Width of the SVG's `viewBox`.
@@ -126,15 +134,18 @@ impl MathRenderer {
         let root = document.root().expect("checked above");
         let root_layout = &typeset.layouts[&root];
         let margin = svg_renderer::MARGIN;
-        let svg = svg_renderer::render_to_string(
+        let alt = alt_text(mathml);
+        let svg = svg_renderer::render_to_string_with(
             &document,
             &typeset.layouts,
             self.shaper.face(),
             units_per_em,
             flags,
+            svg_renderer::A11y { title: &alt },
         );
         Ok(Rendering {
             svg,
+            alt,
             width: root_layout.size.width + 2.0 * margin,
             height: root_layout.size.height + 2.0 * margin,
             baseline: root_layout.baseline + margin,
@@ -159,6 +170,85 @@ mod tests {
         assert!(svg.starts_with("<svg"), "{svg}");
         assert!(svg.contains("<path"), "glyph outlines expected");
         assert!(svg.contains("<rect"), "fraction rule expected");
+    }
+
+    #[test]
+    fn alt_text_prefers_the_author() {
+        assert_eq!(
+            alt_text(r#"<math alttext="x squared"><msup><mi>x</mi><mn>2</mn></msup></math>"#),
+            "x squared"
+        );
+        assert_eq!(
+            alt_text(
+                r#"<math><semantics><msup><mi>x</mi><mn>2</mn></msup><annotation encoding="text/plain">x squared</annotation></semantics></math>"#
+            ),
+            "x squared"
+        );
+        assert_eq!(alt_text("<math><mi>x</mi></math>"), "x");
+        // Character references are decoded, so the name reads "x−1" and not "x&#x2212;1".
+        assert_eq!(
+            alt_text("<math><mi>x</mi><mo>&#x2212;</mo><mn>1</mn></math>"),
+            "x\u{2212}1"
+        );
+        // The fallback is deliberately crude — concatenated text, no operator names. Anything that
+        // cares about the wording supplies an annotation instead.
+        assert_eq!(
+            alt_text("<math><mi>x</mi><mo>+</mo><mn>1</mn></math>"),
+            "x+1"
+        );
+        assert_eq!(alt_text(""), "");
+    }
+
+    #[test]
+    fn rendering_carries_an_accessible_name() {
+        let out = renderer()
+            .render(
+                r#"<math alttext="x over two"><mfrac><mi>x</mi><mn>2</mn></mfrac></math>"#,
+                false,
+            )
+            .unwrap_or_else(|_| panic!("render failed"));
+        assert_eq!(out.alt(), "x over two");
+        let svg = out.svg();
+        assert!(svg.contains(r#"role="img""#), "{svg}");
+        assert!(svg.contains("<title>x over two</title>"), "{svg}");
+    }
+
+    /// The guard P0 asked for: whatever the input, a rendered SVG carries a name and declares itself
+    /// an image. Runs over every demo equation, so a regression in the fallback shows up in CI
+    /// rather than in a screen reader.
+    #[test]
+    fn every_demo_equation_renders_an_accessible_svg() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/equations");
+        let r = renderer();
+        let mut paths: Vec<_> = std::fs::read_dir(dir)
+            .unwrap_or_else(|e| panic!("demo equations must be readable: {e}"))
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("xml"))
+            .collect();
+        paths.sort();
+        assert!(!paths.is_empty(), "expected demo equations");
+        for path in paths {
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            let mathml = std::fs::read_to_string(&path).unwrap();
+            let out = r
+                .render(&mathml, false)
+                .unwrap_or_else(|_| panic!("{name}: render failed"));
+            assert!(
+                !out.alt().trim().is_empty(),
+                "{name}: the accessible name is empty"
+            );
+            let svg = out.svg();
+            assert!(svg.contains(r#"role="img""#), "{name}: no role: {svg}");
+            let title = svg
+                .find("<title>")
+                .unwrap_or_else(|| panic!("{name}: no <title>"));
+            // The title has to come before the drawing: some readers take the first child only.
+            assert_eq!(
+                svg[..title].matches('<').count(),
+                1,
+                "{name}: <title> is not the SVG's first child"
+            );
+        }
     }
 
     #[test]
@@ -265,6 +355,145 @@ pub fn latex_error_range(latex: &str, display: bool) -> Option<Vec<u32>> {
         latex[..byte].encode_utf16().count() as u32
     };
     Some(vec![utf16(error.0.start), utf16(error.0.end)])
+}
+
+/// The accessible name for a formula.
+///
+/// The author's own text wins: an `<annotation encoding="text/plain">` inside `<semantics>`, or an
+/// `alttext` attribute on `<math>` — MathML defines both for exactly this. Failing that, the text
+/// content of the expression is used, which is at least what a screen reader would read out of the
+/// markup. This runs on the raw string, before parsing, so a document that fails to parse still gets
+/// a name.
+pub fn alt_text(mathml: &str) -> String {
+    annotation_text(mathml)
+        .or_else(|| attribute_value(mathml, "alttext"))
+        .unwrap_or_else(|| text_content(mathml))
+}
+
+/// The body of the first `<annotation>` whose encoding is `text/plain`.
+fn annotation_text(mathml: &str) -> Option<String> {
+    let mut rest = mathml;
+    while let Some(start) = rest.find("<annotation") {
+        let after = &rest[start + "<annotation".len()..];
+        let tag_end = after.find('>')?;
+        let tag = &after[..tag_end];
+        let body = &after[tag_end + 1..];
+        let text_end = body.find("</annotation")?;
+        rest = &body[text_end..];
+        if tag.to_ascii_lowercase().contains("text/plain") {
+            let text = collapse(&decode_entities(&body[..text_end]));
+            if !text.is_empty() {
+                return Some(text);
+            }
+        }
+    }
+    None
+}
+
+/// The value of an attribute on the root `<math>` element.
+fn attribute_value(mathml: &str, name: &str) -> Option<String> {
+    let start = mathml.find("<math")?;
+    let tag = &mathml[start..];
+    let tag = &tag[..tag.find('>')?];
+    for quote in ['"', '\''] {
+        let needle = format!("{name}={quote}");
+        if let Some(i) = tag.find(&needle) {
+            let rest = &tag[i + needle.len()..];
+            if let Some(j) = rest.find(quote) {
+                let text = collapse(&decode_entities(&rest[..j]));
+                if !text.is_empty() {
+                    return Some(text);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Everything that is text rather than markup, with whitespace collapsed.
+fn text_content(mathml: &str) -> String {
+    let mut out = String::new();
+    let mut rest = mathml;
+    loop {
+        match rest.find('<') {
+            Some(i) => {
+                out.push_str(&rest[..i]);
+                rest = &rest[i..];
+                if rest.starts_with("<!--") {
+                    match rest.find("-->") {
+                        Some(k) => {
+                            rest = &rest[k + 3..];
+                            continue;
+                        }
+                        None => break,
+                    }
+                }
+                match rest.find('>') {
+                    Some(k) => rest = &rest[k + 1..],
+                    None => break,
+                }
+            }
+            None => {
+                out.push_str(rest);
+                break;
+            }
+        }
+    }
+    collapse(&decode_entities(&out))
+}
+
+/// Decodes the character references that carry meaning in a name. Unknown named entities are left
+/// as written rather than dropped, so a name that says `&minus;` is visibly wrong instead of silently
+/// shorter than the markup.
+fn decode_entities(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find('&') {
+        out.push_str(&rest[..i]);
+        let tail = &rest[i..];
+        // A reference is short; `;` further away than this is ordinary text.
+        let decoded = tail
+            .find(';')
+            .filter(|end| *end <= 10)
+            .and_then(|end| decode_reference(&tail[1..end]).map(|c| (c, end + 1)));
+        match decoded {
+            Some((character, len)) => {
+                out.push(character);
+                rest = &tail[len..];
+            }
+            None => {
+                out.push('&');
+                rest = &tail[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// One character reference body: `#8722`, `#x2212` or a name.
+fn decode_reference(body: &str) -> Option<char> {
+    if let Some(number) = body.strip_prefix('#') {
+        let code = match number.strip_prefix('x').or_else(|| number.strip_prefix('X')) {
+            Some(hexadecimal) => u32::from_str_radix(hexadecimal, 16).ok()?,
+            None => number.parse::<u32>().ok()?,
+        };
+        return char::from_u32(code);
+    }
+    Some(match body {
+        "lt" => '<',
+        "gt" => '>',
+        "quot" => '"',
+        "apos" => '\'',
+        "nbsp" => ' ',
+        "amp" => '&',
+        _ => return None,
+    })
+}
+
+/// One line, single spaces.
+fn collapse(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 type LatexResult = Result<String, Box<math_core::LatexError>>;

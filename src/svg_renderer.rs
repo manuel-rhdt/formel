@@ -4,7 +4,7 @@ use std::path::Path as FsPath;
 use crate::host::{Fragment, NodeLayout, Point};
 use crate::standalone::{MathDocument, NodeId};
 
-use ::svg::node::element::{Group, Line, Path, Rectangle};
+use ::svg::node::element::{Group, Line, Path, Rectangle, Title};
 use ::svg::node::Node;
 use ::svg::Document;
 
@@ -24,6 +24,18 @@ pub struct Flags {
     pub show_logical_bounds: bool,
 }
 
+/// What makes the SVG self-describing. An empty `title` writes nothing, so a plain render stays
+/// exactly as it was.
+///
+/// `title` becomes the SVG's `<title>`, which is the accessible name an assistive technology reads
+/// for the image, and turns on `role="img"`. No `id` and no `aria-labelledby` are written: several
+/// SVGs are often inlined into one document, and duplicated ids would break that.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct A11y<'a> {
+    /// The accessible name, e.g. "x equals minus b plus or minus the square root of b squared".
+    pub title: &'a str,
+}
+
 /// Renders a laid-out document to an SVG file. See [`render_to_string`].
 pub fn render<T: AsRef<FsPath>>(
     document: &MathDocument,
@@ -33,7 +45,28 @@ pub fn render<T: AsRef<FsPath>>(
     flags: Flags,
     out_path: T,
 ) {
-    let svg_document = build_document(document, layouts, font, units_per_em, flags);
+    render_with(
+        document,
+        layouts,
+        font,
+        units_per_em,
+        flags,
+        A11y::default(),
+        out_path,
+    )
+}
+
+/// [`render`], with an accessible name written into the SVG.
+pub fn render_with<T: AsRef<FsPath>>(
+    document: &MathDocument,
+    layouts: &HashMap<NodeId, NodeLayout>,
+    font: &Face<'_>,
+    units_per_em: f32,
+    flags: Flags,
+    a11y: A11y<'_>,
+    out_path: T,
+) {
+    let svg_document = build_document(document, layouts, font, units_per_em, flags, a11y);
     ::svg::save(out_path, &svg_document).unwrap();
 }
 
@@ -46,7 +79,26 @@ pub fn render_to_string(
     units_per_em: f32,
     flags: Flags,
 ) -> String {
-    build_document(document, layouts, font, units_per_em, flags).to_string()
+    render_to_string_with(
+        document,
+        layouts,
+        font,
+        units_per_em,
+        flags,
+        A11y::default(),
+    )
+}
+
+/// [`render_to_string`], with an accessible name written into the SVG.
+pub fn render_to_string_with(
+    document: &MathDocument,
+    layouts: &HashMap<NodeId, NodeLayout>,
+    font: &Face<'_>,
+    units_per_em: f32,
+    flags: Flags,
+    a11y: A11y<'_>,
+) -> String {
+    build_document(document, layouts, font, units_per_em, flags, a11y).to_string()
 }
 
 fn build_document(
@@ -55,6 +107,7 @@ fn build_document(
     font: &Face<'_>,
     units_per_em: f32,
     flags: Flags,
+    a11y: A11y<'_>,
 ) -> Document {
     let root = document.root().expect("document has a root");
     let root_layout = &layouts[&root];
@@ -69,6 +122,12 @@ fn build_document(
             root_layout.size.height + 2.0 * MARGIN,
         ),
     );
+
+    // The title has to be the first child, so it goes in before anything is drawn.
+    if !a11y.title.is_empty() {
+        svg_document.assign("role", "img");
+        svg_document.append(Title::new(a11y.title));
+    }
 
     let mut ink_group = Group::new().set("stroke", "none").set("fill", "#FFE6E6");
     let mut logical_group = Group::new()
