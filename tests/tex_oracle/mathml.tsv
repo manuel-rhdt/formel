@@ -184,3 +184,7 @@ accent-top-bar-digit	<math><mover accent="true"><mn>2</mn><mo stretchy="false">�
 accent-top-hat-xy	<math><mover accent="true"><mrow><mi>x</mi><mspace/><mi>y</mi></mrow><mo stretchy="false">ˆ</mo></mover></math>
 accent-top-vec-cap-ab	<math><mover accent="true"><mrow><mi>A</mi><mspace/><mi>B</mi></mrow><mo stretchy="false">⃗</mo></mover></math>
 accent-top-bar-fx	<math><mover accent="true"><mrow><mi>f</mi><mspace/><mi>x</mi></mrow><mo stretchy="false">¯</mo></mover></math>
+sqrt-index-n	<math><mroot><mi>x</mi><mi>n</mi></mroot></math>
+sqrt-index-p	<math><mroot><mi>x</mi><mi>p</mi></mroot></math>
+sqrt-index-two	<math><mroot><mi>x</mi><mn>2</mn></mroot></math>
+sqrt-index-g	<math><mroot><mi>x</mi><mi>g</mi></mroot></math>

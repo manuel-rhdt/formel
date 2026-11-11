@@ -392,6 +392,10 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
 
         let [nucleus, over_box, under_box] = boxes;
         let mut nucleus = nucleus.expect("the base is always laid out");
+        let mut base = BaseAnchor {
+            center: nucleus.origin.x + nucleus.metrics.advance / 2.0,
+            italic_correction: nucleus.metrics.italic_correction,
+        };
         let font = self.font(node, style);
 
         if let Some(mut over_box) = over_box {
@@ -410,6 +414,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 style,
                 over_box,
                 nucleus,
+                &mut base,
                 true,
                 over_is_accent,
                 base_is_largeop,
@@ -422,6 +427,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 style,
                 under_box,
                 nucleus,
+                &mut base,
                 false,
                 under_is_accent,
                 base_is_largeop,
@@ -438,6 +444,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         style: &MathComputedStyle,
         mut attachment: Box_<T>,
         mut nucleus: Box_<T>,
+        base: &mut BaseAnchor,
         as_over: bool,
         as_accent: bool,
         nucleus_is_largeop: bool,
@@ -505,18 +512,22 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             (nucleus.origin.x + nucleus.metrics.top_accent_attachment)
                 - (attachment.origin.x + attachment.metrics.top_accent_attachment)
         } else {
-            (nucleus.origin.x + nucleus.metrics.ink_center())
-                - (attachment.origin.x + attachment.metrics.ink_center())
+            // by margin boxes (MathML Core 3.4.2, and TeX), on the base as it was before any script
+            // was attached
+            base.center - (attachment.origin.x + attachment.metrics.advance / 2.0)
         };
         if center_difference < 0.0 && !as_accent {
             nucleus.origin.x -= center_difference;
+            base.center -= center_difference;
         } else {
             attachment.origin.x += center_difference;
         }
 
-        // italic correction of large operators: limits follow the slant
+        // italic correction of large operators: limits follow the slant, the one above to the right
+        // and the one below to the left, each by half of the correction of the base itself (not of
+        // what the other script has made of it)
         if nucleus_is_largeop {
-            let half_italic = nucleus.metrics.italic_correction / 2.0;
+            let half_italic = base.italic_correction / 2.0;
             attachment.origin.x += if as_over { half_italic } else { -half_italic };
         }
 
@@ -546,4 +557,14 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         };
         result
     }
+}
+
+/// Where the base of an under/over construct is, for the scripts to centre on it. `<munderover>`
+/// attaches its two scripts one after the other, and the second sees the first script's box
+/// around the base; this keeps what has to come from the base itself.
+struct BaseAnchor {
+    /// The middle of the base's margin box, in the coordinates of the box the scripts are added to.
+    center: f32,
+    /// The italic correction of the base.
+    italic_correction: f32,
 }

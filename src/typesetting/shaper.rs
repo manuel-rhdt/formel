@@ -2,7 +2,6 @@
 //! [ttf-parser](https://docs.rs/ttf-parser) for reading the OpenType `MATH` table.
 
 use std::cell::RefCell;
-use std::cmp::min;
 
 use rustybuzz::ttf_parser::gsub::SubstitutionSubtable;
 use rustybuzz::ttf_parser::math::{self, GlyphConstruction};
@@ -604,11 +603,12 @@ fn try_assembly(
     }
 
     let connector_overlap = if part_count >= 2 {
-        // First determine the ideal overlap that would get closest to the target
-        // size. The following quotient is integer operation and gives the best
-        // lower approximation of the actual value with fractional pixels.
+        // First determine the ideal overlap that would get closest to the target size. It is not
+        // rounded down to whole units (as the algorithm of MathML Core does, which can make the
+        // assembly up to `part_count - 1` units longer than asked), so that the assembly is as long
+        // as the target, as in TeX. The positions of the parts are rounded below.
         let c = full_advance_sum_non_ext + repeat_count_ext as i32 * full_advance_sum_ext;
-        let mut connector_overlap = (c - target_size) / (part_count as i32 - 1);
+        let mut connector_overlap = (c - target_size) as f32 / (part_count as f32 - 1.0);
 
         // We now consider the constraints on connectors. In general, only the
         // start of the first part and then end of the last part are not connected
@@ -619,18 +619,18 @@ fn try_assembly(
         for (index, part) in parts.iter().enumerate() {
             let will_be_repeated = repeat_count_ext >= 2 && part.extender;
             if index < (part_count_ext + part_count_non_ext - 1) as usize || will_be_repeated {
-                connector_overlap = min(connector_overlap, part.end_connector_length);
+                connector_overlap = connector_overlap.min(part.end_connector_length as f32);
             }
             if index > 0 || will_be_repeated {
-                connector_overlap = min(connector_overlap, part.start_connector_length);
+                connector_overlap = connector_overlap.min(part.start_connector_length as f32);
             }
         }
-        if connector_overlap < min_connector_overlap {
+        if connector_overlap < min_connector_overlap as f32 {
             return None;
         };
         connector_overlap
     } else {
-        0
+        0.0
     };
 
     let result = parts
@@ -640,13 +640,13 @@ fn try_assembly(
             let repeat_count = if part.extender { repeat_count_ext } else { 1 } as usize;
             std::iter::repeat_n(part, repeat_count)
         })
-        // Offset the each glyph from the previous glyph by the advance of the part minus the
-        // connector overlap.
-        .scan(/* initial offset */ 0, move |current_offset, part| {
-            let delta_offset = part.full_advance - connector_overlap;
-            let origin = point_with_offset(*current_offset, horizontal);
+        // Offset each glyph from the previous glyph by the advance of the part minus the
+        // connector overlap, rounding the position (not each step, which would add up).
+        .scan(0.0f32, move |current_offset, part| {
+            let offset = (*current_offset).round() as i32;
+            let origin = point_with_offset(offset, horizontal);
             let glyphs = shaper.glyphs_from_index(part.glyph, options);
-
+            let delta_offset = part.full_advance as f32 - connector_overlap;
             if horizontal {
                 *current_offset += delta_offset;
             } else {

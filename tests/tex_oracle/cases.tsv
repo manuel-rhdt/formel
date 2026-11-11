@@ -186,3 +186,7 @@ accent-top-bar-digit	t	\bar{2}
 accent-top-hat-xy	t	\hat{xy}
 accent-top-vec-cap-ab	t	\vec{AB}
 accent-top-bar-fx	t	\bar{fx}
+sqrt-index-n	t	\sqrt[n]{x}
+sqrt-index-p	t	\sqrt[p]{x}
+sqrt-index-two	t	\sqrt[2]{x}
+sqrt-index-g	t	\sqrt[g]{x}

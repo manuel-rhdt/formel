@@ -24,10 +24,6 @@ impl Metrics {
         self.ascent + self.descent
     }
 
-    pub fn ink_center(&self) -> f32 {
-        self.ink_left + self.ink_width / 2.0
-    }
-
     pub fn ink_right(&self) -> f32 {
         self.ink_left + self.ink_width
     }

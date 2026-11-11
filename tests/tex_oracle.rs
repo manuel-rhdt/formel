@@ -109,13 +109,27 @@ const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
 
 /// The cases (by name prefix) whose glyph positions are compared with TeX's. Accents: their
 /// horizontal position (the top accent attachment of the base against that of the accent) shows
-/// nowhere in the size of the formula. Fractions: so does how the numerator and the denominator
-/// are centred. The other cases are not compared glyph by glyph yet.
-const GLYPH_CHECKED: &[&str] = &["accent-", "frac-", "paren-nested-fraction", "sqrt-of-fraction"];
+/// nowhere in the size of the formula. Fractions: neither does how the numerator and the
+/// denominator are centred. Limits: nor does how they are shifted by the italic correction of an
+/// integral. Roots: nor does the height of the index. Arrows: nor does how a
+/// stretched one is assembled from its parts. The other cases are not compared glyph by glyph yet.
+const GLYPH_CHECKED: &[&str] = &[
+    "accent-", "frac-", "paren-nested-fraction", "sqrt-", "sum-", "int-", "arrow-",
+];
 
 /// Cases among those that are not where TeX puts their glyphs (see `glyph_positions_match_tex`),
 /// with why.
 const KNOWN_GLYPH_DIFFERENCES: &[(&str, &str)] = &[
+    // The index of a root. The font puts the *bottom* of the degree at RadicalDegreeBottomRaisePercent
+    // (60%) of the height of the radical sign, and so does MathML Core (it adds the descent of the
+    // degree's box). TeX puts its *baseline* there: the same 360.5 units for every index. The
+    // difference is the descent of the index at its size: 11 for `3`, 5.5 for `n`, 97 for `p`, 102.5
+    // for `g`, and 0 for `2`.
+    ("sqrt-index", "verified: the index `3` hangs 11 units below its baseline, TeX puts the baseline there"),
+    ("sqrt-index-tall", "verified: the index `n` hangs 5.5 units below its baseline, TeX puts the baseline there"),
+    ("sqrt-index-n", "verified: the index `n` hangs 5.5 units below its baseline, TeX puts the baseline there"),
+    ("sqrt-index-p", "verified: the index `p` hangs 97 units below its baseline, TeX puts the baseline there"),
+    ("sqrt-index-g", "verified: the index `g` hangs 102.5 units below its baseline, TeX puts the baseline there"),
     // The combining circumflex has variants 365, 645, 769, 920, 1101, 1321, 1582 and 1897 wide.
     // TeX takes the largest that is not wider than the base, MathML Core the smallest that is at
     // least as wide. `abc` is 1405 wide: TeX takes 1321 (glyph 2315), here 1582 (glyph 2325); `ab`

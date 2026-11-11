@@ -24,3 +24,21 @@ fn constants_test() {
         }
     })
 }
+
+/// A glyph assembly is as long as asked (MathML Core rounds the overlap of the parts down to a
+/// whole unit, which makes it up to `parts - 1` units longer; TeX does not): the vector arrow of
+/// Latin Modern Math is a left end of 205 units, extenders of 137 and a right end of 205.
+#[test]
+fn glyph_assembly_is_as_long_as_the_target() {
+    use formel::host::{MathFont, ShapeOptions};
+    TEST_FONT.with(|font| {
+        let arrow = font.shape("\u{20D7}", ShapeOptions::default())[0].glyph_code;
+        for target in [1405, 1500, 2000, 3001] {
+            let parts = font.stretch(arrow, true, target, ShapeOptions::default());
+            assert!(parts.len() > 3, "an assembly for {target}");
+            let (offset, last) = parts.last().unwrap();
+            let length = offset.x + last.advance_width;
+            assert!((length - target).abs() <= 1, "asked for {target}, got {length}");
+        }
+    })
+}

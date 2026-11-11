@@ -205,7 +205,11 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 - surd.metrics.height() * raise_percent;
 
             let mut degree = self.layout_node(index, Ctx::plain(Form::Infix));
-            // `degree_bottom` is where the degree's bottom edge goes, not its baseline.
+            // `degree_bottom` is where the bottom of the degree goes, not its baseline: the font's
+            // `RadicalDegreeBottomRaisePercent` is the "height of the bottom of the radical degree",
+            // and so is MathML Core (3.3.3), which adds the descent of the degree's box. TeX raises
+            // the baseline of the degree instead, so an index with a descender (`p`, `g`) is about
+            // 100 units lower in TeX than here; see `KNOWN_GLYPH_DIFFERENCES` of `tex_oracle`.
             degree.origin.y += degree_bottom - degree.metrics.descent;
             degree.origin.x += kern_before;
 

@@ -238,3 +238,35 @@ fn fractions_centre_their_parts_by_advance() {
         assert!(bar.origin.x.abs() < 1e-2 && (bar.size.width - 529.0).abs() < 1e-2, "{bar:?}");
     })
 }
+
+/// In `<munderover>` the limits are centred on the base and shifted by half of the italic
+/// correction of the base, the one above to the right and the one below to the left (MathML Core
+/// 3.4.2.5, and TeX). The scripts are attached one after the other, and the second must not see
+/// the first one's box instead of the base: where a script is is the same as with the other
+/// script alone.
+#[test]
+fn limits_of_munderover_are_placed_as_with_one_script() {
+    let offsets = |xml: &str| {
+        let mut offsets = vec![];
+        layout_xml(xml, |doc, layout| {
+            let construct = doc.node(doc.root().unwrap()).children[0];
+            let children = &doc.node(construct).children;
+            offsets = children.iter().map(|&c| layout(c).location.x).collect::<Vec<_>>();
+        });
+        offsets
+    };
+    let integral = "<mo>&#x222B;</mo>";
+    let [base, sub] = offsets(&format!("<munder>{integral}<mn>0</mn></munder>"))[..] else {
+        panic!()
+    };
+    let [_, sup] = offsets(&format!("<mover>{integral}<mn>1</mn></mover>"))[..] else {
+        panic!()
+    };
+    let both = offsets(&format!("<munderover>{integral}<mn>0</mn><mn>1</mn></munderover>"));
+    // the integral sign has a big italic correction, so the two limits are far apart
+    assert!(sup - sub > 100.0, "{sub} {sup}");
+    assert_eq!(both.len(), 3);
+    assert!((both[0] - base).abs() < 1e-2, "{both:?}");
+    assert!((both[1] - sub).abs() < 1e-2, "{both:?} against the subscript alone at {sub}");
+    assert!((both[2] - sup).abs() < 1e-2, "{both:?} against the superscript alone at {sup}");
+}
