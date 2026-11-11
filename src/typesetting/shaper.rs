@@ -320,12 +320,20 @@ impl<'a> Shaper<'a> {
                 .and_then(|info| info.italic_corrections)
                 .and_then(|values| values.get(glyph))
                 .map_or(0, |v| v.value as i32),
-            // Like HarfBuzz: glyphs without an entry are attached at half their advance.
+            // Like HarfBuzz: glyphs without an entry are attached at half their advance. Marks
+            // have no advance (and their ink is usually left of the origin), so they are
+            // attached at the center of their ink instead.
             top_accent_attachment: glyph_info
                 .and_then(|info| info.top_accent_attachments)
                 .and_then(|values| values.get(glyph))
                 .map_or_else(
-                    || self.face.glyph_hor_advance(glyph).unwrap_or(0) as i32 / 2,
+                    || {
+                        if advance_width == 0 {
+                            extents.left_side_bearing + extents.width / 2
+                        } else {
+                            self.face.glyph_hor_advance(glyph).unwrap_or(0) as i32 / 2
+                        }
+                    },
                     |v| v.value as i32,
                 ),
         }

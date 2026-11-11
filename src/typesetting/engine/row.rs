@@ -1,10 +1,12 @@
 //! Rows (`<mrow>` and mrow-like elements), tokens, operators and spaces.
 
+use super::fallback;
 use super::lbox::{LBox, ScaledFont};
 use super::operator::OperatorProperties;
 use super::{Box_, Ctx, Engine, StretchSize};
 use crate::host::{
-    Form, MathComputedStyle, MathConstant, MathElement, MathFont, MathLayoutHost, MathStyle,
+    Form, MathComputedStyle, MathConstant, MathElement, MathFont, MathGlyph, MathLayoutHost,
+    MathStyle,
     parse_math_length,
 };
 use crate::mathmlparser::Flags;
@@ -156,7 +158,14 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         ctx: Ctx,
     ) -> Box_<T> {
         let font = self.font(node, style);
-        let glyphs = font.font.shape(text, Self::shape_options(style, ctx));
+        let options = Self::shape_options(style, ctx);
+        let mut glyphs = font.font.shape(text, options);
+        if glyphs.iter().any(|g| g.glyph_code == 0) {
+            if let Some(substituted) = fallback::substitute_missing(&font.font, text, options) {
+                glyphs = font.font.shape(&substituted, options);
+            }
+        }
+        give_leading_mark_width(&mut glyphs);
         LBox::glyphs(font.run_from_shaped(node, glyphs))
     }
 
@@ -277,19 +286,39 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let font = self.font(node, style);
         let unflat = Self::shape_options(style, Ctx { flat_accent: false, ..ctx });
         let options = Self::shape_options(style, ctx);
-        let base_glyph = match font.font.shape(text, unflat).first() {
-            Some(glyph) => glyph.glyph_code,
-            None => return LBox::empty(0.0, 0.0, 0.0),
+        let mut text = std::borrow::Cow::Borrowed(text);
+        let mut shaped = font.font.shape(&text, unflat);
+        if shaped.iter().any(|g| g.glyph_code == 0) {
+            if let Some(substituted) = fallback::substitute_missing(&font.font, &text, unflat) {
+                shaped = font.font.shape(&substituted, unflat);
+                text = substituted.into();
+            }
+        }
+        let Some(&base) = shaped.first() else {
+            return LBox::empty(0.0, 0.0, 0.0);
         };
+        let base_glyph = base.glyph_code;
 
-        if needed_width > 0.0 && font.font.is_stretchable(base_glyph, true) {
-            let parts = font.font.stretch(
-                base_glyph,
-                true,
-                font.units(needed_width),
-                options,
-            );
-            return LBox::glyphs(font.run(node, parts));
+        if needed_width > 0.0 {
+            let target = font.units(needed_width);
+            let too_narrow = base.advance_width.max(base.extents.width) < target;
+            let is_bar = fallback::is_bar(&text);
+            if font.font.is_stretchable(base_glyph, true) {
+                let glyph = base_glyph;
+                let parts = font.font.stretch(glyph, true, target, options);
+                let stretched = LBox::glyphs(font.run(node, parts));
+                // A bar that the font could not stretch far enough is better drawn as a rule.
+                if !is_bar || stretched.metrics.ink_width >= 0.9 * needed_width {
+                    return stretched;
+                }
+            }
+            if too_narrow && base_glyph != 0 && is_bar {
+                // Nothing stretches: draw a rule with the bar glyph's thickness and height.
+                let ascent = base.extents.ascent as f32 * font.scale;
+                let descent = base.extents.descent as f32 * font.scale;
+                return LBox::rule(needed_width, ascent + descent)
+                    .shifted_down((descent - ascent) / 2.0);
+            }
         }
 
         if needed_height > 0.0 && font.font.is_stretchable(base_glyph, false) {
@@ -313,6 +342,23 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             return stretched.shifted_down(shift_down);
         }
 
-        self.layout_text(node, text, style, ctx)
+        self.layout_text(node, &text, style, ctx)
     }
+}
+
+/// A combining mark with nothing before it to attach to (an accent drawn on its own, or the
+/// fallback for a missing spacing accent) has no advance and its ink usually lies left of
+/// its origin. Make it a spacing glyph: its ink starts at the origin and the advance covers it.
+/// The top accent attachment moves with the ink, so accent placement is unchanged.
+fn give_leading_mark_width(glyphs: &mut [MathGlyph]) {
+    let Some(first) = glyphs.first_mut() else {
+        return;
+    };
+    if first.advance_width != 0 || first.extents.width <= 0 {
+        return;
+    }
+    let shift = -(first.offset.x + first.extents.left_side_bearing);
+    first.offset.x += shift;
+    first.top_accent_attachment += shift;
+    first.advance_width = first.extents.width;
 }

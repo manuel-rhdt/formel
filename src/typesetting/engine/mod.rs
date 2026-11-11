@@ -2,6 +2,7 @@
 //! directly over a host tree.
 
 mod enclose;
+mod fallback;
 mod fraction;
 mod lbox;
 mod operator;
