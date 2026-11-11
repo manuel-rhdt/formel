@@ -463,10 +463,74 @@ pub fn convert_character_to_family(c: char, family: Family) -> char {
     c
 }
 
+/// The inverse of [`convert_character_to_family`]: the plain character behind a mathematical
+/// alphanumeric character and its family (`Family::Normal` for any other character).
+pub(crate) fn split_family(c: char) -> (char, Family) {
+    const FAMILIES: [Family; 13] = [
+        Family::Italics,
+        Family::Bold,
+        Family::BoldItalics,
+        Family::Script,
+        Family::BoldScript,
+        Family::Fraktur,
+        Family::DoubleStruck,
+        Family::BoldFraktur,
+        Family::SansSerif,
+        Family::SansSerifBold,
+        Family::SansSerifItalics,
+        Family::SansSerifBoldItalics,
+        Family::Monospace,
+    ];
+    for (family_index, table) in FAMILY_TABLES.iter().enumerate() {
+        if let Some(index) = table.iter().position(|&code| code == c as u32) {
+            let plain = CHARACTER_TABLES[family_index][index];
+            return (char::from_u32(plain).unwrap_or(c), FAMILIES[family_index]);
+        }
+    }
+    (c, Family::Normal)
+}
+
+impl Family {
+    /// The MathML `mathvariant` value of this family.
+    pub fn mathvariant(self) -> &'static str {
+        match self {
+            Family::Normal => "normal",
+            Family::Italics => "italic",
+            Family::Bold => "bold",
+            Family::BoldItalics => "bold-italic",
+            Family::Script => "script",
+            Family::BoldScript => "bold-script",
+            Family::Fraktur => "fraktur",
+            Family::DoubleStruck => "double-struck",
+            Family::BoldFraktur => "bold-fraktur",
+            Family::SansSerif => "sans-serif",
+            Family::SansSerifBold => "bold-sans-serif",
+            Family::SansSerifItalics => "sans-serif-italic",
+            Family::SansSerifBoldItalics => "sans-serif-bold-italic",
+            Family::Monospace => "monospace",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::char;
+
+    #[test]
+    fn split_family_inverts_conversion() {
+        for family in ["bold", "italic", "double-struck", "fraktur", "monospace"] {
+            let family = Family::from_mathvariant(family).unwrap();
+            for c in ['a', 'Z', '7', 'α'] {
+                let styled = convert_character_to_family(c, family);
+                if styled != c {
+                    assert_eq!(split_family(styled).0, c);
+                    assert_eq!(split_family(styled).1.mathvariant(), family.mathvariant());
+                }
+            }
+        }
+        assert_eq!(split_family('+').0, '+');
+    }
 
     #[test]
     fn unicode_math_test() {

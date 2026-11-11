@@ -5,10 +5,12 @@
 //! - [`mathmlparser`]: the operator dictionary and (with the `mathml_parser` feature) an XML
 //!   parser that produces a [`standalone::MathDocument`].
 //! - `svg_renderer` (feature `svg`): draws a laid-out document as SVG.
+//! - [`speech`]: spoken text for screen readers, built from the MathML structure.
 //! - [`shaper`]: [`shaper::Shaper`], a [`host::MathFont`] based on rustybuzz.
 
 pub mod host;
 pub mod mathmlparser;
+pub mod speech;
 pub mod standalone;
 #[cfg(feature = "svg")]
 pub mod svg_renderer;
