@@ -14,6 +14,8 @@ compiled to WebAssembly (`formel-wasm/`, `web/`).
 
 ## Gallery
 
+Any math font that is compatible with LuaTeX or XeTeX (or MS Word) can be used with *formel*.
+
 ### Fractions, radicals & continued fractions
 
 <table>
