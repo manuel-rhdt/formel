@@ -10,7 +10,7 @@ directly consumed by users of the rust library. A simple SVG renderer is provide
 
 **[Try it in the browser →](https://manuel-rhdt.github.io/formel/)** Type LaTeX or MathML, compare the
 bundled fonts (or drop in your own), and copy or download the result as SVG or PNG. The demo is this crate
-compiled to WebAssembly (`formel-wasm/`, `web/`).
+compiled to WebAssembly (`formel-wasm/`, `web/`), resulting in a **small WebAssembly bundle of ~1 MB**.
 
 ## Gallery
 
