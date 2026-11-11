@@ -1,5 +1,8 @@
 # formel
 
+[![crates.io](https://img.shields.io/crates/v/formel.svg)](https://crates.io/crates/formel)
+[![docs.rs](https://docs.rs/formel/badge.svg)](https://docs.rs/formel)
+
 A Rust library that lays out mathematical formulas using
 **OpenType MATH fonts** and [rustybuzz](https://github.com/harfbuzz/rustybuzz) for unicode shaping.
 It implements the typesetting rules from the OpenType MATH specification and
