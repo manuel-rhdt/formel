@@ -1,24 +1,19 @@
 # formel
 
-A Rust library that lays out mathematical formulas (MathML in, positioned glyphs out) using the
-**OpenType `MATH` table** of a font and [rustybuzz](https://github.com/harfbuzz/rustybuzz) for shaping.
+A Rust library that lays out mathematical formulas (MathML in, positioned glyphs out) using
+**OpenType MATH fonts** and [rustybuzz](https://github.com/harfbuzz/rustybuzz) for unicode shaping.
 It implements the typesetting rules from the OpenType MATH specification and
 [MathML Core](https://www.w3.org/TR/mathml-core/): script and fraction placement, stretchy operators,
-radicals, tables, accents, italic corrections, math kerning and more, all driven by the metrics the font
-provides, so a well-made math font gives you good output without any hand-tuned constants.
+radicals, tables, accents, italic corrections, math kerning and more, comparable in quality to
+modern unicode TeX engines, like LuaTeX and XeTeX.
 
 **[Try it in the browser →](https://manuel-rhdt.github.io/formel/)** Type LaTeX or MathML, compare the
 bundled fonts (or drop in your own), and copy or download the result as SVG or PNG. The demo is this crate
-compiled to WebAssembly (`formel-wasm/`, `web/`); nothing leaves your machine.
+compiled to WebAssembly (`formel-wasm/`, `web/`).
 
 ## Gallery
 
-Every formula below is laid out by this crate and rendered to SVG with the bundled `mathimg` tool,
-once per font. The only thing that changes between the renderings is the font. Fonts are grouped by style: Computer Modern, Times-like (STIX Two, Termes), Palatino-like (Pagella, Asana), Century Schoolbook and Bookman-like (Schola, Bonum), Cambria, then sans-serif (DejaVu, Noto Sans, Fira).
-
 ### Fractions, radicals & continued fractions
-
-Nested fractions shrink through script styles, and the radical's surd and rule are built from the font's `MATH` table variants and assemblies.
 
 <table>
 <tr><td width="150"><sub>New Computer Modern Math</sub></td><td><picture><source media="(prefers-color-scheme: dark)" srcset="docs/img/quadratic-newcm-dark.svg"><img alt="quadratic in New Computer Modern Math" src="docs/img/quadratic-newcm-light.svg" height="102"></picture></td></tr>
