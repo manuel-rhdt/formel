@@ -185,6 +185,11 @@ mod tests {
             "x squared"
         );
         assert_eq!(alt_text("<math><mi>x</mi></math>"), "x");
+        // Character references are decoded, so the name reads "x−1" and not "x&#x2212;1".
+        assert_eq!(
+            alt_text("<math><mi>x</mi><mo>&#x2212;</mo><mn>1</mn></math>"),
+            "x\u{2212}1"
+        );
         // The fallback is deliberately crude — concatenated text, no operator names. Anything that
         // cares about the wording supplies an annotation instead.
         assert_eq!(
@@ -206,6 +211,44 @@ mod tests {
         let svg = out.svg();
         assert!(svg.contains(r#"role="img""#), "{svg}");
         assert!(svg.contains("<title>x over two</title>"), "{svg}");
+    }
+
+    /// The guard P0 asked for: whatever the input, a rendered SVG carries a name and declares itself
+    /// an image. Runs over every demo equation, so a regression in the fallback shows up in CI
+    /// rather than in a screen reader.
+    #[test]
+    fn every_demo_equation_renders_an_accessible_svg() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/equations");
+        let r = renderer();
+        let mut paths: Vec<_> = std::fs::read_dir(dir)
+            .unwrap_or_else(|e| panic!("demo equations must be readable: {e}"))
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("xml"))
+            .collect();
+        paths.sort();
+        assert!(!paths.is_empty(), "expected demo equations");
+        for path in paths {
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            let mathml = std::fs::read_to_string(&path).unwrap();
+            let out = r
+                .render(&mathml, false)
+                .unwrap_or_else(|_| panic!("{name}: render failed"));
+            assert!(
+                !out.alt().trim().is_empty(),
+                "{name}: the accessible name is empty"
+            );
+            let svg = out.svg();
+            assert!(svg.contains(r#"role="img""#), "{name}: no role: {svg}");
+            let title = svg
+                .find("<title>")
+                .unwrap_or_else(|| panic!("{name}: no <title>"));
+            // The title has to come before the drawing: some readers take the first child only.
+            assert_eq!(
+                svg[..title].matches('<').count(),
+                1,
+                "{name}: <title> is not the SVG's first child"
+            );
+        }
     }
 
     #[test]
@@ -399,15 +442,53 @@ fn text_content(mathml: &str) -> String {
     collapse(&decode_entities(&out))
 }
 
-/// Decodes the entities that carry meaning in a name; anything else is left alone.
+/// Decodes the character references that carry meaning in a name. Unknown named entities are left
+/// as written rather than dropped, so a name that says `&minus;` is visibly wrong instead of silently
+/// shorter than the markup.
 fn decode_entities(text: &str) -> String {
-    text.replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&apos;", "'")
-        .replace("&nbsp;", " ")
-        .replace("&#160;", " ")
-        .replace("&amp;", "&")
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find('&') {
+        out.push_str(&rest[..i]);
+        let tail = &rest[i..];
+        // A reference is short; `;` further away than this is ordinary text.
+        let decoded = tail
+            .find(';')
+            .filter(|end| *end <= 10)
+            .and_then(|end| decode_reference(&tail[1..end]).map(|c| (c, end + 1)));
+        match decoded {
+            Some((character, len)) => {
+                out.push(character);
+                rest = &tail[len..];
+            }
+            None => {
+                out.push('&');
+                rest = &tail[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// One character reference body: `#8722`, `#x2212` or a name.
+fn decode_reference(body: &str) -> Option<char> {
+    if let Some(number) = body.strip_prefix('#') {
+        let code = match number.strip_prefix('x').or_else(|| number.strip_prefix('X')) {
+            Some(hexadecimal) => u32::from_str_radix(hexadecimal, 16).ok()?,
+            None => number.parse::<u32>().ok()?,
+        };
+        return char::from_u32(code);
+    }
+    Some(match body {
+        "lt" => '<',
+        "gt" => '>',
+        "quot" => '"',
+        "apos" => '\'',
+        "nbsp" => ' ',
+        "amp" => '&',
+        _ => return None,
+    })
 }
 
 /// One line, single spaces.
