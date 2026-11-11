@@ -23,6 +23,16 @@ test("styleSvg recolors and labels", () => {
   assert.ok(!svg.includes("<rect"), "transparent background adds no rect");
 });
 
+test("styleSvg keeps the title the renderer already wrote", () => {
+  const titled = '<svg viewBox="-10 -10 200 100" role="img">\n' +
+    "<title>x over two</title>\n" +
+    '<g fill="black" stroke="none"><path d="M0 0"/></g>\n</svg>';
+  const svg = styleSvg(titled, { alt: "ignored" });
+  assert.equal(svg.match(/<title/g).length, 1, "exactly one title");
+  assert.ok(!svg.includes("ignored"), "the caller's text does not override the renderer's");
+  assert.ok(!svg.includes("aria-label"), "no second accessible name");
+});
+
 test("styleSvg adds a background rectangle covering the viewBox", () => {
   const svg = styleSvg(RAW, { bg: "#ffffff", alt: "" });
   assert.ok(svg.includes('<rect x="-10" y="-10" width="200" height="100" fill="#ffffff"/>'));
