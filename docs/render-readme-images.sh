@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Renders docs/equations/*.xml with several OpenType math fonts into docs/img/
 # (set MATHIMG=path to use a prebuilt binary, ONLY=font to render a single font)
-# (a light and a dark variant of each, for use with <picture> in the README).
+# (one file per pair: ink is currentColor, with an embedded prefers-color-scheme
+# style so it adapts to light/dark even when loaded through <img>).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -27,6 +28,7 @@ if [[ -z $MATHIMG ]]; then
 fi
 mkdir -p docs/img
 tmp=$(mktemp -d)
+STYLE='<style>svg{color:#1f2328}@media(prefers-color-scheme:dark){svg{color:#e6edf3}}</style>'
 for eq in docs/equations/*.xml; do
   name=$(basename "$eq" .xml)
   for font in "${!FONTS[@]}"; do
@@ -36,8 +38,9 @@ for eq in docs/equations/*.xml; do
     # Fira Math has no vertical or diagonal ellipsis glyphs
     [[ $name == matrix && $font == fira ]] && continue
     "$MATHIMG" -f "${FONTS[$font]}" "$eq" "$tmp/out.svg"
-    sed 's/"black"/"#1f2328"/g' "$tmp/out.svg" > "docs/img/$name-$font-light.svg"
-    sed 's/"black"/"#e6edf3"/g' "$tmp/out.svg" > "docs/img/$name-$font-dark.svg"
+    sed -e 's/"black"/"currentColor"/g' \
+        -e "0,/<svg[^>]*>/s||&$STYLE|" \
+        "$tmp/out.svg" > "docs/img/$name-$font.svg"
   done
 done
 rm -r "$tmp"
