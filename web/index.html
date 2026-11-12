@@ -152,6 +152,7 @@
   .opt > .optlabel { flex: 0 0 7.5rem; }
   .opt > :not(.optlabel):not(.unit) { color: var(--text); }
   #options .hint { margin: .7rem 0 0; max-width: 46rem; }
+  #options .fallback { margin-top: .9rem; flex-wrap: wrap; }
 
   /* font comparison */
   #fontgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: .5rem; padding: .75rem; border-top: 1px solid var(--line); }
@@ -334,6 +335,12 @@
     </div>
     <p class="hint">Text size is the size of the text the formula sits next to: a downloaded SVG comes out at
       exactly that size, a PNG at that size times the resolution. On a slide, just scale the image.</p>
+    <div class="opt fallback"><span class="optlabel">If pasting fails</span>
+      <button id="copysvg" class="btn" type="button" disabled>Copy SVG source</button>
+      <button id="copyhtml" class="btn" type="button" disabled>Copy as rich text</button>
+    </div>
+    <p class="hint">The SVG source is plain text, for an editor or a file. Rich text is HTML with the
+      image embedded; whether an app keeps it as a vector image depends on the app.</p>
   </div>
 
   <div id="fontgrid" hidden aria-label="The formula in every font"></div>
@@ -341,28 +348,18 @@
 </section>
 
 <details class="card panel" id="embed">
-  <summary>Embed code &amp; other ways to copy <span class="sub">HTML, Markdown, SVG source, rich text</span></summary>
+  <summary>Embed in a web page <span class="sub">inline SVG, image tag or MathML</span></summary>
   <div class="panelbody">
-    <h3>For a web page or Markdown</h3>
     <div class="bar">
       <select id="snippetkind" aria-label="Snippet type">
-        <option value="img">HTML &lt;img&gt; with data URI</option>
-        <option value="svg">Inline &lt;svg&gt;</option>
-        <option value="markdownFile">Markdown, linking the downloaded file</option>
-        <option value="markdownData">Markdown with data URI</option>
+        <option value="svg">Inline &lt;svg&gt; (follows the text color)</option>
+        <option value="img">&lt;img&gt; with a data URI</option>
+        <option value="mathml">MathML (drawn by the browser)</option>
       </select>
       <button id="copysnippet" class="btn" type="button">Copy snippet</button>
     </div>
     <textarea id="snippet" readonly spellcheck="false" aria-label="Embed snippet" aria-describedby="snippethint"></textarea>
     <p class="hint snippethint" id="snippethint"></p>
-
-    <h3>If pasting the image does not work</h3>
-    <p>The SVG source as plain text, for an editor or a file, or <em>rich text</em> (HTML with the
-      image embedded), which some apps keep as a vector image.</p>
-    <div class="bar">
-      <button id="copysvg" class="btn" type="button" disabled>Copy SVG source</button>
-      <button id="copyhtml" class="btn" type="button" disabled>Copy as rich text</button>
-    </div>
   </div>
 </details>
 </main>
@@ -803,35 +800,30 @@ function refreshOutput() {
   updateDisplay();
 }
 
+/** The formula's color in an inline snippet: the page's text color, unless a color was chosen. */
+function inlineColor() {
+  return colors().fg.toLowerCase() === "#000000" ? "currentColor" : colors().fg;
+}
+
 function updateSnippet() {
   if (!rendering) return;
-  const png = format() === "png";
-  const kindSelect = $("snippetkind");
-  // inline SVG has no PNG counterpart
-  kindSelect.querySelector("option[value=svg]").disabled = png;
-  if (png && kindSelect.value === "svg") kindSelect.value = "img";
-  const kind = kindSelect.value;
+  const kind = $("snippetkind").value;
+  const custom = inlineColor() !== "currentColor";
+  $("snippethint").textContent = {
+    svg: custom
+      ? "A fixed color was chosen under Options; with black selected the formula would follow the text color instead."
+      : "Sized in em, so it matches the surrounding text, and sits on its baseline. The color follows the text, so dark mode works.",
+    img: "Same sizing, but an image cannot inherit the text color: it stays black unless you pick another color under Options, so it vanishes on a dark background. The data URI is URL-encoded rather than base64, which is shorter.",
+    mathml: "No image at all: the visitor's browser lays it out with its own math font, so it will not look like the preview, and very old browsers show nothing.",
+  }[kind];
 
-  let hint = "";
-  if (kind === "markdownFile") hint = `Save the image with Download as formula.${png ? "png" : "svg"} next to the Markdown file. `;
-  if (kind.startsWith("markdown")) {
-    hint += png
-      ? `Markdown shows a PNG at its pixel size (here ${pngPixelSize()}), so it does not follow the text size; the HTML snippet does.`
-      : `Markdown shows the image at its own size, here for ${textSize()} pt text; the HTML snippet follows the surrounding text.`;
-    if (kind === "markdownData") hint += " Some renderers, such as GitHub's, do not show data: URIs.";
-  }
-  $("snippethint").textContent = hint;
-
-  // a drag may use a PNG of another resolution meanwhile, the snippet should not
-  if (png && (images.png.seq !== renderSeq || images.png.pxPerEm !== pxPerEm() || !images.png.dataUri)) {
-    $("snippet").value = "Preparing the PNG…";      // filled in when it is ready
-    $("copysnippet").disabled = true;
-    return;
-  }
+  // Alt text and the formula's own MathML do not belong in the inline SVG's metadata: in HTML a
+  // <math> inside <svg> is parsed as foreign content, and the MathML has its own snippet.
+  const { fg, bg } = colors();
   const s = snippets({
-    svg: styled(),
-    svgFile: fileSvg().svg,
-    png: png ? images.png.dataUri : null,
+    svg: styleSvg(rendering.svg, { fg: inlineColor(), bg, alt: rendering.alt }),
+    imgSvg: styleSvg(rendering.svg, { fg, bg, alt: rendering.alt }),
+    mathml: $("mathml").textContent,
     alt: rendering.alt,
     display: rendering.display,
     width: rendering.width,
@@ -1185,7 +1177,7 @@ function updateFormatUi() {
  */
 const images = {
   svg: { url: null, seq: -1, w: 0 },
-  png: { url: null, seq: -1, w: 0, dataUri: null, pxPerEm: 0, width: 0, height: 0 },
+  png: { url: null, seq: -1, w: 0, pxPerEm: 0, width: 0, height: 0 },
 };
 let renderSeq = 0;   // bumped whenever the image content changes; not by the PNG resolution
 let shown = null;    // the entry of `images` that the preview shows
@@ -1241,17 +1233,15 @@ function schedulePng() {
     try {
       const scale = pxPerEm();
       const png = await pngBlob(scale);
-      const dataUri = await blobToDataUrl(png);
       const { width, height } = sized(scale);
       if (token !== pngToken) return;
       const old = images.png.url;
       images.png = {
         url: URL.createObjectURL(png), seq, w: rendering.width / rendering.unitsPerEm,
-        dataUri, pxPerEm: scale, width: Math.ceil(width), height: Math.ceil(height),
+        pxPerEm: scale, width: Math.ceil(width), height: Math.ceil(height),
       };
       updateDisplay();
       releaseLater(old);
-      updateSnippet();
     } catch (e) {
       console.warn("preparing the PNG failed:", e);
     }
@@ -1423,7 +1413,7 @@ function setOptionsOpen(open) {
 $("optionsbtn").addEventListener("click", () => setOptionsOpen($("options").hidden));
 
 for (const input of document.querySelectorAll("input[name=format]")) {
-  input.addEventListener("change", () => { updateFormatUi(); schedulePng(); updateDisplay(); updateSnippet(); });
+  input.addEventListener("change", () => { updateFormatUi(); schedulePng(); updateDisplay(); });
 }
 $("textsize").addEventListener("input", () => {
   if (!$("textsize").validity.valid || !$("textsize").value) return;   // wait for a usable number

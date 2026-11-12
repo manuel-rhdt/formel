@@ -222,21 +222,32 @@ function em(value) {
   return `${Number(value.toFixed(3))}em`;
 }
 
-/** Escapes text for the alt part of a Markdown image. */
-export function escapeMarkdownAlt(text) {
-  return oneLine(text).replace(/([\\\[\]])/g, "\\$1");
+/**
+ * An SVG as a `data:` URI that sits in a double-quoted HTML attribute. Percent-encodes only what
+ * has to be (not everything, like `encodeURIComponent`, and not base64, which is a third larger),
+ * so the snippet stays short and mostly readable.
+ */
+export function svgDataUriEncoded(svg) {
+  const body = svg
+    .replace(/<\?xml[^>]*\?>\s*/, "")
+    .replace(/\s+/g, " ")
+    .replace(/%/g, "%25")
+    .replace(/#/g, "%23")
+    .replace(/</g, "%3C")
+    .replace(/>/g, "%3E")
+    .replace(/"/g, "%22")
+    .replace(/&/g, "%26");
+  return `data:image/svg+xml,${body}`;
 }
 
 /**
- * Snippets for embedding a rendering in other documents.
+ * Snippets for embedding a rendering in a web page.
  *
  * @param {object} p
- * @param {string} p.svg        styled SVG (see `styleSvg`)
- * @param {string} [p.svgFile]  the SVG with an absolute size (see `sizeSvg`), for Markdown, which
- *                              shows images at their own size; defaults to `svg`
- * @param {string} [p.png]      data: URI of a PNG of the same image; if given, the snippets use
- *                              it instead of the SVG, and there is no inline-SVG snippet
- * @param {string} p.alt        alternative text, e.g. the LaTeX source
+ * @param {string} p.svg        SVG for inline use (see `styleSvg`); it may paint with `currentColor`
+ * @param {string} [p.imgSvg]   SVG for an `<img>`, which cannot inherit the text color; defaults to `svg`
+ * @param {string} [p.mathml]   the formula's MathML, offered as-is for browsers that render it natively
+ * @param {string} p.alt        alternative text
  * @param {boolean} p.display   block formula (centered) rather than inline
  * @param {number} p.width      viewBox width in font units
  * @param {number} p.height     viewBox height in font units
@@ -246,23 +257,18 @@ export function escapeMarkdownAlt(text) {
  * Sizes are in em, so the formula is as big as the surrounding text. For inline formulas the
  * image is shifted down by the part of the box below the baseline, so it lines up with the text.
  */
-export function snippets({ svg, svgFile = svg, png = null, alt, display, width, height, baseline, unitsPerEm }) {
+export function snippets({ svg, imgSvg = svg, mathml = "", alt, display, width, height, baseline, unitsPerEm }) {
   const w = em(width / unitsPerEm);
   const h = em(height / unitsPerEm);
   const below = em((height - baseline) / unitsPerEm);
   const attrAlt = escapeXml(oneLine(alt));
   const position = display ? "display:block;margin:1em auto" : `vertical-align:-${below}`;
-  const uri = png ?? svgDataUri(svg);
-  const file = png ? "formula.png" : "formula.svg";
-
-  // inline <svg> needs explicit sizes, otherwise browsers default to 300x150
-  const inlineSvg = png ? null : svg.replace("<svg ", `<svg width="${w}" height="${h}" style="${position}" `);
 
   return {
-    img: `<img src="${uri}" alt="${attrAlt}" style="height:${h};${position}">`,
-    svg: inlineSvg,
-    markdownFile: `![${escapeMarkdownAlt(alt)}](${file})`,
-    markdownData: `![${escapeMarkdownAlt(alt)}](${png ?? svgDataUri(svgFile)})`,
+    // inline <svg> needs explicit sizes, otherwise browsers default to 300x150
+    svg: svg.replace("<svg ", `<svg width="${w}" height="${h}" style="${position}" `),
+    img: `<img src="${svgDataUriEncoded(imgSvg)}" alt="${attrAlt}" style="height:${h};${position}">`,
+    mathml,
   };
 }
 

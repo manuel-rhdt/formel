@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULTS, escapeXml, styleSvg, mathmlForXml, sizeSvg, viewBox, snippets, toBase64, svgDataUri,
-  escapeMarkdownAlt, encodeState, decodeState, htmlImage, svgInPoints, pixelsPerEm, setPngResolution,
+  svgDataUriEncoded, encodeState, decodeState, htmlImage, svgInPoints, pixelsPerEm, setPngResolution,
 } from "../export.js";
 import { deflateSync, crc32 as zlibCrc32 } from "node:zlib";
 
@@ -76,7 +76,7 @@ test("inline snippets sit on the baseline", () => {
   // 1000 units = 1em; 200 units below the baseline = 0.2em
   assert.ok(s.img.includes("height:1em;vertical-align:-0.2em"), s.img);
   assert.ok(s.img.includes('alt="E = mc^2 &quot;quoted&quot;"'), s.img);
-  assert.ok(s.img.startsWith('<img src="data:image/svg+xml;base64,'));
+  assert.ok(s.img.startsWith('<img src="data:image/svg+xml,%3Csvg '), s.img);
   assert.ok(s.svg.includes('width="2em" height="1em" style="vertical-align:-0.2em"'), s.svg);
 });
 
@@ -86,15 +86,28 @@ test("display snippets are centered blocks", () => {
   });
   assert.ok(s.img.includes("display:block;margin:1em auto"), s.img);
   assert.ok(!s.img.includes("vertical-align"), s.img);
+  assert.ok(s.svg.includes("display:block;margin:1em auto"), s.svg);
 });
 
-test("markdown snippets escape the alt text", () => {
-  assert.equal(escapeMarkdownAlt("\\left[ x \\right]\n"), "\\\\left\\[ x \\\\right\\]");
+test("the img snippet can use another SVG than the inline one", () => {
+  const inline = RAW.replace('"black"', '"currentColor"');
   const s = snippets({
-    svg: RAW, alt: "[x]", display: false, width: 1, height: 1, baseline: 1, unitsPerEm: 1,
+    svg: inline, imgSvg: RAW, mathml: "<math/>", alt: "x", display: false,
+    width: 1000, height: 1000, baseline: 800, unitsPerEm: 1000,
   });
-  assert.equal(s.markdownFile, "![\\[x\\]](formula.svg)");
-  assert.ok(s.markdownData.startsWith("![\\[x\\]](data:image/svg+xml;base64,"));
+  assert.ok(s.svg.includes('fill="currentColor"'));
+  assert.ok(!s.img.includes("currentColor"));
+  assert.ok(s.img.includes("fill=%22black%22"));
+  assert.equal(s.mathml, "<math/>");
+});
+
+test("svgDataUriEncoded survives an HTML attribute and a round trip", () => {
+  const svg = '<?xml version="1.0"?>\n<svg a="1 & 2" b="#fff">\n  <path d="M0 0"/>100%</svg>';
+  const uri = svgDataUriEncoded(svg);
+  assert.ok(uri.startsWith("data:image/svg+xml,%3Csvg "), uri);
+  for (const bad of ['"', "<", ">", "#", "&", "\n"]) assert.ok(!uri.slice(uri.indexOf(",")).includes(bad), `${JSON.stringify(bad)} in ${uri}`);
+  assert.equal(decodeURIComponent(uri.slice(uri.indexOf(",") + 1)), '<svg a="1 & 2" b="#fff"> <path d="M0 0"/>100%</svg>');
+  assert.ok(uri.length < svgDataUri(svg).length, "shorter than base64");
 });
 
 test("state round-trips through the URL fragment", () => {
@@ -127,26 +140,6 @@ test("htmlImage sets the pixel size and escapes the alt text", () => {
     '<img src="data:image/png;base64,AA==" alt="a &quot;b&quot; &lt;c&gt;" width="100" height="21">',
   );
   assert.equal(htmlImage({ src: "x" }), '<img src="x" alt="">');
-});
-
-test("PNG snippets use the PNG and have no inline SVG", () => {
-  const png = "data:image/png;base64,AAAA";
-  const s = snippets({
-    svg: RAW, png, alt: "x", display: false, width: 2000, height: 1000, baseline: 800, unitsPerEm: 1000,
-  });
-  assert.ok(s.img.startsWith(`<img src="${png}" alt="x" style="height:1em;vertical-align:-0.2em`), s.img);
-  assert.equal(s.svg, null);
-  assert.equal(s.markdownFile, "![x](formula.png)");
-  assert.equal(s.markdownData, `![x](${png})`);
-});
-
-test("Markdown with a data URI embeds the sized SVG", () => {
-  const file = sizeSvg(RAW, 48, 1000).svg;
-  const s = snippets({
-    svg: RAW, svgFile: file, alt: "x", display: true, width: 200, height: 100, baseline: 80, unitsPerEm: 1000,
-  });
-  assert.equal(s.markdownData, `![x](${svgDataUri(file)})`);
-  assert.ok(s.img.includes(svgDataUri(RAW)), "the HTML snippet sizes the image itself");
 });
 
 test("svgInPoints sizes the SVG for the text size", () => {
