@@ -17,6 +17,12 @@ pub(crate) struct Metrics {
     pub italic_correction: f32,
     /// x coordinate at which a top accent should be centered.
     pub top_accent_attachment: f32,
+    /// The box ends with a function application operator (U+2061) whose space could not be applied
+    /// inside it, because nothing follows in that row. The enclosing row adds the thin space
+    /// before whatever it places next — unless that starts with an opening fence. TeX spaces the
+    /// flat atom list, and an `<mrow>` is only a group there, so the space has to reach across the
+    /// row boundary.
+    pub ends_with_function_application: bool,
 }
 
 impl Metrics {
@@ -89,6 +95,7 @@ impl<Id: Copy> LBox<Id> {
                 ink_width: advance,
                 italic_correction: 0.0,
                 top_accent_attachment: advance / 2.0,
+                ends_with_function_application: false,
             },
         )
     }
@@ -104,6 +111,7 @@ impl<Id: Copy> LBox<Id> {
                 ink_width: width,
                 italic_correction: 0.0,
                 top_accent_attachment: width / 2.0,
+                ends_with_function_application: false,
             },
         )
     }
@@ -124,6 +132,7 @@ impl<Id: Copy> LBox<Id> {
                 ink_width: width,
                 italic_correction: 0.0,
                 top_accent_attachment: width / 2.0,
+                ends_with_function_application: false,
             },
         )
     }
@@ -182,6 +191,7 @@ impl<Id: Copy> LBox<Id> {
             ink_width: (ink_right.unwrap_or(0) - ink_left) as f32 * s,
             italic_correction: italic_correction as f32 * s,
             top_accent_attachment: accent,
+            ends_with_function_application: false,
         };
         LBox::with_content(Content::Glyphs(run), metrics)
     }

@@ -652,6 +652,7 @@ fn box_metrics(width: f32, ascent: f32, descent: f32) -> Metrics {
         ink_width: width,
         italic_correction: 0.0,
         top_accent_attachment: width / 2.0,
+        ends_with_function_application: false,
     }
 }
 
