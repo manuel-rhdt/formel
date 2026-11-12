@@ -382,6 +382,7 @@ fn inflate<Id: Copy>(content: LBox<Id>, style: &MathComputedStyle, include_margi
             0.0
         },
         top_accent_attachment: inner_metrics.top_accent_attachment + edges.left,
+        ends_with_function_application: false,
     };
     outer.margin = margin;
     outer

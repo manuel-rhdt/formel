@@ -1332,3 +1332,42 @@ fn function_application_adds_no_space_before_a_fence() {
     let (times, sin2, b) = function_row("\u{2062}", fenced);
     assert_close(gap(&apply, sin, a), gap(&times, sin2, b));
 }
+
+/// `sin <apply>` in a row of its own, the argument in the enclosing row — how pandoc writes every
+/// function name. The space belongs between the operator and its argument, so it has to reach
+/// across the row boundary.
+#[test]
+fn function_application_reaches_past_the_end_of_a_row() {
+    let gap_of = |nested: bool| {
+        let mut doc = Doc::new();
+        let sin = doc.tok(Mi, "sin");
+        let apply = doc.tok(Mo, "\u{2061}");
+        let x = doc.tok(Mi, "x");
+        let (left, root) = if nested {
+            let row = doc.el(Mrow, &[sin, apply]);
+            (row, doc.el(Mrow, &[row, x]))
+        } else {
+            (apply, doc.el(Mrow, &[sin, apply, x]))
+        };
+        doc.run(root);
+        doc.absolute_rect(root, x).origin.x - doc.absolute_rect(root, left).right()
+    };
+    assert_close(gap_of(true), gap_of(false));
+}
+
+/// The same shape, but the argument opens with a fence: no space, as in `sin(x)`.
+#[test]
+fn function_application_adds_no_space_before_a_fence_after_a_row() {
+    let gap_of = |op: &str| {
+        let mut doc = Doc::new();
+        let (sin, apply) = (doc.tok(Mi, "sin"), doc.tok(Mo, op));
+        let row = doc.el(Mrow, &[sin, apply]);
+        let (open, x, close) = (doc.tok(Mo, "("), doc.tok(Mi, "x"), doc.tok(Mo, ")"));
+        let fenced = doc.el(Mrow, &[open, x, close]);
+        let root = doc.el(Mrow, &[row, fenced]);
+        doc.run(root);
+        doc.absolute_rect(root, fenced).origin.x - doc.absolute_rect(root, row).right()
+    };
+    // invisible times is the same invisible character without the space
+    assert_close(gap_of("\u{2061}"), gap_of("\u{2062}"));
+}
