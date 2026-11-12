@@ -103,6 +103,9 @@ const KNOWN_DIFFERENCES: &[(&str, &str)] = &[
     // combining low line reaches down to -143 below the 205 of the base, which is 348.
     ("overline", "verified: accent glyph top 803 vs TeX's rule at 783"),
     ("underline", "verified: accent glyph bottom 348 vs TeX's rule at 405"),
+    // `cases` is `\left\{ … \right.` in amsmath: TeX adds the null delimiter space (120 units) for the
+    // empty `\right.` too, and the MathML has no delimiter there. (`bar-evaluation` has the same.)
+    ("cases", "verified: 120 units of null delimiter space for the empty `\right.`"),
     // TeX adds no italic correction before a fraction; MathML Core does, as a fraction is not slanted.
     ("italic-corr-letter-fraction", "verified: `f`'s italic correction (90) added before a fraction, TeX adds none"),
 ];

@@ -225,8 +225,9 @@ fn fractions_centre_their_parts_by_advance() {
         // in Latin Modern Math the italic `a` is 529 units wide and `b` 429
         assert!((numerator.size.width - 529.0).abs() < 1e-2);
         assert!((denominator.size.width - 429.0).abs() < 1e-2);
-        assert!(numerator.location.x.abs() < 1e-2, "{:?}", numerator.location);
-        assert!((denominator.location.x - 50.0).abs() < 1e-2, "{:?}", denominator.location);
+        // all of it inside the null delimiter space of 120 units on each side
+        assert!((numerator.location.x - 120.0).abs() < 1e-2, "{:?}", numerator.location);
+        assert!((denominator.location.x - 170.0).abs() < 1e-2, "{:?}", denominator.location);
         let bar = layout(frac)
             .fragments
             .iter()
@@ -235,7 +236,7 @@ fn fractions_centre_their_parts_by_advance() {
                 _ => None,
             })
             .expect("fraction bar");
-        assert!(bar.origin.x.abs() < 1e-2 && (bar.size.width - 529.0).abs() < 1e-2, "{bar:?}");
+        assert!((bar.origin.x - 120.0).abs() < 1e-2 && (bar.size.width - 529.0).abs() < 1e-2, "{bar:?}");
     })
 }
 
@@ -269,4 +270,80 @@ fn limits_of_munderover_are_placed_as_with_one_script() {
     assert!((both[0] - base).abs() < 1e-2, "{both:?}");
     assert!((both[1] - sub).abs() < 1e-2, "{both:?} against the subscript alone at {sub}");
     assert!((both[2] - sup).abs() < 1e-2, "{both:?} against the superscript alone at {sup}");
+}
+
+/// TeX puts `\nulldelimiterspace` (1.2pt, 0.12em at 10pt) on each side of a fraction, as the
+/// fraction is `\left. … \right.` with empty delimiters. The size in font units here is that of
+/// the 1000-unit em of the test font.
+const NULL_DELIMITER_SPACE: f32 = 120.0;
+
+/// Checks the width of the `<mfrac>` of `xml` (the first child of the root) and where its numerator
+/// and denominator are, relative to the fraction.
+fn check_null_delimiter_space(xml: &str) {
+    layout_xml(xml, |doc, layout| {
+        let root = doc.root().unwrap();
+        let frac = doc.node(root).children[0];
+        assert!(matches!(doc.node(frac).element, MathElement::Mfrac));
+        let parts = &doc.node(frac).children;
+        let widths: Vec<f32> = parts.iter().map(|&p| layout(p).size.width).collect();
+        let bar = widths.iter().cloned().fold(0.0, f32::max);
+
+        let frac_layout = layout(frac);
+        assert!(
+            (frac_layout.size.width - (bar + 2.0 * NULL_DELIMITER_SPACE)).abs() < 0.5,
+            "fraction is {} wide, TeX has the bar ({bar}) plus 2 * {NULL_DELIMITER_SPACE}",
+            frac_layout.size.width
+        );
+        // the numerator and the denominator are centred between the null delimiters
+        for (&part, width) in parts.iter().zip(widths) {
+            let expected = NULL_DELIMITER_SPACE + (bar - width) / 2.0;
+            let x = layout(part).location.x;
+            assert!((x - expected).abs() < 0.5, "part at x = {x}, expected {expected}");
+        }
+    });
+}
+
+#[test]
+fn fraction_has_null_delimiter_space_text() {
+    check_null_delimiter_space("<math><mfrac><mi>a</mi><mi>bcd</mi></mfrac></math>");
+}
+
+#[test]
+fn fraction_has_null_delimiter_space_display() {
+    check_null_delimiter_space(
+        r#"<math display="block"><mfrac><mi>abc</mi><mi>d</mi></mfrac></math>"#,
+    );
+}
+
+#[test]
+fn fraction_without_bar_has_null_delimiter_space() {
+    // \genfrac{}{}{0pt}{}{a}{b} (and \atop) are generalized fractions as well
+    check_null_delimiter_space(
+        r#"<math><mfrac linethickness="0"><mi>a</mi><mi>bcd</mi></mfrac></math>"#,
+    );
+}
+
+#[test]
+fn fraction_in_a_row_is_spaced_from_its_neighbours() {
+    // x\frac{a}{b}: the row is as wide as its children, and the fraction is 2 * 0.12em wider than
+    // its bar, so the gap between the `x` and the numerator or denominator is at least 0.12em.
+    layout_xml(
+        "<math><mrow><mi>x</mi><mfrac><mi>a</mi><mi>b</mi></mfrac><mi>y</mi></mrow></math>",
+        |doc, layout| {
+            let row = doc.node(doc.root().unwrap()).children[0];
+            let kids = &doc.node(row).children;
+            let (x, frac, y) = (layout(kids[0]), layout(kids[1]), layout(kids[2]));
+            let numerator = doc.node(kids[1]).children[0];
+            let denominator = doc.node(kids[1]).children[1];
+            let ink_left = frac.location.x
+                + layout(numerator).location.x.min(layout(denominator).location.x);
+            let gap_left = ink_left - (x.location.x + x.size.width);
+            assert!(gap_left >= NULL_DELIMITER_SPACE - 0.5, "gap before the fraction: {gap_left}");
+            let ink_right = frac.location.x
+                + (layout(numerator).location.x + layout(numerator).size.width)
+                    .max(layout(denominator).location.x + layout(denominator).size.width);
+            let gap_right = y.location.x - ink_right;
+            assert!(gap_right >= NULL_DELIMITER_SPACE - 0.5, "gap after the fraction: {gap_right}");
+        },
+    );
 }

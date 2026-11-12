@@ -55,9 +55,6 @@ def measure_with_tex():
         # Roman, unless told otherwise. It has no MATH table (no italic corrections, no top accent
         # attachments), and formel draws upright letters with the math font: use that.
         r"\setoperatorfont\symup",
-        # TeX puts 1.2pt of "null delimiter space" around every fraction and \left. / \right. .
-        # MathML has no such thing, so measure without it.
-        r"\nulldelimiterspace=0pt",
         rf'\directlua{{dofile("{HERE / "glyphs.lua"}")}}',
         r"\begin{document}",
         r"\renewcommand\mathrm[1]{\symup{#1}}",

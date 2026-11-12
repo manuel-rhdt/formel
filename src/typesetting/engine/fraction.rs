@@ -4,8 +4,11 @@ use super::lbox::LBox;
 use super::{Box_, Ctx, Engine};
 use crate::host::{
     Form, MathComputedStyle, MathConstant, MathFont, MathLayoutHost, MathStyle, Point,
-    parse_math_length,
+    parse_math_length, script_scale_factor,
 };
+
+/// TeX's `\nulldelimiterspace`, 1.2pt at 10pt, as a fraction of the font size.
+const NULL_DELIMITER_SPACE: f32 = 0.12;
 
 impl<'t, T: MathLayoutHost> Engine<'t, T> {
     /// `<mfrac>` (MathML Core 3.3.2).
@@ -93,12 +96,17 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         // does the same), not by their ink: the fraction is as wide as the wider one, and the bar
         // spans all of it.
         let width = numerator.metrics.advance.max(denominator.metrics.advance);
-        numerator.origin.x = (width - numerator.metrics.advance) / 2.0;
-        denominator.origin.x = (width - denominator.metrics.advance) / 2.0;
+        // TeX sets a fraction between two empty delimiters, each `\nulldelimiterspace` wide.
+        // It is a fixed length: it does not shrink in a script (unlike the font size).
+        let text_size = style.font_size
+            / script_scale_factor(&self.tree.font(node), 0, style.math_depth);
+        let margin = NULL_DELIMITER_SPACE * text_size;
+        numerator.origin.x = margin + (width - numerator.metrics.advance) / 2.0;
+        denominator.origin.x = margin + (width - denominator.metrics.advance) / 2.0;
 
         if thickness > 0.0 {
             let mut rule = LBox::rule(width, thickness);
-            rule.origin = Point::new(0.0, -axis_height);
+            rule.origin = Point::new(margin, -axis_height);
             children.push(numerator);
             children.push(rule);
             children.push(denominator);
@@ -109,6 +117,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
 
         let mut fraction = LBox::boxes(children);
         fraction.metrics.italic_correction = 0.0;
+        fraction.metrics.advance = margin + width + margin;
         fraction
     }
 
