@@ -51,6 +51,7 @@
   header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
   h1 { font: 600 1.6rem/1.2 "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; margin: 0; letter-spacing: .01em; }
   .tagline { margin: .2rem 0 0; color: var(--muted); max-width: 44rem; }
+  .tagline a { white-space: nowrap; }
   .ghlink { font-size: .9rem; white-space: nowrap; }
 
   /* ---------- cards and bars ---------- */
@@ -85,7 +86,6 @@
   .seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
 
   input[type=color] { width: 2rem; height: 2rem; padding: 2px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); cursor: pointer; }
-  input[type=color].off { opacity: .4; }
   #textsize { width: 4.2rem; height: 2rem; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); padding: 0 .3rem 0 .5rem; }
 
   /* ---------- editor ---------- */
@@ -119,25 +119,44 @@
   }
   /* The preview is an <img> of exactly what is exported (the SVG, or the PNG at its resolution),
      so the browser's own image drag and right-click menu act on it. */
-  #imgout { display: block; flex: none; width: calc(var(--w, 0) * var(--size, 3) * 1em); max-width: 100%; height: auto; }
+  #imgout { display: block; flex: none; width: calc(var(--w, 0) * 3em); max-width: 100%; height: auto;
+    max-height: 22rem; object-fit: contain; }
   #out.ready #imgout { cursor: grab; }
 
   /* available to assistive technology without being visible */
   .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
     clip-path: inset(50%); white-space: nowrap; border: 0; }
   #out.stale #imgout { opacity: .3; }
-  .exportbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 .1rem; }
+  /* A transparent background shows as a faint checker: visible when you look for it, quiet
+     otherwise. A light formula color (for dark slides) gets the dark variant, so it stays legible. */
   .checker {
-    background-color: #ececec;
-    background-image: linear-gradient(45deg, #dadada 25%, transparent 25%, transparent 75%, #dadada 75%),
-                      linear-gradient(45deg, #dadada 25%, transparent 25%, transparent 75%, #dadada 75%);
+    --sq: #f1f1ee;
+    background-color: #fff;
+    background-image: linear-gradient(45deg, var(--sq) 25%, transparent 25%, transparent 75%, var(--sq) 75%),
+                      linear-gradient(45deg, var(--sq) 25%, transparent 25%, transparent 75%, var(--sq) 75%);
     background-size: 16px 16px; background-position: 0 0, 8px 8px;
   }
+  .checker.dark { --sq: #2b2d32; background-color: #222327; }
   .placeholder { color: #777; font-size: .95rem; }
   .meta { position: absolute; left: .75rem; bottom: .45rem; font-size: .78rem; color: #6d6d6d; pointer-events: none; }
-  .zoom { position: absolute; right: .5rem; bottom: .4rem; display: flex; gap: .2rem; align-items: center; }
-  .zoom .btn { height: 1.75rem; width: 1.75rem; background: rgba(255,255,255,.85); color: #222; border-color: #c8c8c8; }
-  .zoom output { min-width: 2.6rem; text-align: center; font-size: .8rem; color: #444; background: rgba(255,255,255,.85); border-radius: 4px; padding: 0 .2rem; cursor: pointer; }
+  .dark .placeholder, .dark + .meta { color: #a9abb2; }
+
+  /* a label followed by a joined pair of buttons, e.g. Download [SVG][PNG] */
+  .btngroup { display: inline-flex; align-items: center; gap: .4rem; color: var(--muted); font-size: .88rem; }
+  .btngroup .btn + .btn { margin-left: calc(-.4rem - 1px); border-radius: 0 6px 6px 0; }
+  .btngroup .btn:has(+ .btn) { border-radius: 6px 0 0 6px; }
+  .btngroup .btn:hover:not(:disabled) { position: relative; }
+  .btn .chev { font-size: .7em; color: var(--muted); transition: transform .15s; }
+  .btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+  .btn[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); }
+
+  /* options drawer */
+  #options { border-top: 1px solid var(--line); padding: .75rem; }
+  .optgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr)); gap: .6rem 1.5rem; }
+  .opt { display: flex; align-items: center; gap: .5rem; min-height: 2rem; font-size: .88rem; color: var(--muted); }
+  .opt > .optlabel { flex: 0 0 7.5rem; }
+  .opt > :not(.optlabel):not(.unit) { color: var(--text); }
+  #options .hint { margin: .7rem 0 0; max-width: 46rem; }
 
   /* font comparison */
   #fontgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: .5rem; padding: .75rem; border-top: 1px solid var(--line); }
@@ -150,6 +169,9 @@
   .fontcard .name { font-size: .8rem; color: #555; }
   .fontcard .img { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 3.5rem; color: #000; }
   .fontcard svg { width: calc(var(--w, 0) * 1.6em); max-width: 100%; height: auto; }
+  .fontcard.add { border-style: dashed; background: transparent; color: var(--muted); justify-content: center; text-align: center; gap: .15rem; }
+  .fontcard.add strong { color: var(--text); font-weight: 600; font-size: .9rem; }
+  .fontcard.add span { font-size: .8rem; }
 
   /* export */
 
@@ -176,15 +198,22 @@
   #snippet { width: 100%; height: 7.5rem; resize: vertical; color: var(--text); }
   .snippethint { margin: .4rem 0 0; }
   .panelbody p { margin: 0 0 .6rem; color: var(--muted); font-size: .9rem; max-width: 46rem; }
+  .panelbody h3 { font-size: .9rem; font-weight: 600; line-height: 1.3; margin: 1.1rem 0 .5rem; }
+  .panelbody h3:first-child { margin-top: 0; }
 
   footer { margin-top: 1.5rem; color: var(--muted); font-size: .82rem; }
 
   /* ---------- about ---------- */
-  .about { margin-top: 2.5rem; padding-top: 1.15rem; border-top: 1px solid var(--line); color: var(--muted); max-width: 46rem; }
+  .about { margin-top: 2.5rem; padding-top: 1.15rem; border-top: 1px solid var(--line); color: var(--muted); }
   .about h2 { font: 600 .95rem/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: .02em; text-transform: uppercase; margin: 0 0 .4rem; color: var(--text); }
-  .about p { margin: .55rem 0 0; }
-
-  .moduleinfo { margin: .35rem 0 0; color: var(--muted); font-size: .85rem; }
+  .about > p { margin: .55rem 0 0; max-width: 46rem; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .5rem; margin: 1rem 0 0; }
+  .fact { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: .55rem .7rem; font-size: .85rem; }
+  .fact p { margin: 0; }
+  .fact .big, .fact .moduleinfo { color: var(--text); font-weight: 600; font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .fact code { font: .85rem var(--mono); color: var(--text); }
+  .links { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; margin: .9rem 0 0; font-size: .9rem; }
+  .about details.panel { margin-top: 1rem; color: var(--text); }
 
   /* drop target for font files */
   body.dropping::after {
@@ -201,8 +230,11 @@
     .bar { padding: .5rem .6rem; gap: .5rem; }
     .hide-narrow { display: none; }
     #out { min-height: 10rem; padding: 1.5rem .75rem 2.75rem; }
-    .exportbar .sep, .settingsbar .spacer { display: none; }
     details.panel > summary .sub { display: none; }
+    .opt > .optlabel { flex-basis: 6.5rem; }
+    #font { min-width: 0; flex: 1; }
+    .settingsbar .field { flex: 1 1 100%; }
+    .settingsbar .spacer { display: none; }
   }
 </style>
 </head>
@@ -212,9 +244,9 @@
 <header>
   <div>
     <h1>formel</h1>
-    <p class="tagline">Turn LaTeX or MathML into an SVG or PNG image you can drop into a paper,
-      slide deck or website. Everything runs in your browser; nothing is uploaded.</p>
-    <p class="moduleinfo" id="moduleinfo">…</p>
+    <p class="tagline">Type an equation, paste the image into your slides, paper or website.
+      Runs in your browser on a small Rust typesetting engine; nothing is uploaded.
+      <a href="#about">How it works ↓</a></p>
   </div>
   <a class="ghlink" href="https://github.com/manuel-rhdt/formel">Source on GitHub ↗</a>
 </header>
@@ -226,10 +258,6 @@
     <fieldset class="seg" aria-label="Input language">
       <label><input type="radio" name="mode" value="latex" checked>LaTeX</label>
       <label><input type="radio" name="mode" value="mathml">MathML</label>
-    </fieldset>
-    <fieldset class="seg" id="displayseg" aria-label="Style" title="Display style: large operators, limits above and below. Inline style: compact, for running text.">
-      <label><input type="radio" name="display" value="block" checked>Display</label>
-      <label><input type="radio" name="display" value="inline">Inline</label>
     </fieldset>
     <span class="spacer"></span>
     <select id="examples" aria-label="Insert an example">
@@ -253,54 +281,74 @@
       <span class="placeholder" id="placeholder">Loading…</span>
     </div>
     <div class="meta" id="meta"></div>
-    <div class="zoom" aria-label="Preview zoom">
-      <button id="zoomout" class="btn icon" type="button" aria-label="Zoom out">−</button>
-      <output id="zoomval" title="Reset zoom">3×</output>
-      <button id="zoomin" class="btn icon" type="button" aria-label="Zoom in">+</button>
-    </div>
   </div>
 
   <div class="bar exportbar">
-    <fieldset class="seg" aria-label="Image format" title="Format of the preview, Copy, Download, dragging, the right-click menu and the embed snippets">
-      <label title="Vector: sharp at any size; best for documents, the web, Inkscape, Illustrator, Office"><input type="radio" name="format" value="svg" checked>SVG</label>
-      <label title="Bitmap: works in almost any app"><input type="radio" name="format" value="png">PNG</label>
-    </fieldset>
-    <label class="field" title="The text size the formula should match. Downloaded, copied and dragged images come out at this size: SVG in pt, PNG via its resolution.">
-      <span>Text size</span><input id="textsize" type="number" min="4" max="200" step="0.5" value="12" list="textsizes" aria-label="Text size in points"><span>pt</span>
-    </label>
-    <datalist id="textsizes">
-      <option value="9"></option><option value="10"></option><option value="11"></option><option value="12"></option>
-      <option value="14"></option><option value="18"></option><option value="24"></option><option value="32"></option>
-    </datalist>
-    <select id="dpi" aria-label="PNG resolution" title="PNG resolution, with the size of the image it gives. PNG files carry this resolution, so apps that read it insert them at the text size. A PNG copied from Chrome or Edge loses it (the browser re-encodes the image), so it pastes at the app's default resolution: the higher the dpi, the larger. To paste at the right size, use SVG.">
-      <option value="150">150 dpi</option>
-      <option value="300" selected>300 dpi</option>
-      <option value="600">600 dpi</option>
-      <option value="1200">1200 dpi</option>
-    </select>
-    <span class="sep" aria-hidden="true"></span>
-    <button id="copy" class="btn primary" type="button" disabled>Copy SVG</button>
-    <button id="download" class="btn" type="button" disabled>Download SVG</button>
+    <button id="copy" class="btn primary" type="button" disabled>Copy image</button>
+    <span class="btngroup" role="group" aria-label="Download">
+      <span aria-hidden="true">Download</span>
+      <button id="downloadsvg" class="btn" type="button" disabled aria-label="Download SVG"
+        title="Vector: sharp at any size. PowerPoint, Word, Inkscape, Illustrator and browsers open it.">SVG</button>
+      <button id="downloadpng" class="btn" type="button" disabled aria-label="Download PNG"
+        title="Bitmap: works in almost any app">PNG</button>
+    </span>
     <button id="copylink" class="btn quiet" type="button" title="Copy a link that reopens this formula with these settings">Copy link</button>
     <span class="spacer"></span>
     <span id="toast" role="status"></span>
-    <span class="hint hide-narrow" id="hint">or drag / right-click the formula · <kbd id="modkey">Ctrl</kbd> <kbd>Enter</kbd> copies</span>
+    <span class="hint hide-narrow" id="hint">or drag the formula into your app · <kbd id="modkey">Ctrl</kbd> <kbd>Enter</kbd> copies</span>
   </div>
   <div class="bar settingsbar">
     <label class="field"><span>Font</span>
       <select id="font"></select>
     </label>
-    <button id="compare" class="btn quiet" type="button" aria-pressed="false" aria-controls="fontgrid"
+    <button id="compare" class="btn" type="button" aria-pressed="false" aria-controls="fontgrid"
       title="Render the formula in every font side by side">Compare fonts</button>
     <span class="spacer"></span>
-    <label class="field"><span>Color</span><input id="fg" type="color" value="#000000" aria-label="Formula color"></label>
-    <span class="field"><span>Background</span>
-      <fieldset class="seg" aria-label="Background">
-        <label><input type="radio" name="bgmode" value="none" checked>None</label>
-        <label><input type="radio" name="bgmode" value="color">Fill</label>
-      </fieldset>
-      <input id="bg" type="color" value="#ffffff" class="off" aria-label="Background color">
-    </span>
+    <button id="optionsbtn" class="btn" type="button" aria-expanded="false" aria-controls="options">Options <span class="chev" aria-hidden="true">▾</span></button>
+  </div>
+
+  <div id="options" hidden>
+    <div class="optgrid">
+      <div class="opt" id="displayopt"><span class="optlabel">Style</span>
+        <fieldset class="seg" aria-label="Style" title="Display: large operators, limits above and below. Inline: compact, for running text.">
+          <label><input type="radio" name="display" value="block" checked>Display</label>
+          <label><input type="radio" name="display" value="inline">Inline</label>
+        </fieldset>
+      </div>
+      <div class="opt"><span class="optlabel">Text size</span>
+        <input id="textsize" type="number" min="4" max="200" step="0.5" value="12" list="textsizes" aria-label="Text size in points"><span class="unit">pt</span>
+        <datalist id="textsizes">
+          <option value="9"></option><option value="10"></option><option value="11"></option><option value="12"></option>
+          <option value="14"></option><option value="18"></option><option value="24"></option><option value="32"></option>
+        </datalist>
+      </div>
+      <div class="opt"><span class="optlabel">Color</span>
+        <input id="fg" type="color" value="#000000" aria-label="Formula color">
+      </div>
+      <div class="opt"><span class="optlabel">Background</span>
+        <fieldset class="seg" aria-label="Background">
+          <label><input type="radio" name="bgmode" value="none" checked>Transparent</label>
+          <label><input type="radio" name="bgmode" value="color">Color</label>
+        </fieldset>
+        <input id="bg" type="color" value="#ffffff" aria-label="Background color" hidden>
+      </div>
+      <div class="opt"><span class="optlabel">PNG resolution</span>
+        <select id="dpi" aria-label="PNG resolution">
+          <option value="150">150 dpi</option>
+          <option value="300" selected>300 dpi</option>
+          <option value="600">600 dpi</option>
+          <option value="1200">1200 dpi</option>
+        </select>
+      </div>
+      <div class="opt"><span class="optlabel">Drag out as</span>
+        <fieldset class="seg" aria-label="Format of the preview image, for dragging, the right-click menu and the embed code">
+          <label><input type="radio" name="format" value="svg" checked>SVG</label>
+          <label><input type="radio" name="format" value="png">PNG</label>
+        </fieldset>
+      </div>
+    </div>
+    <p class="hint">Text size is the size of the text the formula sits next to: a downloaded SVG comes out at
+      exactly that size, a PNG at that size times the resolution. On a slide, just scale the image.</p>
   </div>
 
   <div id="fontgrid" hidden aria-label="The formula in every font"></div>
@@ -308,8 +356,9 @@
 </section>
 
 <details class="card panel" id="embed">
-  <summary>Embed in a web page or Markdown <span class="sub">self-contained snippet, aligned to the text baseline; uses the PNG/SVG choice</span></summary>
+  <summary>Embed code &amp; other ways to copy <span class="sub">HTML, Markdown, SVG source, rich text</span></summary>
   <div class="panelbody">
+    <h3>For a web page or Markdown</h3>
     <div class="bar">
       <select id="snippetkind" aria-label="Snippet type">
         <option value="img">HTML &lt;img&gt; with data URI</option>
@@ -321,40 +370,48 @@
     </div>
     <textarea id="snippet" readonly spellcheck="false" aria-label="Embed snippet" aria-describedby="snippethint"></textarea>
     <p class="hint snippethint" id="snippethint"></p>
-  </div>
-</details>
 
-<details class="card panel" id="mathmldetails">
-  <summary>Generated MathML <span class="sub">what the LaTeX was converted to</span></summary>
-  <div class="panelbody">
+    <h3>If pasting the image does not work</h3>
+    <p><em>Copy image</em> puts a PNG on the clipboard, plus the SVG where the browser can. These are
+      the alternatives: the SVG source as plain text, for an editor or a file, and <em>rich text</em>
+      (HTML with the image embedded), which some apps keep as a vector image.</p>
     <div class="bar">
-      <button id="editmathml" class="btn" type="button">Edit as MathML</button>
-      <button id="copymathml" class="btn quiet" type="button">Copy</button>
+      <button id="copysvg" class="btn" type="button" disabled>Copy SVG source</button>
+      <button id="copyhtml" class="btn" type="button" disabled>Copy as rich text</button>
     </div>
-    <pre id="mathml"></pre>
-  </div>
-</details>
-
-<details class="card panel" id="experimental">
-  <summary>More ways to move the image <span class="sub">experimental, app-dependent</span></summary>
-  <div class="panelbody">
-    <p>If <em>Copy</em> or dragging does not work with an app, these put the image on the clipboard as
-      <em>rich text</em> instead: HTML with the image embedded. Whether the target app keeps it as a vector image,
-      converts it to a bitmap or ignores it depends on the app.</p>
-    <div class="bar">
-      <button id="copyhtml" class="btn" type="button" disabled>Copy as HTML (PNG)</button>
-    </div>
-    <p>With SVG selected, <em>Copy SVG</em> copies the SVG source code as text, ready to paste into a
-      file or an editor. With PNG selected, <em>Copy PNG</em> copies the image itself.</p>
   </div>
 </details>
 </main>
 
 <section class="about" id="about" aria-labelledby="aboutheading">
-  <h2 id="aboutheading">About</h2>
-  <p>Good math typesetting usually means installing a TeX distribution. formel does it without one.
-    The layout follows the rules XeTeX and LuaTeX use, read from the font’s OpenType MATH table, in a
-    small Rust core compiled to WebAssembly.</p>
+  <h2 id="aboutheading">How it works</h2>
+  <p>This page is a demo of <a href="https://github.com/manuel-rhdt/formel">formel</a>, a Rust library
+    that typesets math. Good math typesetting usually means installing a TeX distribution; formel does
+    it without one. The layout follows the rules XeTeX and LuaTeX use, read from the font’s OpenType
+    MATH table, with <a href="https://github.com/harfbuzz/rustybuzz">rustybuzz</a> for shaping. Any
+    font that works with those engines works here, so drop in your own.</p>
+  <div class="facts">
+    <div class="fact"><p class="big" id="rendertime">–</p><p>to typeset the formula above</p></div>
+    <div class="fact"><p class="moduleinfo" id="moduleinfo">…</p><p>the whole engine, no server</p></div>
+    <div class="fact"><p class="big"><code>cargo add formel</code></p><p>glyph positions out, or SVG</p></div>
+  </div>
+  <p class="links">
+    <a href="https://github.com/manuel-rhdt/formel">GitHub ↗</a>
+    <a href="https://crates.io/crates/formel">crates.io ↗</a>
+    <a href="https://docs.rs/formel">docs.rs ↗</a>
+    <a href="https://github.com/manuel-rhdt/formel#gallery">Font gallery ↗</a>
+  </p>
+
+  <details class="card panel" id="mathmldetails">
+    <summary>The MathML behind this formula <span class="sub">LaTeX is converted to MathML Core, then laid out</span></summary>
+    <div class="panelbody">
+      <div class="bar">
+        <button id="editmathml" class="btn" type="button">Edit as MathML</button>
+        <button id="copymathml" class="btn quiet" type="button">Copy</button>
+      </div>
+      <pre id="mathml"></pre>
+    </div>
+  </details>
 </section>
 
 <footer>
@@ -607,7 +664,6 @@ function currentState() {
     display: radio("display") === "block",
     fg: $("fg").value,
     bg: radio("bgmode") === "none" ? null : $("bg").value,
-    size: zoom,
     textSize: textSize(),
   };
 }
@@ -634,7 +690,6 @@ function applyState(state, hasSource) {
   $("fg").value = state.fg;
   setRadio("bgmode", state.bg ? "color" : "none");
   if (state.bg) $("bg").value = state.bg;
-  setZoom(state.size);
   $("textsize").value = state.textSize;
   lastTextSize = state.textSize;
   fontFile = state.font;
@@ -708,7 +763,9 @@ function render() {
   clearError();
   $("mathml").textContent = prettyXml(mathml);
   $("a11ymath").innerHTML = mathml;
-  $("meta").textContent = `${fontName} · ${(performance.now() - t0).toFixed(1)} ms`;
+  $("meta").textContent = "";
+  const ms = performance.now() - t0;
+  $("rendertime").textContent = `${ms < 10 ? ms.toFixed(1) : Math.round(ms)} ms`;
   refreshOutput();
   scheduleFontGrid();
 }
@@ -724,11 +781,17 @@ function fail(e, range) {
 }
 
 function refreshExportState() {
-  for (const id of ["copy", "download", "copyhtml", "copysnippet", "editmathml", "copymathml"]) {
+  for (const id of ["copy", "downloadsvg", "downloadpng", "copysvg", "copyhtml", "copysnippet", "editmathml", "copymathml"]) {
     $(id).disabled = !valid;
   }
   $("out").classList.toggle("ready", valid);
   $("imgout").draggable = valid;
+}
+
+/** Whether a `#rrggbb` color is light enough to need a dark backdrop. */
+function isLight(hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6;
 }
 
 function showPlaceholder(text) {
@@ -748,6 +811,7 @@ function refreshOutput() {
   $("placeholder").hidden = true;
   $("out").classList.toggle("stale", !valid);
   $("out").classList.toggle("checker", !colors().bg);
+  $("out").classList.toggle("dark", !colors().bg && isLight(colors().fg));
   $("out").style.backgroundColor = colors().bg ?? "";
   refreshExportState();
   updateScaleLabels();
@@ -842,17 +906,6 @@ function prettyXml(xml) {
   return out.join("\n");
 }
 
-// ---------- zoom ----------
-
-let zoom = 3;
-function setZoom(value) {
-  zoom = Math.min(8, Math.max(1, Math.round(value * 4) / 4));
-  document.documentElement.style.setProperty("--size", String(zoom));
-  $("zoomval").value = `${zoom}×`;
-  $("zoomout").disabled = zoom <= 1;
-  $("zoomin").disabled = zoom >= 8;
-}
-
 // ---------- fonts ----------
 
 function loadRenderer(file) {
@@ -921,12 +974,20 @@ function buildFontGrid() {
     card.addEventListener("click", () => selectFont(file));
     return card;
   }));
+  if (!customRenderer) {
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "fontcard add";
+    add.innerHTML = `<strong>+ Use your own font</strong><span>choose an .otf or .ttf with a MATH table, or drop the file anywhere on the page</span>`;
+    add.addEventListener("click", () => $("fontfile").click());
+    grid.append(add);
+  }
   markCurrentFontCard();
   if (!grid.hidden) renderFontGrid();
 }
 
 function markCurrentFontCard() {
-  for (const card of $("fontgrid").children) {
+  for (const card of $("fontgrid").querySelectorAll("[data-file]")) {
     card.setAttribute("aria-pressed", String(card.dataset.file === fontFile));
   }
 }
@@ -941,7 +1002,7 @@ function scheduleFontGrid() {
 async function renderFontGrid() {
   if (!valid || !rendering) return;
   const mathml = rendering.mathml;
-  for (const card of $("fontgrid").children) {
+  for (const card of $("fontgrid").querySelectorAll("[data-file]")) {
     const file = card.dataset.file;
     const slot = card.querySelector(".img");
     try {
@@ -1049,23 +1110,31 @@ function needClipboard() {
 }
 
 /**
- * SVG mode copies the SVG source as text: it goes into a file, an editor or a CMS without any
- * browser-specific clipboard format getting in the way. PNG mode copies the image, which is what
- * an app expects from a PNG.
+ * Copy always copies an image, whatever the preview format: a PNG, which every app pastes, and
+ * next to it the SVG where the browser can put one on the clipboard, for apps that prefer vector.
  */
 const copyImage = () => valid && guarded("Copy", async () => {
-  if (format() === "svg") {
-    if (!navigator.clipboard?.writeText) {
-      throw new Error("the clipboard API is not available (it needs https or localhost)");
-    }
-    await navigator.clipboard.writeText(fileSvg().svg);
-    toast("Copied the SVG source; paste it into a file or an editor");
-    return;
-  }
   needClipboard();
+  toast("Copying…");
   // Passing the promise (not the blob) keeps Safari happy: the write must start inside the click.
-  await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob(pxPerEm()) })]);
-  toast("Copied the PNG");
+  const png = pngBlob(pxPerEm());
+  const vector = Boolean(ClipboardItem.supports?.("image/svg+xml"));
+  if (vector) {
+    try {
+      // without the XML declaration: the browser's clipboard sanitizer would turn it into a comment
+      const svg = new Blob([fileSvg().svg.replace(/^<\?xml[^>]*\?>\s*/, "")], { type: "image/svg+xml" });
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": png, "image/svg+xml": svg })]);
+      toast("Copied the image; paste it into your slide or document");
+      return;
+    } catch { /* fall back to the PNG alone */ }
+  }
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+  toast("Copied the image; paste it into your slide or document");
+});
+
+const copySvgSource = () => valid && guarded("Copy", async () => {
+  await navigator.clipboard.writeText(fileSvg().svg);
+  toast("Copied the SVG source");
 });
 
 /** `<img>` HTML for the SVG (vector) or the PNG (raster) of the current rendering. */
@@ -1093,31 +1162,20 @@ const copyHtml = () => guarded("Copy as HTML", async () => {
   needClipboard();
   const html = imageHtml(kind).then((h) => new Blob([h], { type: "text/html" }));
   await navigator.clipboard.write([new ClipboardItem({ "text/html": html })]);
-  toast(`Copied as HTML (${kind.toUpperCase()}); paste it into the other app`);
+  toast("Copied as rich text; paste it into the other app");
 });
 
-const downloadSvg = () => saveBlob(new Blob([fileSvg().svg], { type: "image/svg+xml" }), "formula.svg");
-const downloadPng = () => guarded("PNG export", async () => saveBlob(await pngBlob(pxPerEm()), "formula.png"));
+const downloadSvg = () => {
+  if (!valid) return;
+  saveBlob(new Blob([fileSvg().svg], { type: "image/svg+xml" }), "formula.svg");
+  toast("Saved formula.svg");
+};
+const downloadPng = () => valid && guarded("PNG export", async () => {
+  saveBlob(await pngBlob(pxPerEm()), "formula.png");
+  toast("Saved formula.png");
+});
 
 const format = () => radio("format");
-function downloadImage() {
-  if (!valid) return;
-  if (format() === "png") return downloadPng();
-  downloadSvg();
-  toast("Saved formula.svg");
-}
-
-function updateFormatUi() {
-  const f = format().toUpperCase();
-  store.set("mathrender.format", format());
-  $("dpi").hidden = format() !== "png";
-  $("copy").textContent = `Copy ${f}`;
-  $("download").textContent = `Download ${f}`;
-  $("copyhtml").textContent = `Copy as HTML (${f})`;
-  $("copy").title = format() === "svg"
-    ? `Copy the SVG source code (${modKey}+Enter)`
-    : `Copy the PNG (${modKey}+Enter)`;
-}
 
 // ---------- preview images, dragging and the context menu ----------
 
@@ -1258,7 +1316,7 @@ function updateMode(previous) {
   const mode = radio("mode");
   if (previous && previous !== mode) saved[previous] = $("src").value;
   $("src").value = saved[mode];
-  $("displayseg").hidden = mode !== "latex";
+  $("displayopt").hidden = mode !== "latex";
   $("mathmldetails").hidden = mode !== "latex";
   $("src").placeholder = mode === "latex" ? String.raw`Type LaTeX, e.g. \frac{a}{b}` : "Type MathML, e.g. <math><mi>x</mi></math>";
   autosize();
@@ -1357,19 +1415,23 @@ $("examples").addEventListener("change", (e) => {
 
 const recolor = () => { refreshOutput(); scheduleHashUpdate(); };
 $("fg").addEventListener("input", recolor);
-$("bg").addEventListener("click", () => { setRadio("bgmode", "color"); updateBgUi(); recolor(); });
 $("bg").addEventListener("input", () => { setRadio("bgmode", "color"); updateBgUi(); recolor(); });
 for (const input of document.querySelectorAll("input[name=bgmode]")) {
   input.addEventListener("change", () => { updateBgUi(); recolor(); });
 }
-function updateBgUi() { $("bg").classList.toggle("off", radio("bgmode") === "none"); }
+function updateBgUi() { $("bg").hidden = radio("bgmode") === "none"; }
 
-$("zoomin").addEventListener("click", () => { setZoom(zoom + 0.5); scheduleHashUpdate(); });
-$("zoomout").addEventListener("click", () => { setZoom(zoom - 0.5); scheduleHashUpdate(); });
-$("zoomval").addEventListener("click", () => { setZoom(3); scheduleHashUpdate(); });
+function setOptionsOpen(open) {
+  $("options").hidden = !open;
+  $("optionsbtn").setAttribute("aria-expanded", String(open));
+}
+$("optionsbtn").addEventListener("click", () => setOptionsOpen($("options").hidden));
 
 for (const input of document.querySelectorAll("input[name=format]")) {
-  input.addEventListener("change", () => { updateFormatUi(); schedulePng(); updateDisplay(); updateSnippet(); });
+  input.addEventListener("change", () => {
+    store.set("mathrender.format", format());
+    schedulePng(); updateDisplay(); updateSnippet();
+  });
 }
 $("textsize").addEventListener("input", () => {
   if (!$("textsize").validity.valid || !$("textsize").value) return;   // wait for a usable number
@@ -1389,7 +1451,9 @@ $("dpi").addEventListener("change", () => {
 $("snippetkind").addEventListener("change", updateSnippet);
 
 $("copy").addEventListener("click", copyImage);
-$("download").addEventListener("click", downloadImage);
+$("downloadsvg").addEventListener("click", downloadSvg);
+$("downloadpng").addEventListener("click", downloadPng);
+$("copysvg").addEventListener("click", copySvgSource);
 $("copyhtml").addEventListener("click", copyHtml);
 $("copylink").addEventListener("click", () => guarded("Copy link", async () => {
   history.replaceState(null, "", `#${encodeState(currentState())}`);
@@ -1419,6 +1483,7 @@ $("editmathml").addEventListener("click", () => {
 $("imgout").addEventListener("dragstart", onDragStart);
 
 $("modkey").textContent = modKey;
+$("copy").title = `Copy the formula as an image (${modKey}+Enter)`;
 addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (isMac ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey) {
     e.preventDefault();
@@ -1431,16 +1496,18 @@ addEventListener("keydown", (e) => {
 setRadio("format", store.get("mathrender.format", "svg"));
 $("dpi").value = store.get("mathrender.dpi", "300");
 if (!$("dpi").value) $("dpi").value = "300";
-updateFormatUi();
 
 await init();
 const { state, hasSource } = decodeState(location.hash, FONTS.map((f) => f.file));
 applyState(state, hasSource);
 updateBgUi();
+// a link that carries non-default options opens with them in view
+if (!state.display || state.fg !== "#000000" || state.bg || state.textSize !== 12) setOptionsOpen(true);
 currentMode = radio("mode");
 lastFont = state.font;
 updateMode(null);
-selectFont(state.font);
+await selectFont(state.font);
+render();   // once more, warm: the first call's time is mostly the engine starting up
 </script>
 </body>
 </html>
