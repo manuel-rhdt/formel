@@ -84,6 +84,8 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let mut owes_function_space = false;
         for (i, child_box) in boxes.into_iter().enumerate() {
             let mut child_box = child_box.expect("every child was laid out");
+            // A row that ends with an unpaid function application says so on its own box.
+            let owes_from_box = child_box.metrics.ends_with_function_application;
             let (lspace, mut rspace) = match properties[i] {
                 Some(p) if self.applies_operator_spacing(children[i]) => (p.lspace, p.rspace),
                 _ => (0.0, 0.0),
@@ -106,9 +108,10 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             {
                 cursor += THIN_SPACE * self.tree.style(children[i]).font_size;
             }
-            owes_function_space = self.is_function_application(children[i])
-                && self.applies_operator_spacing(children[i])
-                && rspace == 0.0;
+            owes_function_space = owes_from_box
+                || (self.is_function_application(children[i])
+                    && self.applies_operator_spacing(children[i])
+                    && rspace == 0.0);
             cursor += lspace;
             // MathML Core 3.3.1.2: a child is slanted if it is not an embellished operator and has
             // an italic correction. The one before a slanted child is dropped, an operator is never
