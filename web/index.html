@@ -377,7 +377,6 @@
   <div class="facts">
     <div class="fact"><p class="big" id="rendertime">–</p><p>to typeset the formula above</p></div>
     <div class="fact"><p class="moduleinfo" id="moduleinfo">1.0 MB of WebAssembly (424 KB gzipped)</p><p>the whole engine, no server</p></div>
-    <div class="fact"><p class="big"><span id="fontcount">14</span> math fonts</p><p>bundled; drop in your own</p></div>
   </div>
   <p class="links">
     <a href="https://github.com/manuel-rhdt/formel">GitHub ↗</a>
@@ -1470,7 +1469,6 @@ $("editmathml").addEventListener("click", () => {
 $("imgout").addEventListener("dragstart", onDragStart);
 
 $("modkey").textContent = modKey;
-$("fontcount").textContent = FONTS.length;
 addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (isMac ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey) {
     e.preventDefault();
