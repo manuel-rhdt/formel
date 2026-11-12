@@ -141,11 +141,6 @@
   .meta { position: absolute; left: .75rem; bottom: .45rem; font-size: .78rem; color: #6d6d6d; pointer-events: none; }
   .dark .placeholder, .dark + .meta { color: #a9abb2; }
 
-  /* a label followed by a joined pair of buttons, e.g. Download [SVG][PNG] */
-  .btngroup { display: inline-flex; align-items: center; gap: .4rem; color: var(--muted); font-size: .88rem; }
-  .btngroup .btn + .btn { margin-left: calc(-.4rem - 1px); border-radius: 0 6px 6px 0; }
-  .btngroup .btn:has(+ .btn) { border-radius: 6px 0 0 6px; }
-  .btngroup .btn:hover:not(:disabled) { position: relative; }
   .btn .chev { font-size: .7em; color: var(--muted); transition: transform .15s; }
   .btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
   .btn[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); }
@@ -211,7 +206,6 @@
   .fact { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: .55rem .7rem; font-size: .85rem; }
   .fact p { margin: 0; }
   .fact .big, .fact .moduleinfo { color: var(--text); font-weight: 600; font-size: 1rem; font-variant-numeric: tabular-nums; }
-  .fact code { font: .85rem var(--mono); color: var(--text); }
   .links { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; margin: .9rem 0 0; font-size: .9rem; }
   .about details.panel { margin-top: 1rem; color: var(--text); }
 
@@ -284,15 +278,12 @@
   </div>
 
   <div class="bar exportbar">
-    <button id="copy" class="btn primary" type="button" disabled>Copy image</button>
-    <span class="btngroup" role="group" aria-label="Download">
-      <span aria-hidden="true">Download</span>
-      <button id="downloadsvg" class="btn" type="button" disabled aria-label="Download SVG"
-        title="Vector: sharp at any size. PowerPoint, Word, Inkscape, Illustrator and browsers open it.">SVG</button>
-      <button id="downloadpng" class="btn" type="button" disabled aria-label="Download PNG"
-        title="Bitmap: works in almost any app">PNG</button>
-    </span>
-    <button id="copylink" class="btn quiet" type="button" title="Copy a link that reopens this formula with these settings">Copy link</button>
+    <fieldset class="seg" aria-label="Image format" title="Format of Copy, Download, dragging the formula and the right-click menu">
+      <label title="Vector: sharp at any size. PowerPoint, Word, Inkscape, Illustrator and browsers take it."><input type="radio" name="format" value="svg" checked>SVG</label>
+      <label title="Bitmap: works in almost any app"><input type="radio" name="format" value="png">PNG</label>
+    </fieldset>
+    <button id="copy" class="btn primary" type="button" disabled>Copy SVG</button>
+    <button id="download" class="btn" type="button" disabled>Download SVG</button>
     <span class="spacer"></span>
     <span id="toast" role="status"></span>
     <span class="hint hide-narrow" id="hint">or drag the formula into your app · <kbd id="modkey">Ctrl</kbd> <kbd>Enter</kbd> copies</span>
@@ -301,8 +292,8 @@
     <label class="field"><span>Font</span>
       <select id="font"></select>
     </label>
-    <button id="compare" class="btn" type="button" aria-pressed="false" aria-controls="fontgrid"
-      title="Render the formula in every font side by side">Compare fonts</button>
+    <button id="compare" class="btn" type="button" aria-expanded="false" aria-controls="fontgrid"
+      title="Render the formula in every font side by side">Compare fonts <span class="chev" aria-hidden="true">▾</span></button>
     <span class="spacer"></span>
     <button id="optionsbtn" class="btn" type="button" aria-expanded="false" aria-controls="options">Options <span class="chev" aria-hidden="true">▾</span></button>
   </div>
@@ -340,12 +331,6 @@
           <option value="1200">1200 dpi</option>
         </select>
       </div>
-      <div class="opt"><span class="optlabel">Drag out as</span>
-        <fieldset class="seg" aria-label="Format of the preview image, for dragging, the right-click menu and the embed code">
-          <label><input type="radio" name="format" value="svg" checked>SVG</label>
-          <label><input type="radio" name="format" value="png">PNG</label>
-        </fieldset>
-      </div>
     </div>
     <p class="hint">Text size is the size of the text the formula sits next to: a downloaded SVG comes out at
       exactly that size, a PNG at that size times the resolution. On a slide, just scale the image.</p>
@@ -372,9 +357,8 @@
     <p class="hint snippethint" id="snippethint"></p>
 
     <h3>If pasting the image does not work</h3>
-    <p><em>Copy image</em> puts a PNG on the clipboard, plus the SVG where the browser can. These are
-      the alternatives: the SVG source as plain text, for an editor or a file, and <em>rich text</em>
-      (HTML with the image embedded), which some apps keep as a vector image.</p>
+    <p>The SVG source as plain text, for an editor or a file, or <em>rich text</em> (HTML with the
+      image embedded), which some apps keep as a vector image.</p>
     <div class="bar">
       <button id="copysvg" class="btn" type="button" disabled>Copy SVG source</button>
       <button id="copyhtml" class="btn" type="button" disabled>Copy as rich text</button>
@@ -392,8 +376,8 @@
     font that works with those engines works here, so drop in your own.</p>
   <div class="facts">
     <div class="fact"><p class="big" id="rendertime">–</p><p>to typeset the formula above</p></div>
-    <div class="fact"><p class="moduleinfo" id="moduleinfo">…</p><p>the whole engine, no server</p></div>
-    <div class="fact"><p class="big"><code>cargo add formel</code></p><p>glyph positions out, or SVG</p></div>
+    <div class="fact"><p class="moduleinfo" id="moduleinfo">1.0 MB of WebAssembly (424 KB gzipped)</p><p>the whole engine, no server</p></div>
+    <div class="fact"><p class="big"><span id="fontcount">14</span> math fonts</p><p>bundled; drop in your own</p></div>
   </div>
   <p class="links">
     <a href="https://github.com/manuel-rhdt/formel">GitHub ↗</a>
@@ -781,7 +765,7 @@ function fail(e, range) {
 }
 
 function refreshExportState() {
-  for (const id of ["copy", "downloadsvg", "downloadpng", "copysvg", "copyhtml", "copysnippet", "editmathml", "copymathml"]) {
+  for (const id of ["copy", "download", "copysvg", "copyhtml", "copysnippet", "editmathml", "copymathml"]) {
     $(id).disabled = !valid;
   }
   $("out").classList.toggle("ready", valid);
@@ -1110,26 +1094,29 @@ function needClipboard() {
 }
 
 /**
- * Copy always copies an image, whatever the preview format: a PNG, which every app pastes, and
- * next to it the SVG where the browser can put one on the clipboard, for apps that prefer vector.
+ * Copies the image in the chosen format. Where the browser can put an SVG image on the clipboard
+ * (Chromium) that is what SVG copies; Firefox cannot, so there the SVG source goes on as text and
+ * the message says so, rather than quietly copying a PNG.
  */
 const copyImage = () => valid && guarded("Copy", async () => {
-  needClipboard();
-  toast("Copying…");
-  // Passing the promise (not the blob) keeps Safari happy: the write must start inside the click.
-  const png = pngBlob(pxPerEm());
-  const vector = Boolean(ClipboardItem.supports?.("image/svg+xml"));
-  if (vector) {
-    try {
-      // without the XML declaration: the browser's clipboard sanitizer would turn it into a comment
-      const svg = new Blob([fileSvg().svg.replace(/^<\?xml[^>]*\?>\s*/, "")], { type: "image/svg+xml" });
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": png, "image/svg+xml": svg })]);
-      toast("Copied the image; paste it into your slide or document");
-      return;
-    } catch { /* fall back to the PNG alone */ }
+  if (format() === "png") {
+    needClipboard();
+    // Passing the promise (not the blob) keeps Safari happy: the write must start inside the click.
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob(pxPerEm()) })]);
+    toast("Copied the PNG; paste it into your slide or document");
+    return;
   }
-  await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-  toast("Copied the image; paste it into your slide or document");
+  const svg = fileSvg().svg;
+  if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write && ClipboardItem.supports?.("image/svg+xml")) {
+    // without the XML declaration: the browser's clipboard sanitizer would turn it into a comment
+    const blob = new Blob([svg.replace(/^<\?xml[^>]*\?>\s*/, "")], { type: "image/svg+xml" });
+    await navigator.clipboard.write([new ClipboardItem({ "image/svg+xml": blob })]);
+    toast("Copied the SVG; paste it into your slide or document");
+    return;
+  }
+  if (!navigator.clipboard?.writeText) throw new Error("the clipboard API is not available (it needs https or localhost)");
+  await navigator.clipboard.writeText(svg);
+  toast("This browser cannot copy SVG images, so the SVG source was copied as text. Choose PNG to copy an image.");
 });
 
 const copySvgSource = () => valid && guarded("Copy", async () => {
@@ -1176,6 +1163,15 @@ const downloadPng = () => valid && guarded("PNG export", async () => {
 });
 
 const format = () => radio("format");
+function downloadImage() { return format() === "png" ? downloadPng() : downloadSvg(); }
+
+function updateFormatUi() {
+  const f = format().toUpperCase();
+  store.set("mathrender.format", format());
+  $("copy").textContent = `Copy ${f}`;
+  $("download").textContent = `Download ${f}`;
+  $("copy").title = `Copy the formula as ${f} (${modKey}+Enter)`;
+}
 
 // ---------- preview images, dragging and the context menu ----------
 
@@ -1385,7 +1381,7 @@ addEventListener("drop", async (e) => {
 $("compare").addEventListener("click", () => {
   const open = $("fontgrid").hidden;
   $("fontgrid").hidden = !open;
-  $("compare").setAttribute("aria-pressed", String(open));
+  $("compare").setAttribute("aria-expanded", String(open));
   if (open) {
     if (!$("fontgrid").children.length) buildFontGrid();
     else renderFontGrid();
@@ -1428,10 +1424,7 @@ function setOptionsOpen(open) {
 $("optionsbtn").addEventListener("click", () => setOptionsOpen($("options").hidden));
 
 for (const input of document.querySelectorAll("input[name=format]")) {
-  input.addEventListener("change", () => {
-    store.set("mathrender.format", format());
-    schedulePng(); updateDisplay(); updateSnippet();
-  });
+  input.addEventListener("change", () => { updateFormatUi(); schedulePng(); updateDisplay(); updateSnippet(); });
 }
 $("textsize").addEventListener("input", () => {
   if (!$("textsize").validity.valid || !$("textsize").value) return;   // wait for a usable number
@@ -1451,15 +1444,9 @@ $("dpi").addEventListener("change", () => {
 $("snippetkind").addEventListener("change", updateSnippet);
 
 $("copy").addEventListener("click", copyImage);
-$("downloadsvg").addEventListener("click", downloadSvg);
-$("downloadpng").addEventListener("click", downloadPng);
+$("download").addEventListener("click", downloadImage);
 $("copysvg").addEventListener("click", copySvgSource);
 $("copyhtml").addEventListener("click", copyHtml);
-$("copylink").addEventListener("click", () => guarded("Copy link", async () => {
-  history.replaceState(null, "", `#${encodeState(currentState())}`);
-  await navigator.clipboard.writeText(location.href);
-  toast("Copied link to this formula");
-}));
 $("copysnippet").addEventListener("click", () => guarded("Copy snippet", async () => {
   await navigator.clipboard.writeText($("snippet").value);
   toast("Copied snippet");
@@ -1483,7 +1470,7 @@ $("editmathml").addEventListener("click", () => {
 $("imgout").addEventListener("dragstart", onDragStart);
 
 $("modkey").textContent = modKey;
-$("copy").title = `Copy the formula as an image (${modKey}+Enter)`;
+$("fontcount").textContent = FONTS.length;
 addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (isMac ? e.metaKey : e.ctrlKey) && !e.altKey && !e.shiftKey) {
     e.preventDefault();
@@ -1496,6 +1483,7 @@ addEventListener("keydown", (e) => {
 setRadio("format", store.get("mathrender.format", "svg"));
 $("dpi").value = store.get("mathrender.dpi", "300");
 if (!$("dpi").value) $("dpi").value = "300";
+updateFormatUi();
 
 await init();
 const { state, hasSource } = decodeState(location.hash, FONTS.map((f) => f.file));
