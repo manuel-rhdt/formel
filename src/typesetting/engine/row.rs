@@ -108,10 +108,14 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             {
                 cursor += THIN_SPACE * self.tree.style(children[i]).font_size;
             }
+            // An explicit `rspace` is the author's answer: whatever it says has already been
+            // applied above, so nothing is owed.
+            let explicit_rspace = self.tree.operator_overrides(children[i]).rspace.is_some();
             owes_function_space = owes_from_box
                 || (self.is_function_application(children[i])
                     && self.applies_operator_spacing(children[i])
-                    && rspace == 0.0);
+                    && rspace == 0.0
+                    && !explicit_rspace);
             cursor += lspace;
             // MathML Core 3.3.1.2: a child is slanted if it is not an embellished operator and has
             // an italic correction. The one before a slanted child is dropped, an operator is never
