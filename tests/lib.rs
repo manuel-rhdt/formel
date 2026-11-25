@@ -352,7 +352,7 @@ fn fraction_in_a_row_is_spaced_from_its_neighbours() {
 /// Computer Modern, where `ss03` selects the NewCM-based doublestruck letters.
 fn newcm_glyph(xml: &str, features: formel::host::FontFeatures) -> u32 {
     let font = formel::shaper::Shaper::from_slice(
-        include_bytes!("../web/fonts/newcomputermodern-math.otf"),
+        include_bytes!("testfiles/newcomputermodern-math.otf"),
         0,
     )
     .expect("NewCM has a MATH table");

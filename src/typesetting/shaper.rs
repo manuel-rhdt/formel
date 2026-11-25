@@ -683,8 +683,10 @@ mod test {
     }
 
     fn newcm() -> Shaper<'static> {
+        // `tests/testfiles/` rather than `web/fonts/`: the crate package excludes `web/`, so a test
+        // that reads from there does not compile from the published tarball.
         Shaper::from_slice(
-            include_bytes!("../../web/fonts/newcomputermodern-math.otf"),
+            include_bytes!("../../tests/testfiles/newcomputermodern-math.otf"),
             0,
         )
         .expect("NewCM has a MATH table")

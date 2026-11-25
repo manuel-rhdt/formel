@@ -59,16 +59,21 @@ jobs:
 
       # The package version is taken from the tag, so a tag that disagrees with the crate would
       # publish something whose version says nothing about the code.
-      - name: Check the tag against the crate version
+      - name: Check the tag against the crate versions
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          crate=$(sed -n 's/^version = "\(.*\)"$/\1/p' formel-wasm/Cargo.toml | head -1)
-          if [ "v$crate" != "${GITHUB_REF_NAME}" ]; then
-            echo "tag ${GITHUB_REF_NAME} does not match formel-wasm version $crate" >&2
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' formel-wasm/Cargo.toml | head -1)
+          crate=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match formel-wasm version $version" >&2
             exit 1
           fi
-          echo "packaging $crate"
-          echo "VERSION=$crate" >> "$GITHUB_ENV"
+          if [ "$crate" != "$version" ]; then
+            echo "formel is $crate but formel-wasm is $version; release them together" >&2
+            exit 1
+          fi
+          echo "packaging $version"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
 
       # Same script the demo build uses (web/build.sh), with the type declarations the package needs.
       - name: Build
