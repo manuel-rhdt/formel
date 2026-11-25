@@ -48,8 +48,10 @@ document.querySelector("#formula").innerHTML =
   renderer.render_svg(latex_to_mathml(determinant, true));
 ```
 
-Both `render_svg` and `render` produce an SVG sized in the font's design units
-(`units_per_em()` per em), so scale it with CSS. It ships no fonts: any OpenType MATH font works.
+The SVG's `viewBox` is in the font's design units and its `width`/`height` are in `em`, so a
+formula takes its size from the text around it without any CSS. `render` additionally returns the
+size and the baseline in design units, for placing it yourself. It ships no fonts: any OpenType
+MATH font works.
 
 ## Gallery
 
