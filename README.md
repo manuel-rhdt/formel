@@ -2,6 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/formel.svg)](https://crates.io/crates/formel)
 [![docs.rs](https://docs.rs/formel/badge.svg)](https://docs.rs/formel)
+[![npm](https://img.shields.io/npm/v/@manuel-rhdt/formel-wasm.svg)](https://www.npmjs.com/package/@manuel-rhdt/formel-wasm)
 
 A Rust library that lays out mathematical formulas using
 **OpenType MATH fonts** and [rustybuzz](https://github.com/harfbuzz/rustybuzz) for unicode shaping.
@@ -23,6 +24,8 @@ The WebAssembly build is published as [`@manuel-rhdt/formel-wasm`](https://www.n
 npm install @manuel-rhdt/formel-wasm
 ```
 
+MathML in, SVG out:
+
 ```js
 import init, { MathRenderer } from "@manuel-rhdt/formel-wasm";
 
@@ -34,7 +37,19 @@ document.querySelector("#formula").innerHTML =
   renderer.render_svg('<math><mfrac><mi>a</mi><mi>b</mi></mfrac></math>');
 ```
 
-It ships no fonts: any OpenType MATH font works.
+LaTeX in, SVG out — `latex_to_mathml` converts first, so no MathML has to be written by hand:
+
+```js
+import { latex_to_mathml } from "@manuel-rhdt/formel-wasm";
+
+// `renderer` as above; `true` means display style
+const determinant = String.raw`\det\begin{pmatrix} a & b \\ c & d \end{pmatrix} = ad - bc`;
+document.querySelector("#formula").innerHTML =
+  renderer.render_svg(latex_to_mathml(determinant, true));
+```
+
+Both `render_svg` and `render` produce an SVG sized in the font's design units
+(`units_per_em()` per em), so scale it with CSS. It ships no fonts: any OpenType MATH font works.
 
 ## Gallery
 

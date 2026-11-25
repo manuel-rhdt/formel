@@ -46,6 +46,10 @@ test("LaTeX converts to MathML, and a syntax error reports its range", () => {
   assert.match(mathml, /<mtable/);
   assert.match(mathml, /application\/x-tex/);
 
+  // the README's "LaTeX in, SVG out" path
+  const renderer = new glue.MathRenderer(font);
+  assert.ok(renderer.render_svg(mathml).startsWith("<svg"));
+
   assert.equal(glue.latex_error_range("\\frac{a}{b}", true), undefined);
   // `\notacommand` is what the crate's own test uses as a certain error; the range is a typed array
   const range = Array.from(glue.latex_error_range("x + \\notacommand y", true) ?? []);
