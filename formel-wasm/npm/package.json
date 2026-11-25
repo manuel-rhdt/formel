@@ -15,6 +15,10 @@
       "types": "./formel_wasm.d.ts",
       "default": "./formel_wasm.js"
     },
+    "./dom": {
+      "types": "./dom.d.ts",
+      "default": "./dom.js"
+    },
     "./formel_wasm_bg.wasm": "./formel_wasm_bg.wasm",
     "./package.json": "./package.json"
   },
@@ -24,6 +28,8 @@
     "formel_wasm_bg.wasm",
     "formel_wasm_bg.wasm.d.ts",
     "README.md",
+    "dom.js",
+    "dom.d.ts",
     "LICENSE",
     "THIRD_PARTY.md"
   ],

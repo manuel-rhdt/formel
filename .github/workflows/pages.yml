@@ -54,7 +54,7 @@ jobs:
         run: cargo test --workspace --exclude mathimg --all-features
 
       - name: Test the demo's JavaScript helpers
-        run: node --test web/test/export.test.mjs
+        run: node --test web/test/*.test.mjs
 
       # Size build: the release profile in Cargo.toml (opt-level=z, LTO, one codegen unit,
       # panic=abort, strip) plus wasm-opt -Oz. ~35% smaller than a plain `cargo build --release`.

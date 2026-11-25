@@ -82,7 +82,7 @@ jobs:
       - name: Assemble the package
         run: |
           cp LICENSE formel-wasm/npm/package.json formel-wasm/npm/README.md \
-             formel-wasm/npm/THIRD_PARTY.md formel-wasm/npm/dist/
+             formel-wasm/npm/THIRD_PARTY.md web/dom.js web/dom.d.ts formel-wasm/npm/dist/
 
       # Instantiates the real wasm-opt'ed artifact in Node and checks the file list `npm pack` makes.
       - name: Test the package

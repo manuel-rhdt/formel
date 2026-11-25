@@ -58,6 +58,34 @@ test("LaTeX converts to MathML, and a syntax error reports its range", () => {
   assert.deepEqual(range, [4, 16]);
 });
 
+test("the ./dom helpers work on a real rendering", async () => {
+  const dom = await import(at("dom.js").href);
+  const renderer = new glue.MathRenderer(font);
+  const rendering = renderer.render("<math><mfrac><mi>a</mi><mi>b</mi></mfrac></math>", false);
+
+  const styled = dom.styleSvg(rendering.svg, { fg: "#336699", alt: "a over b" });
+  // the renderer already named the SVG, so its title is kept rather than a second one added
+  assert.equal((styled.match(/<title/g) || []).length, 1, styled);
+  assert.match(styled, /fill="#336699"/);
+
+  const snippets = dom.snippets({
+    svg: styled,
+    alt: "a over b",
+    display: false,
+    width: rendering.width,
+    height: rendering.height,
+    baseline: rendering.baseline,
+    unitsPerEm: renderer.units_per_em(),
+  });
+  // the renderer's own em size must be replaced, not repeated (a fraction's rule has its own
+  // `width`, so look at the root element only)
+  const open = snippets.svg.match(/^<svg[^>]*>/)[0];
+  assert.equal((open.match(/width=/g) || []).length, 1, open);
+  assert.equal((open.match(/height=/g) || []).length, 1, open);
+  assert.match(open, /style="vertical-align:-\d/);
+  assert.ok(snippets.img.startsWith('<img src="data:image/svg+xml,'));
+});
+
 test("the tarball contains what the export map points at", async () => {
   const output = execFileSync("npm", ["pack", "--dry-run", "--json"], {
     cwd: fileURLToPath(dist),
@@ -78,6 +106,8 @@ test("the tarball contains what the export map points at", async () => {
     "formel_wasm.d.ts",
     "formel_wasm_bg.wasm",
     "formel_wasm_bg.wasm.d.ts",
+    "dom.js",
+    "dom.d.ts",
   ]) {
     assert.ok(packed.has(required), `${required} is missing from the published files`);
   }

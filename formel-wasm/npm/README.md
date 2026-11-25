@@ -51,6 +51,34 @@ const range = latex_error_range("\\frac{", true); // [start, end] in UTF-16 unit
 All free OpenType MATH fonts work (New Computer Modern, STIX Two, TeX Gyre, Asana, Fira Math, …);
 Cambria Math works too but its license does not allow redistribution.
 
+## Placing it in a page
+
+`@manuel-rhdt/formel-wasm/dom` carries the string helpers a page needs — colour, accessible name,
+sizing, inline alignment, `data:` URIs — so you do not have to write them:
+
+```js
+import { snippets, styleSvg } from "@manuel-rhdt/formel-wasm/dom";
+
+const rendering = renderer.render(mathml, false);
+const svg = styleSvg(rendering.svg, { fg: "currentColor", alt: rendering.alt });
+
+const { svg: inline } = snippets({
+  svg,
+  alt: rendering.alt,
+  display: false,
+  width: rendering.width,
+  height: rendering.height,
+  baseline: rendering.baseline,
+  unitsPerEm: renderer.units_per_em(),
+});
+
+element.innerHTML = inline; // as big as the surrounding text, sitting on its baseline
+```
+
+Also there: `svgInPoints` for a standalone file sized in pt, `svgDataUri`/`svgDataUriEncoded` for
+`data:` URIs, `setPngResolution` to tag PNGs from a canvas with their dpi, and `htmlImage` for
+pasting into rich-text editors. Type declarations are included.
+
 ## Bundlers
 
 The module is a wasm-bindgen `--target web` build. It loads its `.wasm` relative to itself
