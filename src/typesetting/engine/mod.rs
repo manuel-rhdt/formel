@@ -297,6 +297,10 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                         metrics.advance - m.horizontal(),
                         metrics.height() - m.vertical(),
                     ),
+                    // the ink of the margin box is its border box, so it has to shed the margin
+                    // to describe the border box
+                    ink_left: metrics.ink_left - m.left,
+                    ink_width: metrics.ink_width,
                     baseline: metrics.ascent - m.top,
                     fragments: own_fragments,
                 };

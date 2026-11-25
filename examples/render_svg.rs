@@ -31,12 +31,17 @@ fn main() {
     };
     let typeset = formel::layout(&document, &font, options);
 
+    let flags = Flags {
+        margin: svg_renderer::DEFAULT_MARGIN_EM * units_per_em,
+        font_size: Some(units_per_em),
+        ..Default::default()
+    };
     svg_renderer::render(
         &document,
         &typeset.layouts,
         font.face(),
         units_per_em,
-        Flags::default(),
+        flags,
         output,
     );
 }

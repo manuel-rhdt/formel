@@ -192,6 +192,8 @@ fn main() {
             let flags = svg_renderer::Flags {
                 show_ink_bounds: args.flag_show_ink_bounds,
                 show_logical_bounds: args.flag_show_logical_bounds,
+                margin: svg_renderer::DEFAULT_MARGIN_EM * units_per_em,
+                font_size: Some(units_per_em),
             };
 
             svg_renderer::render(

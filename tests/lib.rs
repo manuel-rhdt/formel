@@ -121,6 +121,36 @@ fn table_cells_have_default_padding() {
     );
 }
 
+/// The SVG's `viewBox` covers the ink even where it reaches past the advance width, and keeps the
+/// margin on every side.
+#[cfg(feature = "svg")]
+#[test]
+fn view_box_covers_ink_overflow_and_margin() {
+    use formel::host::{Point, Size};
+
+    let root = NodeLayout {
+        size: Size::new(100.0, 40.0),
+        ink_left: -8.0,   // the hook of an integral
+        ink_width: 120.0, // and an overhang on the right
+        baseline: 30.0,
+        ..Default::default()
+    };
+    let view = formel::svg_renderer::view_box(&root, 5.0);
+    assert_eq!(view.origin, Point::new(-13.0, -5.0));
+    assert_eq!(view.size, Size::new(130.0, 50.0));
+
+    // a formula whose ink stays inside its advance is only padded
+    let inside = NodeLayout {
+        size: Size::new(100.0, 40.0),
+        ink_left: 2.0,
+        ink_width: 60.0,
+        ..Default::default()
+    };
+    let view = formel::svg_renderer::view_box(&inside, 5.0);
+    assert_eq!(view.origin, Point::new(-5.0, -5.0));
+    assert_eq!(view.size, Size::new(110.0, 50.0));
+}
+
 #[test]
 fn function_application_respects_an_explicit_rspace() {
     let width = |xml: &str| {

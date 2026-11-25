@@ -150,11 +150,14 @@ impl MathRenderer {
         let typeset = formel::layout(&document, &self.shaper, options);
         let flags = svg_renderer::Flags {
             show_logical_bounds: debug,
+            // the layout is in font units here (font_size = units_per_em), so an em is that
+            margin: svg_renderer::DEFAULT_MARGIN_EM * units_per_em,
+            font_size: Some(units_per_em),
             ..Default::default()
         };
         let root = document.root().expect("checked above");
         let root_layout = &typeset.layouts[&root];
-        let margin = svg_renderer::MARGIN;
+        let view = svg_renderer::view_box(root_layout, flags.margin);
         let alt =
             authored_alt_text(mathml).unwrap_or_else(|| speech::speak_document(&document, root));
         let svg = svg_renderer::render_to_string_with(
@@ -168,9 +171,9 @@ impl MathRenderer {
         Ok(Rendering {
             svg,
             alt,
-            width: root_layout.size.width + 2.0 * margin,
-            height: root_layout.size.height + 2.0 * margin,
-            baseline: root_layout.baseline + margin,
+            width: view.size.width,
+            height: view.size.height,
+            baseline: root_layout.baseline - view.origin.y,
         })
     }
 }
@@ -317,6 +320,11 @@ mod tests {
         assert!(
             svg.contains(&format!("{} {}", w, h)),
             "viewBox should match: {svg}"
+        );
+        // sized in em, so the formula follows the font size of the text around it
+        assert!(
+            svg.contains("width=\"") && svg.contains("em\""),
+            "the SVG should carry a width in em: {svg}"
         );
         // the baseline is inside the box, and a fraction has stuff below it
         assert!(result.baseline() > 0.0 && result.baseline() < h);

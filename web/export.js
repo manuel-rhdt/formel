@@ -114,6 +114,19 @@ export function viewBox(svg) {
 }
 
 /**
+ * Replaces the SVG's `width` and `height`, which the renderer already writes in `em`. An element
+ * cannot carry the same attribute twice, so the old ones have to be dropped first.
+ */
+function withSize(svg, width, height) {
+  const open = svg.match(/<svg\b[^>]*>/);
+  if (!open) return svg;
+  const tag = open[0]
+    .replace(/\s(?:width|height)="[^"]*"/g, "")
+    .replace(/^<svg/, `<svg width="${width}" height="${height}"`);
+  return tag + svg.slice(open[0].length);
+}
+
+/**
  * Gives the SVG an absolute size, so that it works on its own (the renderer's SVG only has a
  * `viewBox`). `pxPerEm` is the size of one em of the font; `unitsPerEm` converts font units.
  */
@@ -123,7 +136,7 @@ export function sizeSvg(svg, pxPerEm, unitsPerEm) {
   const scale = pxPerEm / unitsPerEm;
   const width = box.width * scale;
   const height = box.height * scale;
-  const sized = svg.replace("<svg ", `<svg width="${width.toFixed(2)}" height="${height.toFixed(2)}" `);
+  const sized = withSize(svg, width.toFixed(2), height.toFixed(2));
   return { svg: `<?xml version="1.0" encoding="UTF-8"?>\n${sized}\n`, width, height };
 }
 
@@ -138,7 +151,7 @@ export function svgInPoints(svg, textSize, unitsPerEm) {
   const scale = textSize / unitsPerEm;
   const widthPt = box.width * scale;
   const heightPt = box.height * scale;
-  const sized = svg.replace("<svg ", `<svg width="${widthPt.toFixed(3)}pt" height="${heightPt.toFixed(3)}pt" `);
+  const sized = withSize(svg, `${widthPt.toFixed(3)}pt`, `${heightPt.toFixed(3)}pt`);
   return { svg: `<?xml version="1.0" encoding="UTF-8"?>\n${sized}\n`, widthPt, heightPt };
 }
 

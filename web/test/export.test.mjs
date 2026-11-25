@@ -57,6 +57,21 @@ test("sizeSvg scales font units to pixels", () => {
   assert.ok(svg.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n<svg width="9.60" height="4.80" viewBox='));
 });
 
+test("sizeSvg replaces the width and height the renderer already wrote", () => {
+  const sizedInput =
+    '<svg width="3.200em" height="1.100em" role="img" viewBox="-50 -50 3200 1100">' +
+    '<path d="M0 0"/></svg>';
+  const { svg } = sizeSvg(sizedInput, 40, 1000);
+  assert.equal((svg.match(/width=/g) || []).length, 1);
+  assert.ok(
+    svg.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n<svg width="128.00" height="44.00" role="img"'),
+    svg,
+  );
+  const points = svgInPoints(sizedInput, 12, 1000).svg;
+  assert.equal((points.match(/height=/g) || []).length, 1);
+  assert.match(points, /<svg width="38.400pt" height="13.200pt" role="img"/);
+});
+
 test("base64 handles non-ASCII text", () => {
   assert.equal(toBase64("abc"), "YWJj");
   assert.equal(Buffer.from(toBase64("π≈3,14"), "base64").toString("utf8"), "π≈3,14");

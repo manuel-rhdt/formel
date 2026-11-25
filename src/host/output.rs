@@ -21,6 +21,11 @@ pub struct NodeLayout {
     pub location: Point,
     /// The size of the border box.
     pub size: Size,
+    /// Horizontal ink extent of the border box, relative to it. Glyphs can paint outside the
+    /// advance width — an italic `f` leans over its right edge, the hook of an integral reaches
+    /// left — so this can start left of 0 and end right of `size.width`.
+    pub ink_left: f32,
+    pub ink_width: f32,
     /// Distance from the top of the border box to the alphabetic baseline.
     pub baseline: f32,
     /// What this node paints itself, relative to its border box. Fragments of descendant nodes

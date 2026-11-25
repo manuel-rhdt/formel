@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path as FsPath;
 
-use crate::host::{Fragment, NodeLayout, Point};
+use crate::host::{Fragment, NodeLayout, Point, Rect};
 use crate::standalone::{MathDocument, NodeId};
 
 use ::svg::node::element::{Group, Line, Path, Rectangle, Title};
@@ -13,8 +13,12 @@ use std::fmt::Write;
 use rustybuzz::ttf_parser::{GlyphId, OutlineBuilder};
 use rustybuzz::Face;
 
-/// Space added around the layout on every side, in px.
-pub const MARGIN: f32 = 10.0;
+/// The space kept around a formula by default, as a fraction of the font size.
+///
+/// The margin is not a constant in the layout's unit: the engine's px are whatever `font-size`
+/// the caller asked for, so a fixed 10 px is 0.01 em for a caller that lays out with
+/// `font_size = units_per_em` and 0.63 em for one that keeps the default of 16 px.
+pub const DEFAULT_MARGIN_EM: f32 = 0.05;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Flags {
@@ -22,6 +26,28 @@ pub struct Flags {
     pub show_ink_bounds: bool,
     /// Outline the border box of every element.
     pub show_logical_bounds: bool,
+    /// Space kept around the formula on every side, in the layout's unit (px) — not necessarily
+    /// the font's. [`DEFAULT_MARGIN_EM`] times the font size is the usual choice; 0 keeps the box
+    /// to the ink.
+    pub margin: f32,
+    /// The root's `font-size`, in the layout's unit. When set, the SVG gets `width` and `height`
+    /// in `em`, so it takes its size from the surrounding text while the `viewBox` keeps the
+    /// layout's own units.
+    pub font_size: Option<f32>,
+}
+
+/// The `viewBox` of the rendered SVG: the root's border box, widened where the formula's ink
+/// reaches past it — the hook of an integral, the overhang of an italic `f` — plus `margin` on
+/// every side.
+pub fn view_box(root: &NodeLayout, margin: f32) -> Rect {
+    let left = root.ink_left.min(0.0);
+    let right = (root.ink_left + root.ink_width).max(root.size.width);
+    Rect::new(
+        left - margin,
+        -margin,
+        right - left + 2.0 * margin,
+        root.size.height + 2.0 * margin,
+    )
 }
 
 /// What makes the SVG self-describing.
@@ -89,7 +115,8 @@ pub fn render_with<T: AsRef<FsPath>>(
 }
 
 /// Renders a laid-out document to an SVG string. Coordinates are px; `units_per_em` converts
-/// glyph outlines from font units.
+/// glyph outlines from font units. See [`Flags::margin`] for the space around the formula and
+/// [`Flags::font_size`] for the `em` size of the result.
 pub fn render_to_string(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
@@ -131,15 +158,23 @@ fn build_document(
     let root_layout = &layouts[&root];
 
     let mut svg_document = Document::new();
+    let view = view_box(root_layout, flags.margin);
     svg_document.assign(
         "viewBox",
         (
-            -MARGIN,
-            -MARGIN,
-            root_layout.size.width + 2.0 * MARGIN,
-            root_layout.size.height + 2.0 * MARGIN,
+            view.origin.x,
+            view.origin.y,
+            view.size.width,
+            view.size.height,
         ),
     );
+    // `em` rather than px: the formula then follows the font size of the text around it, and the
+    // viewBox keeps the layout's own units for everything that draws.
+    if let Some(font_size) = flags.font_size.filter(|size| *size > 0.0) {
+        let em = |length: f32| format!("{:.3}em", length / font_size);
+        svg_document.assign("width", em(view.size.width));
+        svg_document.assign("height", em(view.size.height));
+    }
 
     // The title has to be the first child, so it goes in before anything is drawn.
     let title = match a11y.title {
