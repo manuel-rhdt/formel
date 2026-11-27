@@ -311,6 +311,14 @@ pub trait MathFont {
     /// Metrics for a glyph by index (no cmap lookup).
     fn glyph(&self, glyph: GlyphCode, options: ShapeOptions) -> MathGlyph;
 
+    /// Whether the font has a glyph for the character `c`, that is, whether it is in the font's
+    /// character map. The default shapes the character and looks for glyph 0 (`.notdef`).
+    fn has_glyph(&self, c: char) -> bool {
+        self.shape(c.encode_utf8(&mut [0; 4]), ShapeOptions::default())
+            .first()
+            .is_some_and(|glyph| glyph.glyph_code != 0)
+    }
+
     /// Whether the font has size variants or a glyph assembly for `glyph` in the given
     /// direction.
     fn is_stretchable(&self, glyph: GlyphCode, horizontal: bool) -> bool;
@@ -370,6 +378,9 @@ macro_rules! forward_math_font {
             }
             fn glyph(&self, glyph: GlyphCode, options: ShapeOptions) -> MathGlyph {
                 (**self).glyph(glyph, options)
+            }
+            fn has_glyph(&self, c: char) -> bool {
+                (**self).has_glyph(c)
             }
             fn is_stretchable(&self, glyph: GlyphCode, horizontal: bool) -> bool {
                 (**self).is_stretchable(glyph, horizontal)

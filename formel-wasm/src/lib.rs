@@ -8,11 +8,14 @@
 //! container.innerHTML = renderer.render_svg("<math><mi>x</mi></math>");
 //! ```
 
+use formel::host::{CompositeFont, CompositeFontError, FontFace, FontFeatures, UnicodeRanges};
 use formel::mathmlparser;
 use formel::shaper::Shaper;
 use formel::speech;
 use formel::standalone::StyleOptions;
 use formel::svg_renderer;
+use std::rc::Rc;
+
 use wasm_bindgen::prelude::*;
 
 /// The result of [`MathRenderer::render`]: the SVG and where the baseline is in it.
@@ -76,8 +79,13 @@ impl Rendering {
 /// The font bytes are copied once on construction and reused for every call.
 #[wasm_bindgen]
 pub struct MathRenderer {
-    // The shaper owns its copy of the font bytes, so `free()` on the JS side releases them.
-    shaper: Shaper,
+    // The shapers own their copies of the font bytes, so `free()` on the JS side releases them.
+    primary: Rc<Shaper>,
+    /// The faces of `add_font_face`, in the order they were added.
+    added: Vec<FontFace<Rc<Shaper>>>,
+    /// The primary font and the added faces, which take precedence over it and over the faces added
+    /// before them.
+    font: CompositeFont<Rc<Shaper>>,
     font_features: formel::host::FontFeatures,
 }
 
@@ -86,12 +94,50 @@ impl MathRenderer {
     /// Creates a renderer from the bytes of an OpenType font with a `MATH` table.
     #[wasm_bindgen(constructor)]
     pub fn new(font: &[u8]) -> Result<MathRenderer, JsError> {
-        let shaper = Shaper::from_slice(font, 0)
-            .ok_or_else(|| JsError::new("not a valid font with an OpenType MATH table"))?;
+        let primary = Rc::new(parse_font(font)?);
+        let font = composite(&primary, &[]).map_err(|error| JsError::new(&error.to_string()))?;
         Ok(MathRenderer {
-            shaper,
+            primary,
+            added: Vec::new(),
+            font,
             font_features: Default::default(),
         })
+    }
+
+    /// Adds a font that is used instead of the main font for some characters, like a CSS `@font-face`
+    /// rule with a `unicode-range`: the font of this call is used for a character if it is in
+    /// `unicode_ranges` and the font has a glyph for it, otherwise the faces added before, and last the
+    /// font of the constructor. Layout constants and the size of the em are those of the font of the
+    /// constructor.
+    ///
+    /// `unicode_ranges` is a list of pairs, the first and the last codepoint of each range:
+    /// `[0x1D49C, 0x1D503]` is `U+1D49C-1D503` (the script letters). Without it the font is used for
+    /// every character it has. `size_adjust` scales the glyphs of the font (1 by default, 0.9 is 90%) and
+    /// `font_features` is a `font-feature-settings` value for this font. The font needs a `MATH` table.
+    /// At most 255 fonts can be added.
+    pub fn add_font_face(
+        &mut self,
+        font: &[u8],
+        unicode_ranges: Option<Vec<u32>>,
+        size_adjust: Option<f32>,
+        font_features: Option<String>,
+    ) -> Result<(), JsError> {
+        let (unicode_ranges, size_adjust, font_features) = face_options(
+            unicode_ranges.as_deref(),
+            size_adjust,
+            font_features.as_deref(),
+        )
+        .map_err(|message| JsError::new(&message))?;
+        let face = FontFace::new(Rc::new(parse_font(font)?))
+            .unicode_ranges(unicode_ranges)
+            .size_adjust(size_adjust)
+            .font_features(font_features);
+        let mut added = self.added.clone();
+        added.push(face);
+        self.font =
+            composite(&self.primary, &added).map_err(|error| JsError::new(&error.to_string()))?;
+        self.added = added;
+        Ok(())
     }
 
     /// Sets OpenType features for all following renders, as a CSS `font-feature-settings`
@@ -112,7 +158,7 @@ impl MathRenderer {
     /// The font's design units per em. The SVG is sized in these units.
     pub fn units_per_em(&self) -> u32 {
         use formel::host::MathFont;
-        self.shaper.units_per_em()
+        self.font.units_per_em()
     }
 
     /// Renders a MathML string (a `<math>` element or a fragment with one root) to an SVG
@@ -155,13 +201,13 @@ impl MathRenderer {
 
         // A font size of one em per font unit makes px equal font units. As in MathML Core
         // (`math { math-style: compact }`), `<math>` is inline unless it has `display="block"`.
-        let units_per_em = self.shaper.units_per_em() as f32;
+        let units_per_em = self.font.units_per_em() as f32;
         let options = StyleOptions {
             font_size: units_per_em,
             math_style: formel::host::MathStyle::Compact,
             font_features: self.font_features,
         };
-        let typeset = formel::layout(&document, &self.shaper, options);
+        let typeset = formel::layout(&document, &self.font, options);
         let flags = svg_renderer::Flags {
             show_logical_bounds: debug,
             // the layout is in font units here (font_size = units_per_em), so an em is that
@@ -177,7 +223,7 @@ impl MathRenderer {
         let svg = svg_renderer::render_to_string_with(
             &document,
             &typeset.layouts,
-            &self.shaper,
+            &self.font,
             units_per_em,
             flags,
             svg_renderer::A11y::titled(&alt),
@@ -191,6 +237,58 @@ impl MathRenderer {
             units_per_em: units_per_em as u32,
         })
     }
+}
+
+fn parse_font(data: &[u8]) -> Result<Shaper, JsError> {
+    Shaper::from_slice(data, 0)
+        .ok_or_else(|| JsError::new("not a valid font with an OpenType MATH table"))
+}
+
+/// The font of the constructor and the added faces, the last added first.
+fn composite(
+    primary: &Rc<Shaper>,
+    added: &[FontFace<Rc<Shaper>>],
+) -> Result<CompositeFont<Rc<Shaper>>, CompositeFontError> {
+    let mut faces: Vec<_> = added.iter().rev().cloned().collect();
+    faces.push(FontFace::new(primary.clone()));
+    let primary = faces.len() - 1;
+    CompositeFont::new(faces, primary)
+}
+
+/// The options of `add_font_face`, checked.
+fn face_options(
+    unicode_ranges: Option<&[u32]>,
+    size_adjust: Option<f32>,
+    font_features: Option<&str>,
+) -> Result<(UnicodeRanges, f32, FontFeatures), String> {
+    let unicode_ranges = match unicode_ranges {
+        None | Some([]) => UnicodeRanges::all(),
+        Some(numbers) => {
+            if numbers.len() % 2 != 0 {
+                return Err("unicode ranges are pairs of the first and the last codepoint".into());
+            }
+            let ranges: Vec<_> = numbers.chunks(2).map(|pair| pair[0]..=pair[1]).collect();
+            if ranges
+                .iter()
+                .any(|range| range.start() > range.end() || *range.end() > 0x10FFFF)
+            {
+                return Err(
+                    "a unicode range must go from a codepoint up to one at most U+10FFFF".into(),
+                );
+            }
+            UnicodeRanges::new(ranges)
+        }
+    };
+    let size_adjust = size_adjust.unwrap_or(1.0);
+    if !(size_adjust.is_finite() && size_adjust > 0.0) {
+        return Err("size adjust must be a positive number".into());
+    }
+    let font_features = match font_features.map(str::trim) {
+        None | Some("") | Some("normal") => FontFeatures::default(),
+        Some(settings) => formel::host::parse_font_feature_settings(settings)
+            .ok_or("invalid font-feature-settings value")?,
+    };
+    Ok((unicode_ranges, size_adjust, font_features))
 }
 
 #[cfg(test)]
@@ -749,7 +847,9 @@ fn separate_letters(mathml: &str) -> String {
         } else {
             open.last_mut().expect("root").1 = false;
             if !tag.ends_with("/>") && !tag.starts_with("<!") && !tag.starts_with("<?") {
-                let name = tag[1..].split(|c: char| c.is_whitespace() || c == '>').next();
+                let name = tag[1..]
+                    .split(|c: char| c.is_whitespace() || c == '>')
+                    .next();
                 open.push((name.unwrap_or(""), false));
             }
         }
@@ -898,15 +998,22 @@ mod latex_tests {
         let sp_op_ord = width(r"\det x") - width(r"x");
         let sp_op_open = width(r"\det(x)") - width(r"(x)");
         let sp_op_inner =
-            width(r"\det \left( \frac{a}{c} \right)")
-            - width(r"\left( \frac{a}{c} \right)");
-        let sp_op_inner2 =
-            width(r"\det \begin{pmatrix} a \\ c \end{pmatrix}")
+            width(r"\det \left( \frac{a}{c} \right)") - width(r"\left( \frac{a}{c} \right)");
+        let sp_op_inner2 = width(r"\det \begin{pmatrix} a \\ c \end{pmatrix}")
             - width(r"\begin{pmatrix} a \\ c \end{pmatrix}");
 
-        assert!(close(sp_op_ord - sp_op_open, thin), "{sp_op_ord} {sp_op_open}");
-        assert!(close(sp_op_inner - sp_op_open, thin), "{sp_op_inner} {sp_op_open}");
-        assert!(close(sp_op_inner2 - sp_op_open, thin), "{sp_op_inner2} {sp_op_open}");
+        assert!(
+            close(sp_op_ord - sp_op_open, thin),
+            "{sp_op_ord} {sp_op_open}"
+        );
+        assert!(
+            close(sp_op_inner - sp_op_open, thin),
+            "{sp_op_inner} {sp_op_open}"
+        );
+        assert!(
+            close(sp_op_inner2 - sp_op_open, thin),
+            "{sp_op_inner2} {sp_op_open}"
+        );
     }
 }
 
@@ -1070,6 +1177,150 @@ mod latex_alt_tests {
             "the fraction with numerator negative b plus or minus the square root of b squared \
              minus 4 a c and denominator 2 a",
             "{mathml}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod font_face_tests {
+    use super::*;
+
+    /// STIX glyphs at 2048 units per em, without E, F, x and the plus sign.
+    const SECOND: &[u8] = include_bytes!("../../tests/testfiles/stixtwo-math-subset-2048.otf");
+
+    const A_AND_V: &str =
+        r#"<math><mi mathvariant="normal">A</mi><mi mathvariant="normal">V</mi></math>"#;
+
+    /// How often a glyph is drawn at `scale` (the scale of the face of 2048 units per em in a
+    /// renderer of 1000 is 1000 / 2048).
+    fn drawn_at(svg: &str, scale: &str) -> usize {
+        svg.matches(&format!("scale({scale}, -{scale})")).count()
+    }
+
+    fn renderer() -> MathRenderer {
+        let renderer = super::tests::renderer();
+        assert_eq!(
+            renderer.units_per_em(),
+            1000,
+            "the test font has 1000 units per em"
+        );
+        renderer
+    }
+
+    #[test]
+    fn a_face_is_used_for_its_ranges() {
+        let mut renderer = renderer();
+        let before = renderer.render_svg(A_AND_V).unwrap();
+        assert_eq!(drawn_at(&before, "0.48828125"), 0);
+
+        renderer
+            .add_font_face(SECOND, Some(vec![0x41, 0x41]), None, None)
+            .ok()
+            .unwrap();
+        let after = renderer.render_svg(A_AND_V).unwrap();
+        assert_eq!(
+            drawn_at(&after, "0.48828125"),
+            1,
+            "A is drawn from the added font, V is not"
+        );
+        assert_eq!(
+            renderer.units_per_em(),
+            1000,
+            "the font of the constructor is the primary"
+        );
+
+        // without ranges the font is used for every character it has: A and V
+        let mut renderer = super::tests::renderer();
+        renderer
+            .add_font_face(SECOND, None, None, None)
+            .ok()
+            .unwrap();
+        assert_eq!(
+            drawn_at(&renderer.render_svg(A_AND_V).unwrap(), "0.48828125"),
+            2
+        );
+        // but not for the characters it lacks: E
+        let e = r#"<math><mi mathvariant="normal">E</mi></math>"#;
+        assert_eq!(drawn_at(&renderer.render_svg(e).unwrap(), "0.48828125"), 0);
+    }
+
+    #[test]
+    fn a_face_added_later_takes_precedence() {
+        let mut renderer = renderer();
+        renderer
+            .add_font_face(SECOND, None, None, None)
+            .ok()
+            .unwrap();
+        renderer
+            .add_font_face(SECOND, Some(vec![0x41, 0x41]), Some(0.5), None)
+            .ok()
+            .unwrap();
+        let svg = renderer.render_svg(A_AND_V).unwrap();
+        assert_eq!(
+            drawn_at(&svg, "0.24414063"),
+            1,
+            "A: the face added last, at half the size"
+        );
+        assert_eq!(drawn_at(&svg, "0.48828125"), 1, "V: the face added first");
+    }
+
+    #[test]
+    fn a_font_without_a_math_table_is_refused_by_the_shaper() {
+        assert!(Shaper::from_slice(b"not a font", 0).is_none());
+    }
+
+    #[test]
+    fn the_options_of_a_face_are_checked() {
+        let ok = |ranges: Option<&[u32]>, adjust, features| face_options(ranges, adjust, features);
+        let (ranges, adjust, features) = ok(None, None, None).unwrap();
+        assert_eq!(
+            (ranges, adjust, features),
+            (UnicodeRanges::all(), 1.0, FontFeatures::default())
+        );
+        assert_eq!(ok(Some(&[]), None, None).unwrap().0, UnicodeRanges::all());
+        let (ranges, adjust, features) = ok(
+            Some(&[0x41, 0x5A, 0x1D49C, 0x1D503]),
+            Some(0.9),
+            Some(r#""ss01", "cv02" 2"#),
+        )
+        .unwrap();
+        assert!(ranges.contains('Q') && ranges.contains('\u{1D4D0}'));
+        assert!(!ranges.contains('a') && !ranges.contains('\u{1D504}'));
+        assert_eq!(adjust, 0.9);
+        assert_eq!(features.iter().count(), 2);
+        assert!(
+            ok(Some(&[0x41, 0x41]), None, Some("normal"))
+                .unwrap()
+                .2
+                .is_empty()
+        );
+        assert!(ok(None, None, Some("  ")).unwrap().2.is_empty());
+        assert!(ok(Some(&[0x10FFFF, 0x10FFFF]), None, None).is_ok());
+
+        let err =
+            |ranges: Option<&[u32]>, adjust, features| face_options(ranges, adjust, features).err();
+        assert!(err(Some(&[0x41]), None, None).is_some(), "an odd number");
+        assert!(err(Some(&[0x5A, 0x41]), None, None).is_some(), "backwards");
+        assert!(
+            err(Some(&[0x41, 0x110000]), None, None).is_some(),
+            "beyond Unicode"
+        );
+        for adjust in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+            assert!(err(None, Some(adjust), None).is_some(), "{adjust}");
+        }
+        assert!(err(None, None, Some("not a feature")).is_some());
+    }
+
+    #[test]
+    fn at_most_255_faces_can_be_added() {
+        let primary = Rc::new(Shaper::from_slice(SECOND, 0).unwrap());
+        let faces = |count| -> Vec<FontFace<Rc<Shaper>>> {
+            (0..count).map(|_| FontFace::new(primary.clone())).collect()
+        };
+        assert!(composite(&primary, &faces(255)).is_ok());
+        assert_eq!(
+            composite(&primary, &faces(256)).err(),
+            Some(CompositeFontError::TooManyFaces)
         );
     }
 }

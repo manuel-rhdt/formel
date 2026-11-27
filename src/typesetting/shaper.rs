@@ -590,6 +590,13 @@ impl MathFont for Shaper {
             .unwrap_or_default()
     }
 
+    fn has_glyph(&self, c: char) -> bool {
+        self.font
+            .charmap()
+            .map_unicode(c)
+            .is_some_and(|glyph| glyph.to_u32() != 0)
+    }
+
     fn is_stretchable(&self, glyph: GlyphCode, horizontal: bool) -> bool {
         self.has_variants_or_assembly(glyph, horizontal)
     }

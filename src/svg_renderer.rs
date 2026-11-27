@@ -4,11 +4,50 @@ use std::path::Path as FsPath;
 use crate::host::{Fragment, NodeLayout, Point, Rect};
 use crate::standalone::{MathDocument, NodeId};
 
-use ::svg::node::element::{Group, Line, Path, Rectangle, Title};
-use ::svg::node::Node;
 use ::svg::Document;
+use ::svg::node::Node;
+use ::svg::node::element::{Group, Line, Path, Rectangle, Title};
 
+use std::rc::Rc;
+use std::sync::Arc;
+
+use crate::host::{CompositeFont, GlyphCode, MathFont};
 use crate::shaper::Shaper;
+
+/// A font that can draw its glyphs, which is what the renderer needs besides the layout.
+pub trait GlyphOutlines {
+    /// The outline of a glyph as SVG path data in the font's units, with y pointing up, and the factor
+    /// that scales those units to the `units_per_em` given to the renderer: 1 for a plain font, and for
+    /// a glyph of a face of a [`CompositeFont`] that of the face (see [`CompositeFont::decode_glyph`]).
+    fn glyph_path(&self, glyph: GlyphCode) -> (String, f32);
+}
+
+impl GlyphOutlines for Shaper {
+    fn glyph_path(&self, glyph: GlyphCode) -> (String, f32) {
+        (self.glyph_path_data(glyph), 1.0)
+    }
+}
+
+macro_rules! forward_glyph_outlines {
+    ($($ptr:ty),*) => {$(
+        impl<F: GlyphOutlines + ?Sized> GlyphOutlines for $ptr {
+            fn glyph_path(&self, glyph: GlyphCode) -> (String, f32) {
+                (**self).glyph_path(glyph)
+            }
+        }
+    )*};
+}
+forward_glyph_outlines!(&F, Rc<F>, Arc<F>, Box<F>);
+
+impl<F: GlyphOutlines + MathFont> GlyphOutlines for CompositeFont<F> {
+    fn glyph_path(&self, glyph: GlyphCode) -> (String, f32) {
+        let Some(decoded) = self.decode_glyph(glyph) else {
+            return (String::new(), 1.0);
+        };
+        let (path, scale) = decoded.font.glyph_path(decoded.glyph);
+        (path, scale * decoded.scale)
+    }
+}
 
 /// The space kept around a formula by default, as a fraction of the font size.
 ///
@@ -78,10 +117,10 @@ impl<'a> A11y<'a> {
 }
 
 /// Renders a laid-out document to an SVG file. See [`render_to_string`].
-pub fn render<T: AsRef<FsPath>>(
+pub fn render<T: AsRef<FsPath>, F: GlyphOutlines + ?Sized>(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &Shaper,
+    font: &F,
     units_per_em: f32,
     flags: Flags,
     out_path: T,
@@ -98,10 +137,10 @@ pub fn render<T: AsRef<FsPath>>(
 }
 
 /// [`render`], with an accessible name written into the SVG.
-pub fn render_with<T: AsRef<FsPath>>(
+pub fn render_with<T: AsRef<FsPath>, F: GlyphOutlines + ?Sized>(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &Shaper,
+    font: &F,
     units_per_em: f32,
     flags: Flags,
     a11y: A11y<'_>,
@@ -114,10 +153,10 @@ pub fn render_with<T: AsRef<FsPath>>(
 /// Renders a laid-out document to an SVG string. Coordinates are px; `units_per_em` converts
 /// glyph outlines from font units. See [`Flags::margin`] for the space around the formula and
 /// [`Flags::font_size`] for the `em` size of the result.
-pub fn render_to_string(
+pub fn render_to_string<F: GlyphOutlines + ?Sized>(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &Shaper,
+    font: &F,
     units_per_em: f32,
     flags: Flags,
 ) -> String {
@@ -132,10 +171,10 @@ pub fn render_to_string(
 }
 
 /// [`render_to_string`], with an accessible name written into the SVG.
-pub fn render_to_string_with(
+pub fn render_to_string_with<F: GlyphOutlines + ?Sized>(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &Shaper,
+    font: &F,
     units_per_em: f32,
     flags: Flags,
     a11y: A11y<'_>,
@@ -143,10 +182,10 @@ pub fn render_to_string_with(
     build_document(document, layouts, font, units_per_em, flags, a11y).to_string()
 }
 
-fn build_document(
+fn build_document<F: GlyphOutlines + ?Sized>(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &Shaper,
+    font: &F,
     units_per_em: f32,
     flags: Flags,
     a11y: A11y<'_>,
@@ -264,7 +303,10 @@ fn build_document(
                             .set("y2", y2)
                             .set("stroke", "black")
                             .set("stroke-width", thickness)
-                            .set("stroke-dasharray", format!("{} {}", 3.0 * thickness, 2.0 * thickness)),
+                            .set(
+                                "stroke-dasharray",
+                                format!("{} {}", 3.0 * thickness, 2.0 * thickness),
+                            ),
                     )
                 }
             }
@@ -287,12 +329,22 @@ fn build_document(
 
 /// Draws a glyph from the font. Outlines are in font units with y pointing up, so
 /// they are flipped and scaled to px.
-fn draw_glyph(font: &Shaper, glyph: u32, x: f32, y: f32, scale: f32) -> Group {
-    let data = font.glyph_path_data(glyph);
+fn draw_glyph<F: GlyphOutlines + ?Sized>(
+    font: &F,
+    glyph: u32,
+    x: f32,
+    y: f32,
+    scale: f32,
+) -> Group {
+    let (data, face_scale) = font.glyph_path(glyph);
+    let scale = scale * face_scale;
     Group::new()
         .set(
             "transform",
-            format!("translate({:?}, {:?}) scale({:?}, {:?})", x, y, scale, -scale),
+            format!(
+                "translate({:?}, {:?}) scale({:?}, {:?})",
+                x, y, scale, -scale
+            ),
         )
         .add(Path::new().set("d", data))
 }

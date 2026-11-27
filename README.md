@@ -63,7 +63,7 @@ let typeset = formel::layout(&doc, &font, StyleOptions {
     font_size: upem,
     ..Default::default()
 });
-let svg = svg_renderer::render_to_string(&doc, &typeset.layouts, font.face(), upem, Default::default());
+let svg = svg_renderer::render_to_string(&doc, &typeset.layouts, &font, upem, Default::default());
 ```
 
 Without optional features, `formel` exposes `formel::host` so you can embed math layout into your own
@@ -348,6 +348,42 @@ The property is inherited, so it can be set on `<math>`, on `<mstyle>` or on a s
 `normal` resets it. From Rust, set `StyleOptions::font_features` for the whole formula, or
 `MathComputedStyle::font_features` per node when you implement `MathTree` yourself. In JavaScript,
 call `renderer.set_font_features("'ss03'")`.
+
+## Mixed fonts
+
+Some characters can come from a second font, as with a CSS `@font-face` rule that has a
+`unicode-range`: say the calligraphic letters of Lete Sans Math next to Lisnoti. The font for a
+character is the first one that is meant for it and has a glyph for it; everything else comes from
+the main font, which also gives the layout constants and the size of the em. formel does not read
+CSS: you give the ranges as numbers.
+
+```js
+const renderer = new MathRenderer(lisnotiBytes);
+renderer.add_font_face(leteSansMathBytes, new Uint32Array(SCRIPT_RANGES)); // later calls win over earlier ones
+```
+
+```rust
+use formel::host::{CompositeFont, FontFace, UnicodeRanges};
+
+let main = Rc::new(Shaper::from_slice(&lisnoti, 0).expect("OpenType MATH font"));
+let script = Rc::new(Shaper::from_slice(&lete_sans_math, 0).expect("OpenType MATH font"));
+let font = CompositeFont::new(
+    vec![
+        FontFace::new(script).unicode_ranges(UnicodeRanges::new([0x1D49C..=0x1D503 /* … */])),
+        FontFace::new(main), // the faces are tried in this order; this one is the primary face
+    ],
+    1,
+)?;
+// use `&font` like a `Shaper`: in `formel::layout` and in `svg_renderer`
+```
+
+A face can also have a `size_adjust` (the `size-adjust` descriptor, to match the size of the fonts) and
+`font_features` (the `font-feature-settings` descriptor). The script and bold script letters, which
+`mathvariant="script"` and `"bold-script"` produce, are U+1D49C–1D503 and the eleven script letters of
+the Letterlike Symbols block: U+210A–210B, U+2110, U+2112, U+211B, U+212C, U+212F–2131, U+2133–2134.
+As flat pairs for `add_font_face`, `SCRIPT_RANGES` is
+`[0x1D49C, 0x1D503, 0x210A, 0x210B, 0x2110, 0x2110, 0x2112, 0x2112, 0x211B, 0x211B, 0x212C, 0x212C,
+0x212F, 0x2131, 0x2133, 0x2134]`.
 
 ## License
 

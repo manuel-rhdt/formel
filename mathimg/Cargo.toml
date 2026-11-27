@@ -6,6 +6,6 @@ edition = "2024"
 rust-version = "1.85"
 
 [dependencies]
-formel = { path = "..", version = "0.2.0", features = ["mathml_parser", "svg"] }
+formel = { path = "..", version = "0.2.1", features = ["mathml_parser", "svg"] }
 docopt = "1.1"
 serde = { version = "1", features = ["derive"] }

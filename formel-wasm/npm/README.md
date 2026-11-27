@@ -51,6 +51,7 @@ redistribution.
   - **`renderer.render(mathml, debug)`**: renders a MathML string, returning a `Rendering`.
   - **`renderer.render_svg(mathml)`**: renders MathML directly to an `<svg>` string.
   - **`renderer.set_font_features("'ss03'")`**: sets CSS `font-feature-settings` (such as stylistic sets) for subsequent renders.
+  - **`renderer.add_font_face(fontBytes, unicodeRanges?, sizeAdjust?, fontFeatures?)`**: uses another font for some characters, like a CSS `@font-face` with a `unicode-range`. `unicodeRanges` is a `Uint32Array` of pairs (the first and last codepoint of each range, e.g. `[0x1D49C, 0x1D503]` for the script letters), `sizeAdjust` a factor (`0.9` is 90%) and `fontFeatures` a `font-feature-settings` value. The font is used for a character in its ranges that it has a glyph for; otherwise the faces added before are tried, and last the font of the constructor, which gives the layout constants. Later calls take precedence over earlier ones. The font needs a `MATH` table. See [Mixed fonts](https://github.com/manuel-rhdt/formel#mixed-fonts).
   - **`renderer.units_per_em()`**: returns the font's design units per em.
 - **`Rendering`**: `{ svg, alt, width, height, baseline, units_per_em }`, with lengths in font design units.
 - **`latex_to_mathml(latex, display)`**: converts LaTeX to MathML via [math-core](https://github.com/tmke8/math-core) without rendering.
