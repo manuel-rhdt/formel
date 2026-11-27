@@ -1,6 +1,6 @@
 [package]
 name = "formel-wasm"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Manuel Reinhardt <manuel.jr16@gmail.com>"]
 edition = "2024"
 rust-version = "1.96"
@@ -14,6 +14,6 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-formel = { path = "..", version = "0.2.0", features = ["mathml_parser", "svg"] }
+formel = { path = "..", version = "0.2.1", features = ["mathml_parser", "svg"] }
 wasm-bindgen = "=0.2.100"
 math-core = "0.9"

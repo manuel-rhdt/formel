@@ -1003,4 +1003,50 @@ mod tests {
         );
         let _ = (first, second);
     }
+
+    /// The ranges of the script and bold script letters that the README gives hold every letter that
+    /// `mathvariant="script"` and `"bold-script"` produce, and nothing else but the eleven unassigned
+    /// codepoints between them in the block of mathematical alphanumerics.
+    #[test]
+    fn the_documented_script_ranges_are_those_of_the_script_letters() {
+        use crate::typesetting::unicode_math::{Family, convert_character_to_family};
+        let documented = ranges(&[
+            0x1D49C..=0x1D503,
+            0x210A..=0x210B,
+            0x2110..=0x2110,
+            0x2112..=0x2112,
+            0x211B..=0x211B,
+            0x212C..=0x212C,
+            0x212F..=0x2131,
+            0x2133..=0x2134,
+        ]);
+        let mut letters = std::collections::BTreeSet::new();
+        for family in [Family::Script, Family::BoldScript] {
+            for c in ('A'..='Z').chain('a'..='z') {
+                let letter = convert_character_to_family(c, family);
+                assert_ne!(letter, c, "{c:?} in {family:?}");
+                assert!(
+                    documented.contains(letter),
+                    "{letter:?} is not in the ranges"
+                );
+                letters.insert(letter as u32);
+            }
+        }
+        assert_eq!(letters.len(), 104);
+        let unassigned = [
+            0x1D49D, 0x1D4A0, 0x1D4A1, 0x1D4A3, 0x1D4A4, 0x1D4A7, 0x1D4A8, 0x1D4AD, 0x1D4BA,
+            0x1D4BC, 0x1D4C4,
+        ];
+        for codepoint in (0x1D49C..=0x1D503).chain(0x210A..=0x2134) {
+            let c = char::from_u32(codepoint).unwrap();
+            let expected = letters.contains(&codepoint) || unassigned.contains(&codepoint);
+            // between U+210A and U+2134 only the eleven script letters are in the ranges
+            let in_blocks = codepoint >= 0x1D49C || letters.contains(&codepoint);
+            assert_eq!(
+                documented.contains(c),
+                expected && in_blocks,
+                "U+{codepoint:X}"
+            );
+        }
+    }
 }
