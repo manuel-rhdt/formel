@@ -636,6 +636,7 @@ fn the_connectors_of_an_extender_at_the_end_limit_the_tolerated_overlap() {
 // ---- the radical: how the glyphs of the surd are made to join the rule ----
 
 /// The points of the outline of a glyph, as (x, y) in font units, from its SVG path data.
+#[cfg(feature = "svg")]
 fn outline_points(font: &Shaper, glyph: &str) -> Vec<(f32, f32)> {
     let path = font.glyph_path_data(named(font, glyph));
     let numbers: Vec<f32> = path
@@ -653,6 +654,7 @@ fn outline_points(font: &Shaper, glyph: &str) -> Vec<(f32, f32)> {
 /// Every glyph of the surd ends in a horizontal stroke, the start of the rule over the radicand, as
 /// thick as the font's `RadicalRuleThickness`: it is what the rule joins. The stroke is the right
 /// end of the outline, whose top is the highest point of the glyph.
+#[cfg(feature = "svg")]
 #[test]
 fn the_top_stroke_of_every_surd_glyph_is_as_thick_as_the_rule() {
     let font = Shaper::from_static(SUBSET, 0).unwrap();

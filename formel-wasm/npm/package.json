@@ -1,6 +1,6 @@
 {
   "name": "@manuel-rhdt/formel-wasm",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Typeset MathML and LaTeX to SVG in the browser with an OpenType MATH font",
   "license": "MIT",
   "author": "Manuel Reinhardt <manuel.jr16@gmail.com>",

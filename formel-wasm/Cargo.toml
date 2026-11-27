@@ -1,6 +1,6 @@
 [package]
 name = "formel-wasm"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Manuel Reinhardt <manuel.jr16@gmail.com>"]
 edition = "2024"
 rust-version = "1.96"

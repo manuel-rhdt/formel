@@ -13,12 +13,14 @@
 //! malformed data.
 
 use std::cell::RefCell;
+#[cfg(feature = "svg")]
 use std::fmt::Write;
 use std::sync::Arc;
 
 use harfrust::{Buffer, Direction, Feature, Script, ShapeOptions as HbOptions, ShaperFont};
 use read_fonts::TableProvider;
 use read_fonts::model::Font;
+#[cfg(feature = "svg")]
 use read_fonts::model::glyph::outline::{DrawMemory, DrawOptions, PathSink};
 use read_fonts::tables::gsub::{AlternateSubst, SingleSubst, SubstitutionSubtables};
 use read_fonts::tables::math::{
@@ -406,6 +408,7 @@ impl Shaper {
 
     /// The outline of a glyph as SVG path data in font units (y up), or an empty string if the
     /// glyph has no outline.
+    #[cfg(feature = "svg")]
     pub(crate) fn glyph_path_data(&self, glyph: u32) -> String {
         let mut builder = PathBuilder::default();
         if let Some(outline) = self.font.outline_glyphs().get(GlyphId::new(glyph)) {
@@ -510,17 +513,20 @@ fn alternate_substitution(
 }
 
 /// Collects a glyph outline as SVG path data.
+#[cfg(feature = "svg")]
 #[derive(Debug, Default)]
 struct PathBuilder {
     data: String,
 }
 
+#[cfg(feature = "svg")]
 impl PathBuilder {
     fn push(&mut self, command: std::fmt::Arguments) {
         let _ = write!(self.data, "{} ", command);
     }
 }
 
+#[cfg(feature = "svg")]
 impl PathSink for PathBuilder {
     fn move_to(&mut self, x: f32, y: f32) {
         self.push(format_args!("M{} {}", x, y));
