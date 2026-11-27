@@ -780,7 +780,7 @@ mod svg {
             svg_renderer::render_to_string_with(
                 &doc,
                 &result.layouts,
-                font.face(),
+                font,
                 units_per_em,
                 Flags::default(),
                 a11y,
@@ -829,7 +829,7 @@ mod svg {
             svg_renderer::render_to_string(
                 &doc,
                 &result.layouts,
-                font.face(),
+                font,
                 font.units_per_em() as f32,
                 Flags::default(),
             )

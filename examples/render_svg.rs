@@ -39,7 +39,7 @@ fn main() {
     svg_renderer::render(
         &document,
         &typeset.layouts,
-        font.face(),
+        &font,
         units_per_em,
         flags,
         output,

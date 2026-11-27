@@ -76,9 +76,8 @@ impl Rendering {
 /// The font bytes are copied once on construction and reused for every call.
 #[wasm_bindgen]
 pub struct MathRenderer {
-    // Leaked so that the `Shaper` can borrow it for `'static`; a renderer lives for as long as
-    // the page uses it, and `free()` on the JS side drops only the handle.
-    shaper: Shaper<'static>,
+    // The shaper owns its copy of the font bytes, so `free()` on the JS side releases them.
+    shaper: Shaper,
     font_features: formel::host::FontFeatures,
 }
 
@@ -87,8 +86,7 @@ impl MathRenderer {
     /// Creates a renderer from the bytes of an OpenType font with a `MATH` table.
     #[wasm_bindgen(constructor)]
     pub fn new(font: &[u8]) -> Result<MathRenderer, JsError> {
-        let data: &'static [u8] = Box::leak(font.to_vec().into_boxed_slice());
-        let shaper = Shaper::from_slice(data, 0)
+        let shaper = Shaper::from_slice(font, 0)
             .ok_or_else(|| JsError::new("not a valid font with an OpenType MATH table"))?;
         Ok(MathRenderer {
             shaper,
@@ -179,7 +177,7 @@ impl MathRenderer {
         let svg = svg_renderer::render_to_string_with(
             &document,
             &typeset.layouts,
-            self.shaper.face(),
+            &self.shaper,
             units_per_em,
             flags,
             svg_renderer::A11y::titled(&alt),

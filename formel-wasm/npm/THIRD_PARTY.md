@@ -8,12 +8,13 @@ licence, and all of them are permissive.
 | :--- | :--- | :--- |
 | [formel](https://crates.io/crates/formel) | MIT | https://github.com/manuel-rhdt/formel |
 | [math-core](https://crates.io/crates/math-core) | MIT | https://github.com/tmke8/math-core |
-| [rustybuzz](https://crates.io/crates/rustybuzz) | MIT | https://github.com/harfbuzz/rustybuzz |
+| [harfrust](https://crates.io/crates/harfrust) | MIT | https://github.com/harfbuzz/harfrust |
+| [read-fonts](https://crates.io/crates/read-fonts) | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
 | [quick-xml](https://crates.io/crates/quick-xml) | MIT | https://github.com/tafia/quick-xml |
 | [svg](https://crates.io/crates/svg) | MIT OR Apache-2.0 | https://github.com/bodoni/svg |
 | [wasm-bindgen](https://crates.io/crates/wasm-bindgen) | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen |
 
-These in turn depend on the crates pinned in the repository's `Cargo.lock` — `ttf-parser`,
+These in turn depend on the crates pinned in the repository's `Cargo.lock` — `font-types`,
 `unicode-properties`, `phf`, `bitflags` and so on — under MIT, Apache-2.0 or (for `memchr`) the
 Unlicense. `cargo license` or `cargo deny list` prints the exact set with each crate's licence text.
 

@@ -37,12 +37,12 @@ enum Segment {
 /// them.
 struct Doc {
     nodes: Vec<Node>,
-    font: Rc<Shaper<'static>>,
+    font: Rc<Shaper>,
     layouts: HashMap<Id, NodeLayout>,
     set_layout_calls: Vec<Id>,
 }
 
-fn test_font() -> Rc<Shaper<'static>> {
+fn test_font() -> Rc<Shaper> {
     Rc::new(Shaper::from_slice(util::get_bytes(), 0).expect("test font has a MATH table"))
 }
 
@@ -150,7 +150,7 @@ impl Doc {
 
 impl MathTree for Doc {
     type NodeId = Id;
-    type Font = Rc<Shaper<'static>>;
+    type Font = Rc<Shaper>;
 
     fn kind(&self, node: Id) -> NodeKind {
         if self.nodes[node].foreign.is_some() {
