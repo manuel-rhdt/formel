@@ -390,7 +390,9 @@ impl Shaper {
     fn assembly_italic_correction(&self, glyph: u32, horizontal: bool) -> i32 {
         self.construction(glyph, horizontal)
             .and_then(|c| c.glyph_assembly()?.ok())
-            .map_or(0, |assembly| assembly.italics_correction().value().to_i16() as i32)
+            .map_or(0, |assembly| {
+                assembly.italics_correction().value().to_i16() as i32
+            })
     }
 
     /// The font's `MinConnectorOverlap`: assembly parts must overlap by at least this much.
@@ -702,24 +704,27 @@ fn largest_variant(
     Some(shaper.glyphs_from_index(variant, options))
 }
 
-fn try_assembly(
-    shaper: &Shaper,
-    glyph: u32,
-    horizontal: bool,
+/// How an assembly is built for a target size: how often the extenders are repeated and by how
+/// much consecutive parts overlap.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct AssemblyPlan {
+    repeat_count_ext: u32,
+    connector_overlap: f32,
+}
+
+/// The plan for an assembly of `parts` of at least `target_size`, with parts overlapping by at
+/// least `min_connector_overlap` (MathML Core 5.3.1), or `None` if that is impossible.
+fn plan_assembly(
+    parts: &[Part],
+    min_connector_overlap: i32,
     target_size: i32,
-    options: ShapeOptions,
-) -> Option<Vec<(Vector<i32>, Vec<MathGlyph>)>> {
-    // The font's `MinConnectorOverlap`: parts must overlap by at least this much.
-    let min_connector_overlap = shaper.min_connector_overlap();
-
-    let parts = shaper.assembly_parts(glyph, horizontal);
-
+) -> Option<AssemblyPlan> {
     let mut full_advance_sum_non_ext: i32 = 0;
     let mut full_advance_sum_ext: i32 = 0;
     let mut part_count_non_ext: u32 = 0;
     let mut part_count_ext: u32 = 0;
 
-    for part in &parts {
+    for part in parts {
         if part.extender {
             full_advance_sum_ext += part.full_advance;
             part_count_ext += 1;
@@ -731,8 +736,8 @@ fn try_assembly(
 
     let a = full_advance_sum_non_ext - min_connector_overlap * (part_count_non_ext as i32 - 1);
     let b = full_advance_sum_ext - min_connector_overlap * part_count_ext as i32;
-    if b == 0 {
-        // there probably is no glyph assembly for this glyph
+    if b <= 0 {
+        // there probably is no glyph assembly for this glyph, or extenders that do not grow it
         return None;
     };
     let repeat_count_ext = ((target_size - a) as f32 / b as f32).ceil().max(0.0) as u32;
@@ -774,6 +779,62 @@ fn try_assembly(
     } else {
         0.0
     };
+    Some(AssemblyPlan {
+        repeat_count_ext,
+        connector_overlap,
+    })
+}
+
+/// The longest overlap that the connectors of `parts` allow at every joint, if every joint allows
+/// a positive one. Extenders count with both connectors, since they may be joined to themselves.
+fn largest_overlap_the_connectors_allow(parts: &[Part]) -> Option<i32> {
+    let last = parts.len().checked_sub(1)?;
+    let limit = parts
+        .iter()
+        .enumerate()
+        .flat_map(|(index, part)| {
+            let end = (index < last || part.extender).then_some(part.end_connector_length);
+            let start = (index > 0 || part.extender).then_some(part.start_connector_length);
+            [end, start]
+        })
+        .flatten()
+        .min()?;
+    (limit > 0).then_some(limit)
+}
+
+/// [`plan_assembly`], tolerating a font whose `MinConnectorOverlap` is larger than its parts'
+/// connectors can ever overlap by. MathML Core calls such an assembly invalid, and an engine that
+/// obeys falls back to the largest size variant, which for a tall delimiter is far too short.
+/// Asana Math 0.907 is such a font: `MinConnectorOverlap` is 100, its connectors are 15 to 35 units
+/// long. The font's intention is clear (the parts are meant to be joined at their connectors), so
+/// the minimum is lowered to what the connectors allow.
+///
+/// An assembly the font allows is planned exactly as by [`plan_assembly`].
+fn plan_assembly_tolerantly(
+    parts: &[Part],
+    min_connector_overlap: i32,
+    target_size: i32,
+) -> Option<AssemblyPlan> {
+    plan_assembly(parts, min_connector_overlap, target_size).or_else(|| {
+        let allowed = largest_overlap_the_connectors_allow(parts)?;
+        (allowed < min_connector_overlap)
+            .then(|| plan_assembly(parts, allowed, target_size))
+            .flatten()
+    })
+}
+
+fn try_assembly(
+    shaper: &Shaper,
+    glyph: u32,
+    horizontal: bool,
+    target_size: i32,
+    options: ShapeOptions,
+) -> Option<Vec<(Vector<i32>, Vec<MathGlyph>)>> {
+    let parts = shaper.assembly_parts(glyph, horizontal);
+    let AssemblyPlan {
+        repeat_count_ext,
+        connector_overlap,
+    } = plan_assembly_tolerantly(&parts, shaper.min_connector_overlap(), target_size)?;
 
     let result = parts
         .into_iter()
@@ -786,8 +847,14 @@ fn try_assembly(
         // connector overlap, rounding the position (not each step, which would add up).
         .scan(0.0f32, move |current_offset, part| {
             let offset = (*current_offset).round() as i32;
-            let origin = point_with_offset(offset, horizontal);
+            let mut origin = point_with_offset(offset, horizontal);
             let glyphs = shaper.glyphs_from_index(part.glyph, options);
+            if !horizontal {
+                // MathML Core 5.3.1: a vertical part is drawn so that the bottom of the glyph is at
+                // the running position, not its origin. Most fonts draw their parts upwards from
+                // the origin (depth 0, no change), but some (Asana Math 0.962) hang them below it.
+                origin.y -= glyphs.first().map_or(0, |glyph| glyph.extents.descent);
+            }
             let delta_offset = part.full_advance as f32 - connector_overlap;
             if horizontal {
                 *current_offset += delta_offset;

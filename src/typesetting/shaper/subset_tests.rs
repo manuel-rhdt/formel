@@ -414,3 +414,221 @@ fn the_default_implementation_knows_single_glyphs_only() {
         0
     );
 }
+
+// ---- glyph assemblies: tolerance for an impossible `MinConnectorOverlap`, bottom alignment ----
+
+fn part(glyph: u32, start: i32, end: i32, full_advance: i32, extender: bool) -> Part {
+    Part {
+        glyph,
+        start_connector_length: start,
+        end_connector_length: end,
+        full_advance,
+        extender,
+    }
+}
+
+/// The assembly of `(` in Asana Math 0.907, bottom to top. Its `MinConnectorOverlap` is 100, but
+/// no connector is longer than 35 units and the extender's are 15, so by the letter of MathML Core
+/// the assembly is invalid.
+fn asana_0_907_parenthesis() -> Vec<Part> {
+    vec![
+        part(1, 0, 35, 886, false),
+        part(2, 15, 15, 1122, true),
+        part(3, 35, 0, 885, false),
+    ]
+}
+
+#[test]
+fn an_impossible_minimum_overlap_fails_without_tolerance() {
+    assert_eq!(plan_assembly(&asana_0_907_parenthesis(), 100, 3000), None);
+}
+
+#[test]
+fn an_impossible_minimum_overlap_is_lowered_to_what_the_connectors_allow() {
+    let parts = asana_0_907_parenthesis();
+    let plan = plan_assembly_tolerantly(&parts, 100, 3000).expect("an assembly");
+    // the connectors of the extender are the shortest: 15 units
+    assert_eq!(largest_overlap_the_connectors_allow(&parts), Some(15));
+    assert_eq!(plan.connector_overlap, 15.0);
+    // and it is as long as asked: 886 + 885 + r * 1122 - 15 per joint
+    let length = |r: i32| 886 + 885 + r * 1122 - 15 * (1 + r);
+    assert!(length(plan.repeat_count_ext as i32) >= 3000);
+    assert!(
+        length(plan.repeat_count_ext as i32 - 1) < 3000,
+        "no extender more than needed"
+    );
+    // it is the plan of the same font with the minimum it should have had
+    assert_eq!(Some(plan), plan_assembly(&parts, 15, 3000));
+}
+
+/// A font that allows its assembly gets exactly the plan it always got.
+#[test]
+fn a_possible_assembly_is_planned_as_before() {
+    // Asana Math 0.962: MinConnectorOverlap 10, connectors from 15 to 35
+    let parts = vec![
+        part(1, 0, 35, 884, false),
+        part(2, 15, 15, 326, true),
+        part(3, 35, 0, 884, false),
+    ];
+    for target in [0, 500, 1768, 1769, 3000, 9000] {
+        let strict = plan_assembly(&parts, 10, target);
+        assert!(strict.is_some(), "{target}");
+        assert_eq!(
+            plan_assembly_tolerantly(&parts, 10, target),
+            strict,
+            "{target}"
+        );
+    }
+}
+
+/// Without any usable overlap (a joint that cannot overlap at all), or without extender that grows
+/// the assembly, there is nothing to tolerate.
+#[test]
+fn nothing_is_tolerated_without_a_usable_overlap_or_a_growing_extender() {
+    let no_joint = vec![
+        part(1, 0, 0, 500, false),
+        part(2, 0, 20, 500, true),
+        part(3, 20, 0, 500, false),
+    ];
+    assert_eq!(plan_assembly_tolerantly(&no_joint, 100, 3000), None);
+    let no_extender = vec![part(1, 0, 50, 900, false), part(2, 50, 0, 900, false)];
+    assert_eq!(plan_assembly_tolerantly(&no_extender, 100, 3000), None);
+    // an extender that does not grow when joined
+    let flat = vec![
+        part(1, 0, 50, 900, false),
+        part(2, 50, 50, 40, true),
+        part(3, 50, 0, 900, false),
+    ];
+    assert_eq!(plan_assembly_tolerantly(&flat, 50, 3000), None);
+    assert_eq!(plan_assembly_tolerantly(&[], 50, 3000), None);
+}
+
+// MATH header: version (4 bytes), then the offsets of MathConstants, MathGlyphInfo, MathVariants.
+// The first field of MathVariants is `minConnectorOverlap`.
+fn with_min_connector_overlap(font: &[u8], value: u16) -> Vec<u8> {
+    let mut data = font.to_vec();
+    let tables = u16::from_be_bytes([data[4], data[5]]) as usize;
+    let record = (0..tables)
+        .map(|i| 12 + 16 * i)
+        .find(|&r| &data[r..r + 4] == b"MATH")
+        .expect("a MATH table");
+    let be32 = |d: &[u8], at: usize| u32::from_be_bytes(d[at..at + 4].try_into().unwrap()) as usize;
+    let math = be32(&data, record + 8);
+    let variants = math + u16::from_be_bytes([data[math + 8], data[math + 9]]) as usize;
+    data[variants..variants + 2].copy_from_slice(&value.to_be_bytes());
+    data
+}
+
+const SUBSET: &[u8] = include_bytes!("../../../tests/testfiles/stixtwo-math-subset.otf");
+const SUBSET_HANGING: &[u8] =
+    include_bytes!("../../../tests/testfiles/stixtwo-math-subset-hanging.otf");
+
+/// The ink of each part of a stretched vertical glyph: (name, bottom, top), y pointing up.
+fn ink_of_parts(font: &Shaper, target: i32) -> (Vec<(String, i32, i32)>, i32) {
+    let integral = named(font, "uni222B");
+    let (parts, correction) =
+        font.stretch_with_italic_correction(integral, false, target, level(0));
+    let ink = parts
+        .iter()
+        .map(|(origin, glyph)| {
+            let name = font
+                .font
+                .glyph_name(read_fonts::types::GlyphId::new(glyph.glyph_code))
+                .map_or_else(|| glyph.glyph_code.to_string(), |name| name.to_string());
+            // y points down in the offsets: the ink bottom is `descent` below the origin
+            (
+                name,
+                -(origin.y + glyph.extents.descent),
+                -(origin.y - glyph.extents.ascent),
+            )
+        })
+        .collect();
+    (ink, correction)
+}
+
+/// The font of the subset has a valid assembly for the integral (`MinConnectorOverlap` 100 against
+/// connectors of 600 and 800 units): the parts overlap by what the target needs.
+#[test]
+fn a_valid_assembly_overlaps_as_the_target_needs() {
+    let font = Shaper::from_static(SUBSET, 0).unwrap();
+    // uni2321 (1896) + integral.x (1251) + uni2320 (1630): the overlap is the one that makes the
+    // assembly exactly 4000 long, as long as the connectors allow it
+    let (ink, _) = ink_of_parts(&font, 4000);
+    assert_eq!(ink.len(), 3, "{ink:?}");
+    let bottoms: Vec<i32> = ink.iter().map(|(_, bottom, _)| *bottom).collect();
+    // overlap o: 1896 + 1251 + 1630 - 2 o = 4000, so o = 388.5
+    for (bottom, expected) in
+        bottoms
+            .iter()
+            .zip([0.0, 1896.0 - 388.5, 1896.0 + 1251.0 - 2.0 * 388.5])
+    {
+        assert!((*bottom as f32 - expected).abs() <= 1.0, "{bottoms:?}");
+    }
+}
+
+/// The same font with `MinConnectorOverlap` 1000, more than any of its connectors: the assembly is
+/// still built, with the overlap the connectors allow (600), instead of falling back to the
+/// largest size variant.
+#[test]
+fn an_assembly_with_an_impossible_minimum_overlap_is_still_built() {
+    let patched = with_min_connector_overlap(SUBSET, 1000);
+    let font = Shaper::from_vec(patched, 0).unwrap();
+    assert_eq!(font.min_connector_overlap(), 1000);
+    let (ink, correction) = ink_of_parts(&font, 4000);
+    let names: Vec<&str> = ink.iter().map(|(name, ..)| name.as_str()).collect();
+    assert_eq!(names, ["uni2321", "integral.x", "integral.x", "uni2320"]);
+    assert_eq!(
+        correction, 80,
+        "it is an assembly, with the italic correction of the assembly"
+    );
+    // consecutive parts overlap by 600: bottoms at 0, 1896 - 600, + (1251 - 600), + (1251 - 600)
+    let bottoms: Vec<i32> = ink.iter().map(|(_, bottom, _)| *bottom).collect();
+    assert_eq!(bottoms, [0, 1296, 1947, 2598]);
+    // at least as tall as asked (it cannot be made shorter than the connectors allow)
+    assert!(ink.last().unwrap().2 >= 4000, "{ink:?}");
+    // without tolerance the largest variant would have been used: a single glyph
+    let strict = plan_assembly(
+        &font.assembly_parts(font.font.glyph_by_name("uni222B").unwrap().to_u32(), false),
+        1000,
+        4000,
+    );
+    assert_eq!(strict, None);
+}
+
+/// Parts drawn below their origin are placed like parts drawn above it (MathML Core 5.3.1: a
+/// vertical part is drawn with the bottom of the glyph, not its origin, at the running position).
+#[test]
+fn vertical_parts_are_aligned_by_their_bottom_edge() {
+    let upright = Shaper::from_static(SUBSET, 0).unwrap();
+    let hanging = Shaper::from_static(SUBSET_HANGING, 0).unwrap();
+    // the origin of the first part is about 1884 units above where the ink starts
+    let part = named(&hanging, "uni2321");
+    assert_eq!(hanging.glyph(part, level(0)).extents.descent, 1884);
+    assert_eq!(upright.glyph(part, level(0)).extents.descent, 0);
+
+    for target in [2400, 3000, 4000, 9000, 20_000] {
+        let (a, _) = ink_of_parts(&upright, target);
+        let (b, _) = ink_of_parts(&hanging, target);
+        assert_eq!(a, b, "the same ink at {target}");
+        // and the ink is stacked: each part starts where the previous one ends, less the overlap
+        for pair in a.windows(2) {
+            let (below, above) = (&pair[0], &pair[1]);
+            assert!(above.1 < below.2, "parts overlap: {a:?}");
+        }
+        assert_eq!(a[0].1, 0, "the assembly starts at the position 0");
+    }
+}
+
+/// An extender at the end of an assembly is joined to copies of itself, so both of its connectors
+/// count even where a non-extender would not use them (the start of the first part).
+#[test]
+fn the_connectors_of_an_extender_at_the_end_limit_the_tolerated_overlap() {
+    // like the bar of Asana Math: extenders only at the start, a short start connector
+    let parts = vec![part(1, 10, 30, 500, true), part(2, 40, 0, 500, false)];
+    assert_eq!(largest_overlap_the_connectors_allow(&parts), Some(10));
+    let plan = plan_assembly_tolerantly(&parts, 100, 3000).expect("an assembly");
+    assert!(plan.connector_overlap <= 10.0, "{plan:?}");
+    // the same for an extender that comes last
+    let parts = vec![part(1, 0, 40, 500, false), part(2, 30, 10, 500, true)];
+    assert_eq!(largest_overlap_the_connectors_allow(&parts), Some(10));
+}

@@ -9,3 +9,26 @@ pyftsubset web/fonts/stixtwo-math.otf \
   --layout-features=ssty \
   --no-hinting --notdef-outline \
   --output-file=tests/testfiles/stixtwo-math-subset.otf
+
+# stixtwo-math-subset-hanging.otf: the same font with the three parts of the integral's assembly
+# drawn below their origin instead of above it (ink from -h+11 to 11, like the parentheses of
+# Asana Math 0.962). MathML Core draws a vertical part by its bottom edge, so both fonts must give
+# the same assembly. Only the outlines change; the MATH table and the advances do not.
+python3 - <<'PY'
+from fontTools.pens.boundsPen import BoundsPen
+from fontTools.pens.t2CharStringPen import T2CharStringPen
+from fontTools.pens.transformPen import TransformPen
+from fontTools.ttLib import TTFont
+
+font = TTFont("tests/testfiles/stixtwo-math-subset.otf")
+glyphs = font.getGlyphSet()
+cff = font["CFF "].cff
+top = cff.topDictIndex[0]
+for name in ("uni2321", "integral.x", "uni2320"):
+    bounds = BoundsPen(glyphs)
+    glyphs[name].draw(bounds)
+    pen = T2CharStringPen(glyphs[name].width, glyphs)
+    glyphs[name].draw(TransformPen(pen, (1, 0, 0, 1, 0, 11 - bounds.bounds[3])))
+    top.CharStrings[name] = pen.getCharString(private=top.Private, globalSubrs=cff.GlobalSubrs)
+font.save("tests/testfiles/stixtwo-math-subset-hanging.otf")
+PY
