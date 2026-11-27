@@ -707,3 +707,71 @@ fn the_surd_overlaps_the_start_of_the_rule() {
         assert_eq!(ink_right - g.advance_width, overlap, "{glyph}");
     }
 }
+
+#[test]
+fn has_glyph_looks_in_the_character_map() {
+    let font = Shaper::from_static(SUBSET, 0).unwrap();
+    for c in [
+        'A',
+        'E',
+        '+',
+        ' ',
+        '\u{1D453}',
+        '\u{222B}',
+        '\u{221A}',
+        '\u{301}',
+    ] {
+        assert!(font.has_glyph(c), "{c:?}");
+    }
+    for c in ['B', 'z', '\u{1D49C}', '\u{20AC}', '\u{10FFFF}'] {
+        assert!(!font.has_glyph(c), "{c:?}");
+    }
+}
+
+/// The default implementation (used by fonts that do not override it) agrees with the cmap.
+#[test]
+fn the_default_has_glyph_agrees_with_the_character_map() {
+    struct Plain(Shaper);
+    impl MathFont for Plain {
+        fn units_per_em(&self) -> u32 {
+            self.0.units_per_em()
+        }
+        fn constant(&self, c: MathConstant) -> i32 {
+            self.0.constant(c)
+        }
+        fn shape(&self, text: &str, options: ShapeOptions) -> Vec<MathGlyph> {
+            self.0.shape(text, options)
+        }
+        fn glyph(&self, glyph: GlyphCode, options: ShapeOptions) -> MathGlyph {
+            self.0.glyph(glyph, options)
+        }
+        fn is_stretchable(&self, glyph: GlyphCode, horizontal: bool) -> bool {
+            self.0.is_stretchable(glyph, horizontal)
+        }
+        fn stretch(
+            &self,
+            glyph: GlyphCode,
+            horizontal: bool,
+            target_size: i32,
+            options: ShapeOptions,
+        ) -> Vec<(Vector<i32>, MathGlyph)> {
+            self.0.stretch(glyph, horizontal, target_size, options)
+        }
+        fn math_kerning(&self, glyph: GlyphCode, corner: CornerPosition, height: i32) -> i32 {
+            self.0.math_kerning(glyph, corner, height)
+        }
+    }
+    let font = Plain(Shaper::from_static(SUBSET, 0).unwrap());
+    for c in [
+        'A',
+        '+',
+        ' ',
+        '\u{1D453}',
+        'B',
+        'z',
+        '\u{1D49C}',
+        '\u{20AC}',
+    ] {
+        assert_eq!(font.has_glyph(c), font.0.has_glyph(c), "{c:?}");
+    }
+}
