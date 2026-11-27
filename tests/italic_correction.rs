@@ -25,6 +25,9 @@ struct Laid {
     xs: std::collections::HashMap<Vec<usize>, f32>,
     /// The first glyph of the node's own run.
     glyphs: std::collections::HashMap<Vec<usize>, u32>,
+    /// Width of the border box, and the number of glyphs of the node's own run.
+    widths: std::collections::HashMap<Vec<usize>, f32>,
+    run_lengths: std::collections::HashMap<Vec<usize>, usize>,
 }
 
 fn lay_out(xml: &str) -> Laid {
@@ -38,17 +41,21 @@ fn lay_out(xml: &str) -> Laid {
 
     let mut xs = std::collections::HashMap::new();
     let mut glyphs = std::collections::HashMap::new();
+    let mut widths = std::collections::HashMap::new();
+    let mut run_lengths = std::collections::HashMap::new();
     let root = document.root().expect("a root");
     let mut stack: Vec<(NodeId, Vec<usize>, f32)> = vec![(root, vec![], 0.0)];
     while let Some((node, path, parent_x)) = stack.pop() {
         let layout = &result.layouts[&node];
         let x = parent_x + layout.location.x;
         xs.insert(path.clone(), x);
+        widths.insert(path.clone(), layout.size.width);
         for fragment in &layout.fragments {
             if let Fragment::Glyphs { glyphs: run, .. } = fragment {
                 if let Some(first) = run.first() {
                     glyphs.entry(path.clone()).or_insert(first.glyph);
                 }
+                *run_lengths.entry(path.clone()).or_insert(0) += run.len();
             }
         }
         for (i, &child) in document.node(node).children.iter().enumerate() {
@@ -57,7 +64,13 @@ fn lay_out(xml: &str) -> Laid {
             stack.push((child, child_path, x));
         }
     }
-    Laid { font, xs, glyphs }
+    Laid {
+        font,
+        xs,
+        glyphs,
+        widths,
+        run_lengths,
+    }
 }
 
 impl Laid {
@@ -66,6 +79,18 @@ impl Laid {
             .xs
             .get(path)
             .unwrap_or_else(|| panic!("no node at {path:?}"))
+    }
+
+    fn width(&self, path: &[usize]) -> f32 {
+        *self
+            .widths
+            .get(path)
+            .unwrap_or_else(|| panic!("no node at {path:?}"))
+    }
+
+    /// x of the middle of the node's border box.
+    fn center(&self, path: &[usize]) -> f32 {
+        self.x(path) + self.width(path) / 2.0
     }
 
     fn glyph(&self, path: &[usize]) -> formel::host::MathGlyph {
@@ -183,7 +208,13 @@ fn a_row_does_not_add_the_correction_of_a_large_operator() {
 }
 
 /// The correction a row passes on is that of its last child (the row is slanted if it ends in a
-/// slanted glyph), so a superscript of `(a f)` sits after `f`'s correction.
+/// slanted glyph), so a superscript of `(A f)` sits after `f`'s correction.
+///
+/// This counts the correction once. Read literally, MathML Core (Candidate Recommendation of
+/// 24 June 2025, 3.3.1) counts it twice: the row's inline size ends with "increment inline-offset
+/// by previous-italic-correction", the row's italic correction is that same value, and `msup`
+/// adds the base's correction to the base's inline size. That looks like an oversight in the
+/// text (TeX adds it once); this test pins what the engine does, not the literal reading.
 #[test]
 fn a_row_passes_on_the_correction_of_its_last_child() {
     let laid = lay_out(&format!(
@@ -191,4 +222,123 @@ fn a_row_passes_on_the_correction_of_its_last_child() {
     ));
     // the base row is A (718) then f (577), then f's correction
     assert_eq!(laid.x(&[0, 1]) - laid.x(&[0, 0]), 718.0 + 577.0 + 20.0);
+}
+
+const INTEGRAL: &str = "\u{222B}";
+
+/// The limits of a large operator follow its slant: the one above is centred half a correction to
+/// the right of the base's centre, the one below half a correction to the left (MathML Core 3.4.2,
+/// `LargeOpItalicCorrection`), the same in the cases where the script is narrower than the base
+/// and where the base has to move because the script is wider.
+#[test]
+fn limits_of_large_operators_are_shifted_by_half_the_italic_correction() {
+    for display in ["inline", "block"] {
+        for (element, script, over, under) in [
+            ("munder", "A", false, true),
+            ("mover", "A", true, false),
+            ("munder", "AAAAAAAAAA", false, true), // wider than the integral
+            ("mover", "AAAAAAAAAA", true, false),
+        ] {
+            let xml = format!(
+                r#"<math display="{display}"><{element}><mo>{INTEGRAL}</mo><mi mathvariant="normal">{script}</mi></{element}></math>"#
+            );
+            let laid = lay_out(&xml);
+            let integral = laid.glyph(&[0, 0]);
+            // 230 at the text size, 540 for the display size glyph
+            let expected = if display == "block" { 540 } else { 230 };
+            assert_eq!(integral.italic_correction, expected, "{display} {element}");
+            let half = integral.italic_correction as f32 / 2.0;
+            let shift = laid.center(&[0, 1]) - laid.center(&[0, 0]);
+            let want = if over {
+                half
+            } else if under {
+                -half
+            } else {
+                unreachable!()
+            };
+            assert_eq!(shift, want, "{display} {element} with {script}");
+        }
+    }
+}
+
+/// With both limits each gets its own half, from the correction of the base itself.
+#[test]
+fn both_limits_are_shifted_in_opposite_directions() {
+    for (display, correction) in [("inline", 230.0), ("block", 540.0)] {
+        let xml = format!(
+            r#"<math display="{display}"><munderover><mo>{INTEGRAL}</mo><mi mathvariant="normal">A</mi><mi mathvariant="normal">E</mi></munderover></math>"#
+        );
+        let laid = lay_out(&xml);
+        let base = laid.center(&[0, 0]);
+        assert_eq!(
+            laid.center(&[0, 1]) - base,
+            -correction / 2.0,
+            "{display} under"
+        );
+        assert_eq!(
+            laid.center(&[0, 2]) - base,
+            correction / 2.0,
+            "{display} over"
+        );
+    }
+}
+
+/// An operator that is not a large operator, even with a correction of its own, centres its
+/// limits: only `largeop` bases lean (the spec's `LargeOpItalicCorrection` is 0 for the others).
+#[test]
+fn limits_of_ordinary_slanted_bases_are_centred() {
+    for element in ["munder", "mover"] {
+        let laid = lay_out(&format!(
+            "<math><{element}><mi>f</mi>{A}</{element}></math>"
+        ));
+        assert_eq!(
+            laid.glyph(&[0, 0]).italic_correction,
+            20,
+            "the italic f is slanted"
+        );
+        assert_eq!(laid.center(&[0, 1]), laid.center(&[0, 0]), "{element}");
+    }
+}
+
+/// A stretchy operator that the font builds from an assembly has the italic correction of the
+/// assembly (80), not that of the glyph it started from (230), nor that of its parts (none): the
+/// subscript of a large operator sits one correction left of its advance.
+#[test]
+fn an_assembled_operator_has_the_italic_correction_of_the_assembly() {
+    // the row's tall spacer makes the integral stretch to more than the display size glyph
+    let tall =
+        r#"<mpadded height="3000px" depth="3000px"><mi mathvariant="normal">A</mi></mpadded>"#;
+    let xml = format!(
+        r#"<math><mrow><msub><mo stretchy="true" symmetric="true">{INTEGRAL}</mo>{A}</msub>{tall}</mrow></math>"#
+    );
+    let laid = lay_out(&xml);
+    let operator = [0, 0, 0];
+    assert!(
+        laid.run_lengths[&operator.to_vec()] >= 3,
+        "the integral is an assembly of parts"
+    );
+    let gap = laid.x(&[0, 0, 1]) - laid.x(&operator);
+    assert_eq!(
+        gap,
+        laid.width(&operator) - 80.0,
+        "advance of the assembly - its correction"
+    );
+}
+
+/// The same for the sizes the font offers as glyphs: the display size integral has its own
+/// correction (540), found through the stretching algorithm and not only by shaping.
+#[test]
+fn a_stretched_variant_has_the_italic_correction_of_the_variant() {
+    // tall enough to need the display size glyph (2347) but not an assembly
+    let tall = r#"<mpadded height="800px" depth="800px"><mi mathvariant="normal">A</mi></mpadded>"#;
+    let xml = format!(
+        r#"<math><mrow><msub><mo stretchy="true" symmetric="true">{INTEGRAL}</mo>{A}</msub>{tall}</mrow></math>"#
+    );
+    let laid = lay_out(&xml);
+    let operator = [0, 0, 0];
+    assert_eq!(laid.run_lengths[&operator.to_vec()], 1, "a single glyph");
+    let glyph = laid.glyph(&operator);
+    assert_eq!(glyph.italic_correction, 540, "the display size integral");
+    let gap = laid.x(&[0, 0, 1]) - laid.x(&operator);
+    assert_eq!(gap, laid.width(&operator) - 540.0);
 }

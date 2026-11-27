@@ -328,6 +328,29 @@ pub trait MathFont {
         options: ShapeOptions,
     ) -> Vec<(Vector<i32>, MathGlyph)>;
 
+    /// [`stretch`](Self::stretch), also returning the italic correction of the result, as the
+    /// algorithm to shape a stretchy glyph of MathML Core sets it: that of the variant glyph (its
+    /// `MathItalicsCorrectionInfo` entry), or for a glyph assembly the font's
+    /// `GlyphAssembly.italicsCorrection`.
+    ///
+    /// The default implementation knows only the first case: it is the correction of a result of
+    /// one glyph, and 0 for several glyphs. Fonts that can tell the correction of an assembly
+    /// should override it.
+    fn stretch_with_italic_correction(
+        &self,
+        glyph: GlyphCode,
+        horizontal: bool,
+        target_size: i32,
+        options: ShapeOptions,
+    ) -> (Vec<(Vector<i32>, MathGlyph)>, i32) {
+        let parts = self.stretch(glyph, horizontal, target_size, options);
+        let italic_correction = match parts.as_slice() {
+            [(_, glyph)] => glyph.italic_correction,
+            _ => 0,
+        };
+        (parts, italic_correction)
+    }
+
     /// The MATH table kerning of `glyph` at `corner` for the given correction height.
     fn math_kerning(&self, glyph: GlyphCode, corner: CornerPosition, correction_height: i32)
     -> i32;
@@ -359,6 +382,15 @@ macro_rules! forward_math_font {
                 options: ShapeOptions,
             ) -> Vec<(Vector<i32>, MathGlyph)> {
                 (**self).stretch(glyph, horizontal, target_size, options)
+            }
+            fn stretch_with_italic_correction(
+                &self,
+                glyph: GlyphCode,
+                horizontal: bool,
+                target_size: i32,
+                options: ShapeOptions,
+            ) -> (Vec<(Vector<i32>, MathGlyph)>, i32) {
+                (**self).stretch_with_italic_correction(glyph, horizontal, target_size, options)
             }
             fn math_kerning(
                 &self,

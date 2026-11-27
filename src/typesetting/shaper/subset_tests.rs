@@ -285,3 +285,132 @@ fn italic_correction_follows_the_substituted_glyph() {
     assert_eq!(script.glyph_code, named(&font, "u1D453.ssty"));
     assert_eq!((base.italic_correction, script.italic_correction), (20, 0));
 }
+
+/// How the integral stretches in the subset: the base glyph (954 high in the vertical construction
+/// table), `uni222B.dsp` (2347) and above that an assembly of `uni2321`, `integral.x` (an extender)
+/// and `uni2320`, whose own correction is 80, unlike that of its parts.
+#[test]
+fn a_stretched_glyph_has_the_italic_correction_of_what_was_chosen() {
+    let font = subset();
+    let integral = named(&font, "uni222B");
+    let dsp = named(&font, "uni222B.dsp");
+    let parts_of =
+        |target: i32| font.stretch_with_italic_correction(integral, false, target, level(0));
+
+    // (target height, glyphs chosen, correction)
+    let (parts, correction) = parts_of(500);
+    assert_eq!(
+        parts.iter().map(|(_, g)| g.glyph_code).collect::<Vec<_>>(),
+        [integral]
+    );
+    assert_eq!(correction, 230, "the base size integral");
+
+    for target in [955, 1500, 2347] {
+        let (parts, correction) = parts_of(target);
+        assert_eq!(
+            parts.iter().map(|(_, g)| g.glyph_code).collect::<Vec<_>>(),
+            [dsp],
+            "{target}"
+        );
+        assert_eq!(correction, 540, "the display size integral at {target}");
+    }
+
+    // (target, number of parts): just above the display size the two ends suffice; the extender
+    // is repeated for taller targets
+    for (target, count) in [(2348, 2), (4000, 3), (20_000, 12)] {
+        let (parts, correction) = parts_of(target);
+        let glyphs: Vec<u32> = parts.iter().map(|(_, g)| g.glyph_code).collect();
+        assert!(
+            glyphs.len() == count || (count > 3 && glyphs.len() > 3),
+            "parts of an assembly at {target}: {glyphs:?}"
+        );
+        assert_eq!(
+            glyphs[0],
+            named(&font, "uni2321"),
+            "the bottom part comes first"
+        );
+        assert_eq!(
+            *glyphs.last().unwrap(),
+            named(&font, "uni2320"),
+            "the top part is last"
+        );
+        assert_eq!(
+            correction, 80,
+            "GlyphAssembly.italicsCorrection at {target}"
+        );
+        // none of the parts has a correction of its own, so only the assembly's value can be it
+        assert!(parts.iter().all(|(_, g)| g.italic_correction == 0));
+    }
+}
+
+#[test]
+fn stretching_keeps_returning_the_same_parts() {
+    let font = subset();
+    let integral = named(&font, "uni222B");
+    for target in [0, 500, 1500, 2347, 2348, 9000] {
+        let (parts, _) = font.stretch_with_italic_correction(integral, false, target, level(0));
+        assert_eq!(
+            parts,
+            font.stretch(integral, false, target, level(0)),
+            "{target}"
+        );
+    }
+}
+
+/// A glyph that does not stretch is returned as it is, with its own correction.
+#[test]
+fn an_unstretchable_glyph_keeps_its_correction() {
+    let font = subset();
+    let f = named(&font, "u1D453");
+    let (parts, correction) = font.stretch_with_italic_correction(f, false, 5000, level(0));
+    assert_eq!(parts.len(), 1);
+    assert_eq!(correction, 20);
+}
+
+/// A font that does not override `stretch_with_italic_correction` gets the default: the
+/// correction of a single glyph, and 0 for an assembly, whose value only the font knows.
+#[test]
+fn the_default_implementation_knows_single_glyphs_only() {
+    struct Plain(Shaper);
+    impl MathFont for Plain {
+        fn units_per_em(&self) -> u32 {
+            self.0.units_per_em()
+        }
+        fn constant(&self, c: MathConstant) -> i32 {
+            self.0.constant(c)
+        }
+        fn shape(&self, text: &str, options: ShapeOptions) -> Vec<MathGlyph> {
+            self.0.shape(text, options)
+        }
+        fn glyph(&self, glyph: GlyphCode, options: ShapeOptions) -> MathGlyph {
+            self.0.glyph(glyph, options)
+        }
+        fn is_stretchable(&self, glyph: GlyphCode, horizontal: bool) -> bool {
+            self.0.is_stretchable(glyph, horizontal)
+        }
+        fn stretch(
+            &self,
+            glyph: GlyphCode,
+            horizontal: bool,
+            target_size: i32,
+            options: ShapeOptions,
+        ) -> Vec<(Vector<i32>, MathGlyph)> {
+            self.0.stretch(glyph, horizontal, target_size, options)
+        }
+        fn math_kerning(&self, glyph: GlyphCode, corner: CornerPosition, height: i32) -> i32 {
+            self.0.math_kerning(glyph, corner, height)
+        }
+    }
+    let font = Plain(subset());
+    let integral = named(&font.0, "uni222B");
+    assert_eq!(
+        font.stretch_with_italic_correction(integral, false, 1500, level(0))
+            .1,
+        540
+    );
+    assert_eq!(
+        font.stretch_with_italic_correction(integral, false, 9000, level(0))
+            .1,
+        0
+    );
+}

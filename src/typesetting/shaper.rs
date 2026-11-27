@@ -385,6 +385,14 @@ impl Shaper {
             .unwrap_or_default()
     }
 
+    /// `GlyphAssembly.italicsCorrection` of the assembly of a glyph, in font units; 0 without
+    /// assembly.
+    fn assembly_italic_correction(&self, glyph: u32, horizontal: bool) -> i32 {
+        self.construction(glyph, horizontal)
+            .and_then(|c| c.glyph_assembly()?.ok())
+            .map_or(0, |assembly| assembly.italics_correction().value().to_i16() as i32)
+    }
+
     /// The font's `MinConnectorOverlap`: assembly parts must overlap by at least this much.
     fn min_connector_overlap(&self) -> i32 {
         self.math()
@@ -585,19 +593,43 @@ impl MathFont for Shaper {
         target_size: i32,
         options: ShapeOptions,
     ) -> Vec<(Vector<i32>, MathGlyph)> {
+        self.stretch_with_italic_correction(glyph, horizontal, target_size, options)
+            .0
+    }
+
+    fn stretch_with_italic_correction(
+        &self,
+        glyph: GlyphCode,
+        horizontal: bool,
+        target_size: i32,
+        options: ShapeOptions,
+    ) -> (Vec<(Vector<i32>, MathGlyph)>, i32) {
         match self.stretch_parts(glyph, horizontal, target_size, options) {
-            Stretched::Single(glyphs) => glyphs
-                .into_iter()
-                .scan(0, |advance, glyph| {
-                    let offset = Vector { x: *advance, y: 0 };
-                    *advance += glyph.advance_width;
-                    Some((offset, glyph))
-                })
-                .collect(),
-            Stretched::Assembly(parts) => parts
-                .into_iter()
-                .flat_map(|(origin, glyphs)| glyphs.into_iter().map(move |g| (origin, g)))
-                .collect(),
+            Stretched::Single(glyphs) => {
+                // a variant (or the base glyph): its own correction
+                let italic_correction = match glyphs.as_slice() {
+                    [only] => only.italic_correction,
+                    _ => 0,
+                };
+                let parts = glyphs
+                    .into_iter()
+                    .scan(0, |advance, glyph| {
+                        let offset = Vector { x: *advance, y: 0 };
+                        *advance += glyph.advance_width;
+                        Some((offset, glyph))
+                    })
+                    .collect();
+                (parts, italic_correction)
+            }
+            Stretched::Assembly(parts) => {
+                // an assembly: the one of the assembly, not of its parts
+                let italic_correction = self.assembly_italic_correction(glyph, horizontal);
+                let parts = parts
+                    .into_iter()
+                    .flat_map(|(origin, glyphs)| glyphs.into_iter().map(move |g| (origin, g)))
+                    .collect();
+                (parts, italic_correction)
+            }
         }
     }
 

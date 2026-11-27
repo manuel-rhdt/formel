@@ -342,8 +342,10 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             let is_bar = fallback::is_bar(&text);
             if font.font.is_stretchable(base_glyph, true) {
                 let glyph = base_glyph;
-                let parts = font.font.stretch(glyph, true, target, options);
-                let stretched = LBox::glyphs(font.run(node, parts));
+                let (parts, italic_correction) =
+                    font.font.stretch_with_italic_correction(glyph, true, target, options);
+                let mut stretched = LBox::glyphs(font.run(node, parts));
+                stretched.metrics.italic_correction = italic_correction as f32 * font.scale;
                 // A bar that the font could not stretch far enough is better drawn as a rule.
                 if !is_bar || stretched.metrics.ink_width >= 0.9 * needed_width {
                     return stretched;
@@ -359,13 +361,14 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         }
 
         if needed_height > 0.0 && font.font.is_stretchable(base_glyph, false) {
-            let parts = font.font.stretch(
+            let (parts, italic_correction) = font.font.stretch_with_italic_correction(
                 base_glyph,
                 false,
                 font.units(needed_height),
                 options,
             );
-            let stretched = LBox::glyphs(font.run(node, parts));
+            let mut stretched = LBox::glyphs(font.run(node, parts));
+            stretched.metrics.italic_correction = italic_correction as f32 * font.scale;
             let m = stretched.metrics;
             let shift_down = if symmetric {
                 // center on the math axis
