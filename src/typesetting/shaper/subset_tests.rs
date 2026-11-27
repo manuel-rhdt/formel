@@ -225,3 +225,63 @@ fn ssty_alternates_do_not_inherit_kerning() {
         assert_eq!(font.math_kerning(alternate, corner, 300), 0);
     }
 }
+
+/// (character, glyph name, advance, italic correction): the `MathItalicsCorrectionInfo` of the font.
+const ITALIC: [(&str, &str, i32, i32); 4] = [
+    ("\u{1D453}", "u1D453", 577, 20),  // MATHEMATICAL ITALIC SMALL F
+    ("\u{1D447}", "u1D447", 610, 65),  // MATHEMATICAL ITALIC CAPITAL T
+    ("\u{1D449}", "u1D449", 640, 100), // MATHEMATICAL ITALIC CAPITAL V
+    ("\u{222B}", "uni222B", 684, 230), // INTEGRAL
+];
+
+#[test]
+fn italic_correction_comes_from_the_table() {
+    let font = subset();
+    for (text, name, advance, correction) in ITALIC {
+        let shaped = font.shape(text, ShapeOptions::default())[0];
+        assert_eq!(shaped.glyph_code, named(&font, name));
+        assert_eq!(shaped.advance_width, advance, "{name}");
+        assert_eq!(shaped.italic_correction, correction, "{name} by shaping");
+        let by_index = font.glyph(shaped.glyph_code, ShapeOptions::default());
+        assert_eq!(
+            by_index.italic_correction, correction,
+            "{name} by glyph index"
+        );
+    }
+}
+
+/// Glyphs without an entry have no correction: upright letters, the space, and also the `ssty`
+/// alternates of italic glyphs, which the font does not list.
+#[test]
+fn glyphs_without_an_entry_have_no_italic_correction() {
+    let font = subset();
+    for name in [
+        "A",
+        "E",
+        "x",
+        "plus",
+        "space",
+        ".notdef",
+        "u1D453.ssty",
+        "u1D447.ssty2",
+        "uni222B.ssty",
+    ] {
+        let glyph = font.glyph(named(&font, name), ShapeOptions::default());
+        assert_eq!(glyph.italic_correction, 0, "{name}");
+    }
+    assert_eq!(
+        font.glyph(60000, ShapeOptions::default()).italic_correction,
+        0
+    );
+}
+
+/// The correction is kept with the substituted glyph: at script level 1 the italic f is
+/// `u1D453.ssty`, which has none.
+#[test]
+fn italic_correction_follows_the_substituted_glyph() {
+    let font = subset();
+    let base = font.shape("\u{1D453}", level(0))[0];
+    let script = font.shape("\u{1D453}", level(1))[0];
+    assert_eq!(script.glyph_code, named(&font, "u1D453.ssty"));
+    assert_eq!((base.italic_correction, script.italic_correction), (20, 0));
+}
