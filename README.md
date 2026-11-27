@@ -5,7 +5,8 @@
 [![npm](https://img.shields.io/npm/v/@manuel-rhdt/formel-wasm.svg)](https://www.npmjs.com/package/@manuel-rhdt/formel-wasm)
 
 A Rust library that lays out mathematical formulas using
-**OpenType MATH fonts** and [rustybuzz](https://github.com/harfbuzz/rustybuzz) for Unicode shaping.
+**OpenType MATH fonts** and [harfrust](https://github.com/harfbuzz/harfrust) and
+[read-fonts](https://github.com/googlefonts/fontations) (the pure-Rust fontations stack) for shaping and font access.
 It implements the typesetting rules from the OpenType MATH specification and
 [MathML Core](https://www.w3.org/TR/mathml-core/): script and fraction placement, stretchy operators,
 radicals, tables, accents, italic corrections, math kerning and more, comparable in quality to

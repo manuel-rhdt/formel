@@ -15,24 +15,21 @@ use formel::host::MathFont;
 use formel::shaper::Shaper;
 use formel::standalone::StyleOptions;
 
-use fontconfig::{list_fonts, Pattern};
-
-
 use docopt::Docopt;
 
 const USAGE: &'static str = "
-Usage: mathimg [options] <input> <output>
-       mathimg list-fonts [--verbose]
+Usage: mathimg [options] --font=FONT <input> <output>
 
-Subcommands:
-    list-fonts  Lists all available math fonts on the system.
+Renders MathML to an image. <input> is a MathML file, or - for standard input; <output> is a file
+or a directory (the file is then named after the input).
 
 Options:
     -o FORMAT --output-format=FORMAT  The output format to use. [default: svg]
-    -f FONT --font=FONT               Name of the font to use.
+    -f FONT --font=FONT               Path of a font file with an OpenType MATH table.
+    --face-index=N                    Index of the font within a font collection (.ttc/.otc),
+                                      for example Cambria Math in cambria.ttc. [default: 0]
     --show-ink-bounds                 Fill the boxes of token elements.
     --show-logical-bounds             Outline the box of every element.
-    --verbose                         Show additional information
     ";
 
 #[derive(Debug, serde::Deserialize)]
@@ -40,9 +37,8 @@ struct Args {
     arg_input: String,
     arg_output: String,
     flag_output_format: Option<Format>,
-    cmd_list_fonts: bool,
     flag_font: String,
-    flag_verbose: bool,
+    flag_face_index: u32,
     flag_show_ink_bounds: bool,
     flag_show_logical_bounds: bool,
 }
@@ -58,48 +54,6 @@ impl Format {
             Format::Svg => ".svg",
         }
     }
-}
-
-#[derive(Debug)]
-struct Font {
-    name: String,
-    path: PathBuf,
-    face_index: u32,
-}
-
-fn find_math_fonts() -> Vec<Font> {
-    let pat = Pattern::new();
-    let fontset = list_fonts(&pat);
-
-    (&fontset)
-        .iter()
-        .filter_map(|pattern| {
-            pattern.get_string("capability").and_then(|cap| {
-                if cap.contains("otlayout:math") {
-                    Some(Font {
-                        name: pattern.name().unwrap().into(),
-                        path: pattern.filename().unwrap().into(),
-                        face_index: pattern.face_index().unwrap() as u32,
-                    })
-                } else {
-                    None
-                }
-            })
-        })
-        .filter(has_math_data)
-        .collect()
-}
-
-/// checks if a math table exists in the font
-fn has_math_data(font: &Font) -> bool {
-    let Ok(buffer) = std::fs::read(&font.path) else {
-        return false;
-    };
-    Shaper::from_slice(&buffer, font.face_index as u32).is_some()
-}
-
-fn create_shaper(font_bytes: &[u8]) -> Shaper<'_> {
-    Shaper::from_slice(font_bytes, 0).expect("font must have a MATH table")
 }
 
 fn main() {
@@ -132,37 +86,11 @@ fn main() {
         (None, "".into())
     };
 
-    if args.cmd_list_fonts {
-        let vec = find_math_fonts();
-        if vec.len() == 0 {
-            panic!("Found no math fonts.");
-        }
-
-        for font in &vec {
-            print!("{}", font.name);
-            if args.flag_verbose {
-                print!(": {:?}", font.path);
-            }
-            print!("\n");
-        }
-        return;
-    }
-
-    let font_path = if args.flag_font.is_empty() {
-        PathBuf::from(
-            find_math_fonts()
-                .get(0)
-                .expect("Could not find suitable math font on system.")
-                .path
-                .clone(),
-        )
-    } else {
-        match PathBuf::from(args.flag_font.clone()).canonicalize() {
-            Ok(path) => path,
-            Err(err) => {
-                println!("Error opening {:?}", args.flag_font);
-                panic!("{}", err);
-            }
+    let font_path = match PathBuf::from(args.flag_font.clone()).canonicalize() {
+        Ok(path) => path,
+        Err(err) => {
+            eprintln!("Error opening {:?}: {err}", args.flag_font);
+            std::process::exit(1);
         }
     };
 
@@ -175,9 +103,22 @@ fn main() {
         out_path.to_mut().push(output_name.into_owned() + extension);
     }
 
-    let font_bytes = std::fs::read(&font_path).expect("could not read font file");
+    let font_bytes = match std::fs::read(&font_path) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            eprintln!("could not read {:?}: {err}", font_path);
+            std::process::exit(1);
+        }
+    };
 
-    let shaper = create_shaper(&font_bytes);
+    // The face index matters for collections: Shaper::from_slice would otherwise read the first font.
+    let Some(shaper) = Shaper::from_vec(font_bytes, args.flag_face_index) else {
+        eprintln!(
+            "{:?} (face {}) is not a font with an OpenType MATH table",
+            font_path, args.flag_face_index
+        );
+        std::process::exit(1);
+    };
 
     let document = list.as_ref().unwrap();
     // A font size of one em per font unit makes px equal font units.
@@ -199,7 +140,7 @@ fn main() {
             svg_renderer::render(
                 document,
                 &typeset.layouts,
-                shaper.face(),
+                &shaper,
                 units_per_em,
                 flags,
                 &out_path,

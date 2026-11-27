@@ -8,10 +8,7 @@ use ::svg::node::element::{Group, Line, Path, Rectangle, Title};
 use ::svg::node::Node;
 use ::svg::Document;
 
-use std::fmt::Write;
-
-use rustybuzz::ttf_parser::{GlyphId, OutlineBuilder};
-use rustybuzz::Face;
+use crate::shaper::Shaper;
 
 /// The space kept around a formula by default, as a fraction of the font size.
 ///
@@ -84,7 +81,7 @@ impl<'a> A11y<'a> {
 pub fn render<T: AsRef<FsPath>>(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &Face<'_>,
+    font: &Shaper,
     units_per_em: f32,
     flags: Flags,
     out_path: T,
@@ -104,7 +101,7 @@ pub fn render<T: AsRef<FsPath>>(
 pub fn render_with<T: AsRef<FsPath>>(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &Face<'_>,
+    font: &Shaper,
     units_per_em: f32,
     flags: Flags,
     a11y: A11y<'_>,
@@ -120,7 +117,7 @@ pub fn render_with<T: AsRef<FsPath>>(
 pub fn render_to_string(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &Face<'_>,
+    font: &Shaper,
     units_per_em: f32,
     flags: Flags,
 ) -> String {
@@ -138,7 +135,7 @@ pub fn render_to_string(
 pub fn render_to_string_with(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &Face<'_>,
+    font: &Shaper,
     units_per_em: f32,
     flags: Flags,
     a11y: A11y<'_>,
@@ -149,7 +146,7 @@ pub fn render_to_string_with(
 fn build_document(
     document: &MathDocument,
     layouts: &HashMap<NodeId, NodeLayout>,
-    font: &Face<'_>,
+    font: &Shaper,
     units_per_em: f32,
     flags: Flags,
     a11y: A11y<'_>,
@@ -288,46 +285,14 @@ fn build_document(
     svg_document
 }
 
-/// Collects a glyph outline as SVG path data.
-#[derive(Debug, Default)]
-struct PathBuilder {
-    data: String,
-}
-
-impl PathBuilder {
-    fn push(&mut self, command: std::fmt::Arguments) {
-        let _ = write!(self.data, "{} ", command);
-    }
-}
-
-impl OutlineBuilder for PathBuilder {
-    fn move_to(&mut self, x: f32, y: f32) {
-        self.push(format_args!("M{} {}", x, y));
-    }
-    fn line_to(&mut self, x: f32, y: f32) {
-        self.push(format_args!("L{} {}", x, y));
-    }
-    fn quad_to(&mut self, cx: f32, cy: f32, x: f32, y: f32) {
-        self.push(format_args!("Q{} {} {} {}", cx, cy, x, y));
-    }
-    fn curve_to(&mut self, c1x: f32, c1y: f32, c2x: f32, c2y: f32, x: f32, y: f32) {
-        self.push(format_args!("C{} {} {} {} {} {}", c1x, c1y, c2x, c2y, x, y));
-    }
-    fn close(&mut self) {
-        self.push(format_args!("Z"));
-    }
-}
-
 /// Draws a glyph from the font. Outlines are in font units with y pointing up, so
 /// they are flipped and scaled to px.
-fn draw_glyph(font: &Face<'_>, glyph: u32, x: f32, y: f32, scale: f32) -> Group {
-    let mut builder = PathBuilder::default();
-    font.outline_glyph(GlyphId(glyph as u16), &mut builder);
-    let data = builder.data;
+fn draw_glyph(font: &Shaper, glyph: u32, x: f32, y: f32, scale: f32) -> Group {
+    let data = font.glyph_path_data(glyph);
     Group::new()
         .set(
             "transform",
             format!("translate({:?}, {:?}) scale({:?}, {:?})", x, y, scale, -scale),
         )
-        .add(Path::new().set("d", data.trim_end().to_owned()))
+        .add(Path::new().set("d", data))
 }

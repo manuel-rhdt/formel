@@ -51,7 +51,7 @@ jobs:
 
       - name: Run tests
         # --all-features: several test files are compiled out without `mathml_parser` and `svg`
-        run: cargo test --workspace --exclude mathimg --all-features
+        run: cargo test --workspace --all-features
 
       - name: Test the demo's JavaScript helpers
         run: node --test web/test/*.test.mjs

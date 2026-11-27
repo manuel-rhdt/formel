@@ -5,6 +5,6 @@ pub fn get_bytes() -> &'static [u8] {
 }
 
 thread_local! {
-    pub static TEST_FONT: Shaper<'static> =
+    pub static TEST_FONT: Shaper =
         Shaper::from_slice(get_bytes(), 0).expect("test font has a MATH table");
 }
