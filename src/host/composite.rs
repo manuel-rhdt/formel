@@ -21,7 +21,9 @@
 //! # Scale
 //!
 //! The metrics of a glyph of another face are scaled to the units per em of the primary face, and by
-//! the face's [`size_adjust`](FontFace::size_adjust) (the `size-adjust` descriptor). The values that
+//! the face's [`size_adjust`](FontFace::size_adjust) (the `size-adjust` descriptor). The `size_adjust`
+//! of the primary face scales its glyphs and its MATH constants (but not the percentages among them) and
+//! not the em, so `units_per_em` stays that of the primary font. The values that
 //! are rounded to whole units are rounded to the nearest, so with a scale other than 1 an assembly of
 //! several parts can be a few units off.
 
@@ -71,7 +73,8 @@ pub struct FontFace<F> {
     pub font: F,
     /// The codepoints the face may be used for (`unicode-range`). Default: all.
     pub unicode_ranges: UnicodeRanges,
-    /// Scales the glyphs (`size-adjust` as a factor: 0.9 is 90%). Default: 1. Not for the primary face.
+    /// Scales the glyphs and all other metrics of the face (`size-adjust` as a factor: 0.9 is 90%),
+    /// not the em. Default: 1.
     pub size_adjust: f32,
     /// Features to apply for this face (`font-feature-settings` of `@font-face`). Settings of the
     /// shaping options override them.
@@ -113,8 +116,6 @@ pub enum CompositeFontError {
     TooManyFaces,
     /// A `size_adjust` that is not a positive, finite number.
     InvalidSizeAdjust,
-    /// The primary face tells the units per em, so it cannot be scaled.
-    PrimarySizeAdjust,
 }
 
 impl std::fmt::Display for CompositeFontError {
@@ -124,7 +125,6 @@ impl std::fmt::Display for CompositeFontError {
             CompositeFontError::PrimaryOutOfRange => "the primary face is not one of the faces",
             CompositeFontError::TooManyFaces => "a composite font has at most 256 faces",
             CompositeFontError::InvalidSizeAdjust => "size-adjust must be a positive number",
-            CompositeFontError::PrimarySizeAdjust => "the primary face cannot have a size-adjust",
         })
     }
 }
@@ -209,9 +209,6 @@ impl<F: MathFont> CompositeFont<F> {
         {
             return Err(CompositeFontError::InvalidSizeAdjust);
         }
-        if faces[primary].size_adjust != 1.0 {
-            return Err(CompositeFontError::PrimarySizeAdjust);
-        }
 
         let units_per_em = faces[primary].font.units_per_em().max(1);
         let mut by_tag = vec![primary];
@@ -220,7 +217,8 @@ impl<F: MathFont> CompositeFont<F> {
             .enumerate()
             .map(|(index, face)| {
                 let (tag, scale) = if index == primary {
-                    (0, 1.0)
+                    // the units are those of this face, but its `size-adjust` scales it like the others
+                    (0, face.size_adjust as f64)
                 } else {
                     by_tag.push(index);
                     let ratio = units_per_em as f64 / face.font.units_per_em().max(1) as f64;
@@ -368,7 +366,14 @@ impl<F: MathFont> MathFont for CompositeFont<F> {
     }
 
     fn constant(&self, c: MathConstant) -> i32 {
-        self.primary().constant(c)
+        let value = self.primary().constant(c);
+        match c {
+            // percentages do not depend on the size of the font
+            MathConstant::ScriptPercentScaleDown
+            | MathConstant::ScriptScriptPercentScaleDown
+            | MathConstant::RadicalDegreeBottomRaisePercent => value,
+            _ => scaled(value, self.faces[self.primary].scale),
+        }
     }
 
     fn shape(&self, text: &str, options: ShapeOptions) -> Vec<MathGlyph> {
@@ -544,10 +549,8 @@ mod tests {
                 "{bad}"
             );
         }
-        assert_eq!(
-            err(vec![face().size_adjust(0.9)], 0),
-            Some(CompositeFontError::PrimarySizeAdjust)
-        );
+        // the primary face can be adjusted like the others
+        assert!(err(vec![face().size_adjust(0.9)], 0).is_none());
         assert!(err(vec![face().size_adjust(0.9), face()], 1).is_none());
     }
 
@@ -1048,5 +1051,62 @@ mod tests {
                 "U+{codepoint:X}"
             );
         }
+    }
+
+    /// `size-adjust` of the primary face scales its glyphs and its lengths, but not the em and not the
+    /// percentages among the constants.
+    #[test]
+    fn size_adjust_of_the_primary_face_scales_glyphs_and_lengths_but_not_the_em() {
+        let reference = primary();
+        let composite =
+            CompositeFont::new(vec![FontFace::new(primary()).size_adjust(0.5)], 0).unwrap();
+        let a = composite.shape("A", options())[0];
+        let expected = reference.shape("A", options())[0];
+        assert_eq!(
+            a.glyph_code, expected.glyph_code,
+            "the codes of the primary face are its own"
+        );
+        assert_eq!(a.advance_width, expected.advance_width / 2);
+        assert_eq!(
+            a.extents.width,
+            (expected.extents.width as f64 / 2.0).round() as i32
+        );
+        assert_eq!(composite.units_per_em(), 1000, "the em is not scaled");
+        assert_eq!(composite.decode_glyph(a.glyph_code).unwrap().scale, 0.5);
+
+        use MathConstant::*;
+        for c in [
+            AxisHeight,
+            RadicalRuleThickness,
+            FractionRuleThickness,
+            DisplayOperatorMinHeight,
+            SuperscriptShiftUp,
+        ] {
+            let value = reference.constant(c);
+            assert!(value > 0, "{c:?}");
+            assert_eq!(
+                composite.constant(c),
+                (value as f64 / 2.0).round() as i32,
+                "{c:?}"
+            );
+        }
+        for c in [
+            ScriptPercentScaleDown,
+            ScriptScriptPercentScaleDown,
+            RadicalDegreeBottomRaisePercent,
+        ] {
+            assert!(reference.constant(c) > 0, "{c:?}");
+            assert_eq!(
+                composite.constant(c),
+                reference.constant(c),
+                "{c:?} is a percentage"
+            );
+        }
+        // the heights of the kerning table are those of a glyph drawn at half the size: a height of 300
+        // of the composite is 600 of the face, above the second band of A (the first above 352)
+        assert_eq!(
+            composite.math_kerning(a.glyph_code, CornerPosition::TopRight, 300),
+            -33
+        );
     }
 }

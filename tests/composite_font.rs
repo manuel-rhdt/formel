@@ -260,3 +260,21 @@ fn a_stretched_operator_of_another_face_is_an_assembly_of_that_face() {
     assert_eq!(scaled, mixed.codes[&operator.to_vec()].len());
     assert_eq!(drawn.len(), scaled + 2);
 }
+
+/// `size-adjust` of the primary face scales everything it draws and measures, not the em.
+#[test]
+fn size_adjust_of_the_primary_face_scales_the_whole_formula() {
+    let font = CompositeFont::new(
+        vec![FontFace::new(Rc::new(Shaper::from_static(PRIMARY, 0).unwrap())).size_adjust(0.5)],
+        0,
+    )
+    .unwrap();
+    assert_eq!(font.units_per_em(), 1000);
+    let (laid, full) = (lay_out(&font, AVT), lay_out(&alone(), AVT));
+    let (a, b) = (laid.width[&vec![0]], full.width[&vec![0]] / 2.0);
+    assert!(
+        (a - b).abs() <= 2.0,
+        "the row is half as wide: {a} against {b}"
+    );
+    assert_eq!(sorted_scales(&laid.svg), [0.5, 0.5, 0.5]);
+}
