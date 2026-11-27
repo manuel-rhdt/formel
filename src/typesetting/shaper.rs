@@ -964,58 +964,7 @@ mod test {
         // A real constant, from the table
         assert_eq!(font.math_constant(MathConstant::ScriptPercentScaleDown), 70);
     }
-
-    /// At exactly a correction height the kern of the band above applies, as in HarfBuzz
-    /// (`correctionHeight[i-1] <= h < correctionHeight[i]`). The pre-fontations code compared with
-    /// `<=` and so took the band below.
-    #[test]
-    fn math_kerning_bands_are_half_open_like_harfbuzz() {
-        // Latin Modern Math and New Computer Modern have no kerning bands worth testing. STIX Two
-        // does, but it lives in `web/`, which the published crate excludes: skip without it.
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/web/fonts/stixtwo-math.otf");
-        let Ok(data) = std::fs::read(path) else {
-            eprintln!("skipped: {path} not found");
-            return;
-        };
-        let font = Shaper::from_vec(data, 0).expect("STIX Two Math has a MATH table");
-        let math = font.math().unwrap();
-        let kerns = math
-            .math_glyph_info()
-            .unwrap()
-            .math_kern_info()
-            .unwrap()
-            .unwrap();
-        let mut checked = 0;
-        for gid in 0..font.font.num_glyphs() {
-            for (corner, ours) in [
-                (MathKernCorner::TopRight, CornerPosition::TopRight),
-                (MathKernCorner::TopLeft, CornerPosition::TopLeft),
-                (MathKernCorner::BottomRight, CornerPosition::BottomRight),
-                (MathKernCorner::BottomLeft, CornerPosition::BottomLeft),
-            ] {
-                let Some(kern) = kerns.kern(GlyphId::new(gid), corner) else {
-                    continue;
-                };
-                let heights: Vec<i32> = kern
-                    .correction_height()
-                    .iter()
-                    .map(|h| h.value().to_i16() as i32)
-                    .collect();
-                let values: Vec<i32> = kern
-                    .kern_values()
-                    .iter()
-                    .map(|v| v.value().to_i16() as i32)
-                    .collect();
-                for (i, &h) in heights.iter().enumerate() {
-                    if values[i] == values[i + 1] {
-                        continue;
-                    }
-                    assert_eq!(font.math_kerning(gid, ours, h), values[i + 1]);
-                    assert_eq!(font.math_kerning(gid, ours, h - 1), values[i]);
-                    checked += 1;
-                }
-            }
-        }
-        assert!(checked > 0, "test font has no usable kerning");
-    }
 }
+
+#[cfg(test)]
+mod subset_tests;
