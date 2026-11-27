@@ -9,6 +9,7 @@
 //! `math-style`, `math-shift`, padding, border and margin are all read from the host and never
 //! derived by mlayout. All lengths are CSS px.
 
+mod composite;
 mod font;
 mod geometry;
 mod output;
@@ -18,8 +19,12 @@ mod tree;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+pub use self::composite::{
+    CompositeFont, CompositeFontError, DecodedGlyph, FontFace, UnicodeRanges,
+};
 pub use self::font::{
-    CornerPosition, Extents, FontFeatures, GlyphCode, MathConstant, MathFont, MathGlyph, ShapeOptions, Vector,
+    CornerPosition, Extents, FontFeatures, GlyphCode, MathConstant, MathFont, MathGlyph,
+    ShapeOptions, Vector,
 };
 pub use self::geometry::{Edges, Point, Rect, Size};
 pub use self::output::{ForeignMetrics, Fragment, NodeLayout, PositionedGlyph};
