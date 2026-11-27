@@ -632,3 +632,76 @@ fn the_connectors_of_an_extender_at_the_end_limit_the_tolerated_overlap() {
     let parts = vec![part(1, 0, 40, 500, false), part(2, 30, 10, 500, true)];
     assert_eq!(largest_overlap_the_connectors_allow(&parts), Some(10));
 }
+
+// ---- the radical: how the glyphs of the surd are made to join the rule ----
+
+/// The points of the outline of a glyph, as (x, y) in font units, from its SVG path data.
+fn outline_points(font: &Shaper, glyph: &str) -> Vec<(f32, f32)> {
+    let path = font.glyph_path_data(named(font, glyph));
+    let numbers: Vec<f32> = path
+        .split(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-'))
+        .filter(|token| !token.is_empty())
+        .map(|token| token.parse().unwrap())
+        .collect();
+    assert!(
+        numbers.len() % 2 == 0 && !numbers.is_empty(),
+        "{glyph}: {path}"
+    );
+    numbers.chunks(2).map(|xy| (xy[0], xy[1])).collect()
+}
+
+/// Every glyph of the surd ends in a horizontal stroke, the start of the rule over the radicand, as
+/// thick as the font's `RadicalRuleThickness`: it is what the rule joins. The stroke is the right
+/// end of the outline, whose top is the highest point of the glyph.
+#[test]
+fn the_top_stroke_of_every_surd_glyph_is_as_thick_as_the_rule() {
+    let font = Shaper::from_static(SUBSET, 0).unwrap();
+    let thickness = font.math_constant(MathConstant::RadicalRuleThickness);
+    assert_eq!(thickness, 68);
+    for glyph in [
+        "uni221A",
+        "uni221A.s1",
+        "uni221A.s2",
+        "uni221A.s3",
+        "uni221A.t",
+    ] {
+        let points = outline_points(&font, glyph);
+        let right = points.iter().map(|p| p.0).fold(f32::MIN, f32::max);
+        let top = points.iter().map(|p| p.1).fold(f32::MIN, f32::max);
+        let mut at_the_right_end: Vec<f32> = points
+            .iter()
+            .filter(|p| p.0 == right)
+            .map(|p| p.1)
+            .collect();
+        at_the_right_end.sort_by(f32::total_cmp);
+        assert_eq!(
+            at_the_right_end.last(),
+            Some(&top),
+            "{glyph}: the stroke is at the top"
+        );
+        assert_eq!(
+            top - at_the_right_end[at_the_right_end.len() - 2],
+            thickness as f32,
+            "{glyph}: thickness of the top stroke"
+        );
+    }
+}
+
+/// The glyphs of the surd reach past their advance, which is where the rule starts: the stroke
+/// overlaps the rule instead of ending at it, so that there is no gap (35 units for the sizes, 31
+/// for the top part of the assembly).
+#[test]
+fn the_surd_overlaps_the_start_of_the_rule() {
+    let font = Shaper::from_static(SUBSET, 0).unwrap();
+    for (glyph, overlap) in [
+        ("uni221A", 35),
+        ("uni221A.s1", 35),
+        ("uni221A.s2", 35),
+        ("uni221A.s3", 35),
+        ("uni221A.t", 31),
+    ] {
+        let g = font.glyph(named(&font, glyph), ShapeOptions::default());
+        let ink_right = g.extents.left_side_bearing + g.extents.width;
+        assert_eq!(ink_right - g.advance_width, overlap, "{glyph}");
+    }
+}
