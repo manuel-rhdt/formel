@@ -824,10 +824,8 @@ fn spanned_table(doc: &mut Doc, rows: &[Vec<(Id, u32, u32)>]) -> (Id, Vec<Id>) {
         }
         row_ids.push(doc.el(Mtr, &row_cells));
     }
-    let table = doc.el(Mtable, &row_ids);
     // MathML Core tables have no spacing between cells.
-    doc.set_attr(table, "columnspacing", "0");
-    doc.set_attr(table, "rowspacing", "0");
+    let table = doc.el(Mtable, &row_ids);
     (table, cells)
 }
 
@@ -860,7 +858,22 @@ fn squares(doc: &mut Doc, sizes: &[(f32, f32)]) -> Vec<Id> {
     sizes.iter().map(|&(w, d)| px_space(doc, w, 0.0, d)).collect()
 }
 
-/// table-001: cells of 2x2, 4x3 and 3x4 tables are in reading order.
+/// An `<mtd>` styled as the MathML Core UA style sheet does: `padding: 0.5ex 0.4em`, with 1ex
+/// approximated as 0.5em as in the standalone style resolver.
+fn ua_cell(doc: &mut Doc, content: Id) -> Id {
+    let mtd = doc.el(Mtd, &[content]);
+    let em = doc.style_mut(mtd).font_size;
+    doc.style_mut(mtd).padding = Edges {
+        top: 0.25 * em,
+        right: 0.4 * em,
+        bottom: 0.25 * em,
+        left: 0.4 * em,
+    };
+    mtd
+}
+
+/// table-001: cells of 2x2, 4x3 and 3x4 tables are in reading order. The cells carry the UA
+/// padding, which is the only space between them.
 #[test]
 fn wpt_table_001_basic_layout() {
     for (columns, rows) in [(2, 2), (4, 3), (3, 4)] {
@@ -872,7 +885,7 @@ fn wpt_table_001_basic_layout() {
             let mut tds = Vec::new();
             for _ in 0..columns {
                 let space = px_space(&mut doc, 20.0, 10.0, 0.0);
-                tds.push(doc.el(Mtd, &[space]));
+                tds.push(ua_cell(&mut doc, space));
                 spaces.push(space);
             }
             trs.push(doc.el(Mtr, &tds));

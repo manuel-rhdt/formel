@@ -121,6 +121,27 @@ fn table_cells_have_default_padding() {
     );
 }
 
+#[test]
+fn table_has_no_spacing_beyond_cell_padding() {
+    // MathML Core: neighbouring cells touch; the padding of `<mtd>` is the only space between
+    // their contents.
+    layout_xml(
+        "<mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>2</mn></mtd></mtr>\
+         <mtr><mtd><mn>3</mn></mtd><mtd><mn>4</mn></mtd></mtr></mtable>",
+        |doc, layout| {
+            let find_all = |element| {
+                (0..doc.len())
+                    .filter(|&id| doc.node(id).element == element)
+                    .collect::<Vec<_>>()
+            };
+            let table = layout(find_all(MathElement::Mtable)[0]);
+            let cells: Vec<_> = find_all(MathElement::Mtd).into_iter().map(&layout).collect();
+            assert!((table.size.width - cells[0].size.width - cells[1].size.width).abs() < 1e-2);
+            assert!((table.size.height - cells[0].size.height - cells[2].size.height).abs() < 1e-2);
+        },
+    );
+}
+
 /// The SVG's `viewBox` covers the ink even where it reaches past the advance width, and keeps the
 /// margin on every side.
 #[cfg(feature = "svg")]

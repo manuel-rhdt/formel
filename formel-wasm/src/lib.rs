@@ -751,14 +751,12 @@ fn convert_latex_raw(latex: &str, display: bool) -> Result<LatexResult, String> 
         .map(|result| result.mathml))
 }
 
-/// math-core targets browsers implementing MathML Core. Three details differ from what this
+/// math-core targets browsers implementing MathML Core. A few details differ from what this
 /// renderer expects:
 ///
 /// - `\overline` is an accent over the base written with U+0332 COMBINING LOW LINE. That glyph
 ///   sits below the baseline here and would be drawn through the base, so use U+0305
 ///   COMBINING OVERLINE for accents over a base.
-/// - MathML Core tables have no spacing between rows and columns other than the cell padding,
-///   whereas the MathML 3 defaults used here add 0.8em and 0.5ex on top of it.
 /// - After `\sin`, `\lim` and the like it writes the thin space as `lspace="0.1667em"` on the
 ///   invisible function application operator U+2061, which browsers need. This renderer already
 ///   puts a thin space after that operator, so the attribute as it stands would add the space
@@ -779,10 +777,6 @@ fn adapt_for_this_renderer(mathml: String) -> String {
             "<mo rspace=\"0.1667em\">&ApplyFunction;</mo>",
         )
         .replace("\u{332}</mo></mover>", "\u{305}</mo></mover>")
-        .replace(
-            "<mtable",
-            "<mtable columnspacing=\"0em\" rowspacing=\"0em\"",
-        )
 }
 
 /// Puts `<mspace/>` between two neighbouring single-character `<mi>`s of a row, as in `abc`, so

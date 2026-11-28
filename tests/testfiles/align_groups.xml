@@ -28,7 +28,7 @@
   </mtable>
 </math>
 <math display="block">
-  <mtable columnspacing="1em">
+  <mtable>
     <mtr>
       <mtd><maligngroup groupalign="right"/><mi>a</mi><maligngroup/><mo>+</mo><mi>b</mi></mtd>
       <mtd><maligngroup groupalign="right"/><mi>c</mi><maligngroup/><mo>=</mo><mn>0</mn></mtd>
