@@ -121,6 +121,27 @@ fn table_cells_have_default_padding() {
     );
 }
 
+#[test]
+fn table_has_no_spacing_beyond_cell_padding() {
+    // MathML Core: neighbouring cells touch; the padding of `<mtd>` is the only space between
+    // their contents.
+    layout_xml(
+        "<mtable><mtr><mtd><mn>1</mn></mtd><mtd><mn>2</mn></mtd></mtr>\
+         <mtr><mtd><mn>3</mn></mtd><mtd><mn>4</mn></mtd></mtr></mtable>",
+        |doc, layout| {
+            let find_all = |element| {
+                (0..doc.len())
+                    .filter(|&id| doc.node(id).element == element)
+                    .collect::<Vec<_>>()
+            };
+            let table = layout(find_all(MathElement::Mtable)[0]);
+            let cells: Vec<_> = find_all(MathElement::Mtd).into_iter().map(&layout).collect();
+            assert!((table.size.width - cells[0].size.width - cells[1].size.width).abs() < 1e-2);
+            assert!((table.size.height - cells[0].size.height - cells[2].size.height).abs() < 1e-2);
+        },
+    );
+}
+
 /// The SVG's `viewBox` covers the ink even where it reaches past the advance width, and keeps the
 /// margin on every side.
 #[cfg(feature = "svg")]
@@ -149,20 +170,6 @@ fn view_box_covers_ink_overflow_and_margin() {
     let view = formel::svg_renderer::view_box(&inside, 5.0);
     assert_eq!(view.origin, Point::new(-5.0, -5.0));
     assert_eq!(view.size, Size::new(110.0, 50.0));
-}
-
-#[test]
-fn function_application_respects_an_explicit_rspace() {
-    let width = |xml: &str| {
-        let mut width = 0.0;
-        layout_xml(xml, |doc, layout| width = layout(doc.root().unwrap()).size.width);
-        width
-    };
-    let default = width("<mi>sin</mi><mo>&#x2061;</mo><mi>x</mi>");
-    let zero = width(r#"<mi>sin</mi><mo rspace="0">&#x2061;</mo><mi>x</mi>"#);
-    let times = width("<mi>sin</mi><mo>&#x2062;</mo><mi>x</mi>");
-    assert!(default > zero + 1.0);
-    assert!((zero - times).abs() < 1e-2);
 }
 
 /// MathML Core (layout of `<mtext>`, shared by `<mi>`, `<mn>` and `<ms>`): only text made of a

@@ -824,10 +824,8 @@ fn spanned_table(doc: &mut Doc, rows: &[Vec<(Id, u32, u32)>]) -> (Id, Vec<Id>) {
         }
         row_ids.push(doc.el(Mtr, &row_cells));
     }
-    let table = doc.el(Mtable, &row_ids);
     // MathML Core tables have no spacing between cells.
-    doc.set_attr(table, "columnspacing", "0");
-    doc.set_attr(table, "rowspacing", "0");
+    let table = doc.el(Mtable, &row_ids);
     (table, cells)
 }
 
@@ -860,7 +858,22 @@ fn squares(doc: &mut Doc, sizes: &[(f32, f32)]) -> Vec<Id> {
     sizes.iter().map(|&(w, d)| px_space(doc, w, 0.0, d)).collect()
 }
 
-/// table-001: cells of 2x2, 4x3 and 3x4 tables are in reading order.
+/// An `<mtd>` styled as the MathML Core UA style sheet does: `padding: 0.5ex 0.4em`, with 1ex
+/// approximated as 0.5em as in the standalone style resolver.
+fn ua_cell(doc: &mut Doc, content: Id) -> Id {
+    let mtd = doc.el(Mtd, &[content]);
+    let em = doc.style_mut(mtd).font_size;
+    doc.style_mut(mtd).padding = Edges {
+        top: 0.25 * em,
+        right: 0.4 * em,
+        bottom: 0.25 * em,
+        left: 0.4 * em,
+    };
+    mtd
+}
+
+/// table-001: cells of 2x2, 4x3 and 3x4 tables are in reading order. The cells carry the UA
+/// padding, which is the only space between them.
 #[test]
 fn wpt_table_001_basic_layout() {
     for (columns, rows) in [(2, 2), (4, 3), (3, 4)] {
@@ -872,7 +885,7 @@ fn wpt_table_001_basic_layout() {
             let mut tds = Vec::new();
             for _ in 0..columns {
                 let space = px_space(&mut doc, 20.0, 10.0, 0.0);
-                tds.push(doc.el(Mtd, &[space]));
+                tds.push(ua_cell(&mut doc, space));
                 spaces.push(space);
             }
             trs.push(doc.el(Mtr, &tds));
@@ -1350,46 +1363,62 @@ fn gap(doc: &Doc, left: Id, right: Id) -> f32 {
     doc.absolute_rect(root, right).origin.x - doc.absolute_rect(root, left).right()
 }
 
+/// As in MathML Core, U+2061 is an ordinary operator with no space of its own (the operator
+/// dictionary gives it none). Typographic spacing after a function name is up to the author or
+/// converter, through `lspace`/`rspace` or `<mspace>`.
 #[test]
-fn function_application_adds_a_thin_space() {
+fn function_application_adds_no_space_of_its_own() {
     let x = |doc: &mut Doc| doc.tok(Mi, "x");
-    let (apply, sin, a) = function_row("\u{2061}", x);
-    // invisible times is the same invisible character without the space
-    let (times, sin2, b) = function_row("\u{2062}", x);
-    assert_close(gap(&apply, sin, a) - gap(&times, sin2, b), 20.0 * 3.0 / 18.0);
-}
-
-#[test]
-fn function_application_adds_no_space_before_a_fence() {
     let fenced = |doc: &mut Doc| {
         let (open, x, close) = (doc.tok(Mo, "("), doc.tok(Mi, "x"), doc.tok(Mo, ")"));
         doc.el(Mrow, &[open, x, close])
     };
+    // invisible times is another invisible operator without spacing
+    let (apply, sin, a) = function_row("\u{2061}", x);
+    let (times, sin2, b) = function_row("\u{2062}", x);
+    assert_close(gap(&apply, sin, a), gap(&times, sin2, b));
     let (apply, sin, a) = function_row("\u{2061}", fenced);
     let (times, sin2, b) = function_row("\u{2062}", fenced);
     assert_close(gap(&apply, sin, a), gap(&times, sin2, b));
 }
 
-/// `sin <apply>` in a row of its own, the argument in the enclosing row — how pandoc writes every
-/// function name. The space belongs between the operator and its argument, so it has to reach
-/// across the row boundary.
+/// `sin <apply>` in a row of its own and the argument in the enclosing row: nothing is carried
+/// across the row boundary either.
 #[test]
-fn function_application_reaches_past_the_end_of_a_row() {
-    let gap_of = |nested: bool| {
+fn function_application_adds_no_space_past_the_end_of_a_row() {
+    let gap_of = |op: &str| {
+        let mut doc = Doc::new();
+        let sin = doc.tok(Mi, "sin");
+        let apply = doc.tok(Mo, op);
+        let x = doc.tok(Mi, "x");
+        let row = doc.el(Mrow, &[sin, apply]);
+        let root = doc.el(Mrow, &[row, x]);
+        doc.run(root);
+        doc.absolute_rect(root, x).origin.x - doc.absolute_rect(root, row).right()
+    };
+    assert_close(gap_of("\u{2061}"), gap_of("\u{2062}"));
+}
+
+/// The thin space math-core writes for `\sin x`, `lspace="0.1667em"` on U+2061, is applied once,
+/// like the spacing attributes of any other operator, and so is an `rspace`.
+#[test]
+fn function_application_honours_explicit_spacing() {
+    let gap_with = |attribute: Option<&str>| {
         let mut doc = Doc::new();
         let sin = doc.tok(Mi, "sin");
         let apply = doc.tok(Mo, "\u{2061}");
+        if let Some(name) = attribute {
+            doc.set_attr(apply, name, "0.1667em");
+        }
         let x = doc.tok(Mi, "x");
-        let (left, root) = if nested {
-            let row = doc.el(Mrow, &[sin, apply]);
-            (row, doc.el(Mrow, &[row, x]))
-        } else {
-            (apply, doc.el(Mrow, &[sin, apply, x]))
-        };
+        let row = doc.el(Mrow, &[sin, apply, x]);
+        let root = doc.el(Math, &[row]);
         doc.run(root);
-        doc.absolute_rect(root, x).origin.x - doc.absolute_rect(root, left).right()
+        gap(&doc, sin, x)
     };
-    assert_close(gap_of(true), gap_of(false));
+    let bare = gap_with(None);
+    assert_close(gap_with(Some("lspace")) - bare, 20.0 * 0.1667);
+    assert_close(gap_with(Some("rspace")) - bare, 20.0 * 0.1667);
 }
 
 /// The same shape, but the argument opens with a fence: no space, as in `sin(x)`.

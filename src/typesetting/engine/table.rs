@@ -4,9 +4,13 @@
 //! Alignment groups: `<maligngroup>` and `<malignmark>` that are direct children of `<mtd>`
 //! line up the cells of a column (see [`Engine::align_groups`]).
 //!
-//! The layout follows the MathML 3 table attributes: `columnalign`, `rowalign`,
-//! `columnspacing`, `rowspacing`, `columnlines`, `rowlines`, `frame`, `framespacing` and
-//! `align`, `side` and `minlabelspacing` (for the labels of `<mlabeledtr>`). List-valued attributes repeat their last value. Cells may span rows and columns with
+//! The layout follows the MathML 3 table attributes: `columnalign`, `rowalign`, `columnlines`,
+//! `rowlines`, `frame`, `framespacing` and `align`, `side` and `minlabelspacing` (for the labels of
+//! `<mlabeledtr>`). List-valued attributes repeat their last value.
+//!
+//! The spacing between cells is that of MathML Core: the padding of `<mtd>` (from the UA style
+//! sheet or the author) and nothing else. Cells touch, and `columnspacing` and `rowspacing` are
+//! ignored, as in browsers. Converters that want other spacing write it as cell padding. Cells may span rows and columns with
 //! `rowspan` and `columnspan`; table lines stop at the cells that span them.
 
 use super::lbox::{Content, LBox, Metrics};
@@ -114,15 +118,6 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let length = |value: &str| parse_math_length(value, style);
         let column_aligns = self.list_attribute(node, "columnalign", ColumnAlign::parse);
         let row_aligns = self.list_attribute(node, "rowalign", RowAlign::parse);
-        let mut column_spacing = self.list_attribute(node, "columnspacing", length);
-        if column_spacing.is_empty() {
-            column_spacing.push(0.8 * style.font_size);
-        }
-        let mut row_spacing = self.list_attribute(node, "rowspacing", length);
-        if row_spacing.is_empty() {
-            // 1.0ex, approximated as 0.5em
-            row_spacing.push(0.5 * style.font_size);
-        }
         let column_lines = self.list_attribute(node, "columnlines", LineStyle::parse);
         let row_lines = self.list_attribute(node, "rowlines", LineStyle::parse);
         let frame = self
@@ -263,8 +258,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         spanning.sort_by_key(|c| c.row_span);
         for cell in spanning {
             let covered = cell.row..cell.row + cell.row_span;
-            let available: f32 = covered.clone().map(|r| rows[r].ascent + rows[r].descent).sum::<f32>()
-                + covered.clone().take(cell.row_span - 1).map(|r| nth(&row_spacing, r, 0.0)).sum::<f32>();
+            let available: f32 = covered.clone().map(|r| rows[r].ascent + rows[r].descent).sum();
             let missing = cell.lbox.metrics.height() - available;
             if missing > 0.0 {
                 for r in covered {
@@ -282,12 +276,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         spanning.sort_by_key(|c| c.column_span);
         for cell in spanning {
             let covered = cell.column..cell.column + cell.column_span;
-            let available: f32 = covered.clone().map(|c| column_widths[c]).sum::<f32>()
-                + covered
-                    .clone()
-                    .take(cell.column_span - 1)
-                    .map(|c| nth(&column_spacing, c, 0.0))
-                    .sum::<f32>();
+            let available: f32 = covered.clone().map(|c| column_widths[c]).sum();
             let missing = cell.lbox.metrics.advance - available;
             if missing > 0.0 {
                 for c in covered {
@@ -320,23 +309,17 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         };
         let mut column_x = Vec::with_capacity(column_count);
         let mut x = frame_thickness + frame_space_x;
-        for (j, width) in column_widths.iter().enumerate() {
+        for width in &column_widths {
             column_x.push(x);
             x += width;
-            if j + 1 < column_count {
-                x += nth(&column_spacing, j, 0.0);
-            }
         }
         let width = x + frame_space_x + frame_thickness;
 
         let mut row_baselines = Vec::with_capacity(rows.len());
         let mut y = frame_thickness + frame_space_y;
-        for (i, row) in rows.iter().enumerate() {
+        for row in &rows {
             row_baselines.push(y + row.ascent);
             y += row.ascent + row.descent;
-            if i + 1 < rows.len() {
-                y += nth(&row_spacing, i, 0.0);
-            }
         }
         let height = y + frame_space_y + frame_thickness;
 
@@ -353,7 +336,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             _ => -axis_height - height / 2.0,
         };
 
-        // Lines run through the middle of the gaps between rows and columns.
+        // Lines run along the boundaries between rows and columns.
         let mut children = Vec::with_capacity(rows.len() + column_count + 4);
         let mut push_line = |x: f32, y: f32, w: f32, h: f32, style: LineStyle| {
             if style != LineStyle::None && w > 0.0 && h > 0.0 {
@@ -366,19 +349,18 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let inner_height = height - 2.0 * frame_thickness;
         let inner_left = frame_thickness;
         let inner_width = width - 2.0 * frame_thickness;
-        // The bands of the table that rows and columns occupy, from the middle of the gap above
-        // (left of) each to the middle of the gap below (right of) it. They tile the inner area.
+        // The bands of the table that rows and columns occupy. They tile the inner area.
         let row_bands: Vec<(f32, f32)> = (0..rows.len())
             .map(|i| {
                 let top = if i == 0 {
                     inner_top
                 } else {
-                    row_baselines[i] - rows[i].ascent - nth(&row_spacing, i - 1, 0.0) / 2.0
+                    row_baselines[i] - rows[i].ascent
                 };
                 let bottom = if i + 1 == rows.len() {
                     inner_top + inner_height
                 } else {
-                    row_baselines[i] + rows[i].descent + nth(&row_spacing, i, 0.0) / 2.0
+                    row_baselines[i] + rows[i].descent
                 };
                 (top, bottom)
             })
@@ -388,12 +370,12 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
                 let left = if j == 0 {
                     inner_left
                 } else {
-                    column_x[j] - nth(&column_spacing, j - 1, 0.0) / 2.0
+                    column_x[j]
                 };
                 let right = if j + 1 == column_count {
                     inner_left + inner_width
                 } else {
-                    column_x[j] + column_widths[j] + nth(&column_spacing, j, 0.0) / 2.0
+                    column_x[j] + column_widths[j]
                 };
                 (left, right)
             })
@@ -416,8 +398,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         };
         // Lines don't cross cells that span them.
         for j in 0..column_count.saturating_sub(1) {
-            let gap = nth(&column_spacing, j, 0.0);
-            let line_x = column_x[j] + column_widths[j] + gap / 2.0 - thickness / 2.0;
+            let line_x = column_x[j] + column_widths[j] - thickness / 2.0;
             let line_style = nth(&column_lines, j, LineStyle::None);
             let blocked = |i: usize| {
                 cells.iter().any(|c| {
@@ -431,9 +412,7 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             }
         }
         for i in 0..rows.len().saturating_sub(1) {
-            let gap = nth(&row_spacing, i, 0.0);
-            let row_bottom = row_baselines[i] + rows[i].descent;
-            let line_y = row_bottom + gap / 2.0 - thickness / 2.0;
+            let line_y = row_baselines[i] + rows[i].descent - thickness / 2.0;
             let line_style = nth(&row_lines, i, LineStyle::None);
             let blocked = |j: usize| {
                 cells.iter().any(|c| {
@@ -652,7 +631,6 @@ fn box_metrics(width: f32, ascent: f32, descent: f32) -> Metrics {
         ink_width: width,
         italic_correction: 0.0,
         top_accent_attachment: width / 2.0,
-        ends_with_function_application: false,
     }
 }
 

@@ -5,16 +5,10 @@ use super::lbox::{LBox, ScaledFont};
 use super::operator::OperatorProperties;
 use super::{Box_, Ctx, Engine, StretchSize};
 use crate::host::{
-    Form, MathComputedStyle, MathConstant, MathElement, MathFont, MathGlyph, MathLayoutHost,
+    Form, MathComputedStyle, MathConstant, MathFont, MathGlyph, MathLayoutHost,
     MathStyle,
     parse_math_length,
 };
-use crate::mathmlparser::Flags;
-use crate::mathmlparser::operator_dict;
-
-/// The space after a function application, as a fraction of the font size (3/18 em, TeX's
-/// thin space).
-const THIN_SPACE: f32 = 3.0 / 18.0;
 
 impl<'t, T: MathLayoutHost> Engine<'t, T> {
     /// Lays out `children` of `node` horizontally (MathML Core 3.3.1), with operator spacing and
@@ -80,42 +74,12 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
         let mut cursor = 0.0;
         let mut previous_italic_correction = 0.0;
         let mut row = Vec::with_capacity(children.len());
-        // Whether the last child placed was a function application that still owes its space.
-        let mut owes_function_space = false;
         for (i, child_box) in boxes.into_iter().enumerate() {
             let mut child_box = child_box.expect("every child was laid out");
-            // A row that ends with an unpaid function application says so on its own box.
-            let owes_from_box = child_box.metrics.ends_with_function_application;
-            let (lspace, mut rspace) = match properties[i] {
+            let (lspace, rspace) = match properties[i] {
                 Some(p) if self.applies_operator_spacing(children[i]) => (p.lspace, p.rspace),
                 _ => (0.0, 0.0),
             };
-            if self.is_function_application(children[i])
-                && self.applies_operator_spacing(children[i])
-                && children.get(i + 1).is_some_and(|&next| !self.starts_with_fence(next))
-            {
-                // `sin x`: a thin space after the function, but none before an opening fence
-                // as in `sin(x)`. An explicit `rspace` wins.
-                if self.tree.operator_overrides(children[i]).rspace.is_none() {
-                    rspace = rspace.max(THIN_SPACE * self.tree.style(children[i]).font_size);
-                }
-            }
-            // The previous child was a row that ended with a function application: its space is
-            // owed here, before this child, unless this child starts with an opening fence.
-            if owes_function_space
-                && !self.starts_with_fence(children[i])
-                && self.applies_operator_spacing(children[i])
-            {
-                cursor += THIN_SPACE * self.tree.style(children[i]).font_size;
-            }
-            // An explicit `rspace` is the author's answer: whatever it says has already been
-            // applied above, so nothing is owed.
-            let explicit_rspace = self.tree.operator_overrides(children[i]).rspace.is_some();
-            owes_function_space = owes_from_box
-                || (self.is_function_application(children[i])
-                    && self.applies_operator_spacing(children[i])
-                    && rspace == 0.0
-                    && !explicit_rspace);
             cursor += lspace;
             // MathML Core 3.3.1.2: a child is slanted if it is not an embellished operator and has
             // an italic correction. The one before a slanted child is dropped, an operator is never
@@ -135,43 +99,12 @@ impl<'t, T: MathLayoutHost> Engine<'t, T> {
             row.push(child_box);
         }
 
-        // A row that ends with a row that ends with a function application: the flag keeps
-        // travelling up until something follows it.
-        let nested_owes = row.last().is_some_and(|box_| box_.metrics.ends_with_function_application);
         let mut row_box = LBox::boxes(row);
         row_box.metrics.advance = row_box.metrics.advance.max(cursor);
-        row_box.metrics.ends_with_function_application = owes_function_space || nested_owes;
         row_box
     }
 
-    /// Whether `node` is the invisible function application operator U+2061.
-    fn is_function_application(&self, node: T::NodeId) -> bool {
-        self.element(node) == Some(MathElement::Mo)
-            && self.tree.text(node).is_some_and(|text| text == "\u{2061}")
-    }
 
-    /// Whether the first thing drawn by `node` is an opening fence, looking through rows and
-    /// similar wrappers.
-    fn starts_with_fence(&self, node: T::NodeId) -> bool {
-        use MathElement::*;
-        match self.element(node) {
-            Some(Mo) => {
-                let mut chars = self.tree.text(node).unwrap_or_default().chars().collect::<Vec<_>>();
-                match (chars.pop(), chars.is_empty()) {
-                    (Some(c), true) => operator_dict::find_entry(c, Form::Prefix).is_some_and(
-                        |entry| entry.form == Form::Prefix && entry.flags.contains(Flags::FENCE),
-                    ),
-                    _ => false,
-                }
-            }
-            Some(Mrow | Mstyle | Mpadded | Mphantom | Semantics) => self
-                .tree
-                .children(node)
-                .find(|&child| !self.is_space_like(child))
-                .is_some_and(|first| self.starts_with_fence(first)),
-            _ => false,
-        }
-    }
 
     /// Operators get their lspace/rspace except in scripts (`math-depth` > 0), as in TeX.
     fn applies_operator_spacing(&self, embellished_op: T::NodeId) -> bool {
