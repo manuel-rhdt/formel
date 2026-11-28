@@ -757,26 +757,12 @@ fn convert_latex_raw(latex: &str, display: bool) -> Result<LatexResult, String> 
 /// - `\overline` is an accent over the base written with U+0332 COMBINING LOW LINE. That glyph
 ///   sits below the baseline here and would be drawn through the base, so use U+0305
 ///   COMBINING OVERLINE for accents over a base.
-/// - After `\sin`, `\lim` and the like it writes the thin space as `lspace="0.1667em"` on the
-///   invisible function application operator U+2061, which browsers need. This renderer already
-///   puts a thin space after that operator, so the attribute as it stands would add the space
-///   twice. However, the renderer omits its own space before every opening fence, which is
-///   not always right. TeX does not insert a space before a plain `(` (Op then Open) but does
-///   insert a thin space before a `\left( … \right)` group (Op then Inner), and in MathML both
-///   begin with a fence. math-core distinguishes the two cases, so we keep its attribute as
-///   `rspace="0.1667em"`, which the renderer treats as the author's choice and applies once,
-///   in place of its own.
 /// - TeX adds the italic correction of a letter before the next letter (`b` and `c` in `abc`).
 ///   MathML Core adds it before the next child of a row only if that child is not slanted, so
 ///   between two slanted letters there is none. [`separate_letters`] puts an empty `<mspace/>`
 ///   between them: it is not slanted, so it receives the correction, and it takes no room itself.
 fn adapt_for_this_renderer(mathml: String) -> String {
-    separate_letters(&mathml)
-        .replace(
-            "<mo lspace=\"0.1667em\">&ApplyFunction;</mo>",
-            "<mo rspace=\"0.1667em\">&ApplyFunction;</mo>",
-        )
-        .replace("\u{332}</mo></mover>", "\u{305}</mo></mover>")
+    separate_letters(&mathml).replace("\u{332}</mo></mover>", "\u{305}</mo></mover>")
 }
 
 /// Puts `<mspace/>` between two neighbouring single-character `<mi>`s of a row, as in `abc`, so

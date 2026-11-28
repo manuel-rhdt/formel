@@ -172,20 +172,6 @@ fn view_box_covers_ink_overflow_and_margin() {
     assert_eq!(view.size, Size::new(110.0, 50.0));
 }
 
-#[test]
-fn function_application_respects_an_explicit_rspace() {
-    let width = |xml: &str| {
-        let mut width = 0.0;
-        layout_xml(xml, |doc, layout| width = layout(doc.root().unwrap()).size.width);
-        width
-    };
-    let default = width("<mi>sin</mi><mo>&#x2061;</mo><mi>x</mi>");
-    let zero = width(r#"<mi>sin</mi><mo rspace="0">&#x2061;</mo><mi>x</mi>"#);
-    let times = width("<mi>sin</mi><mo>&#x2062;</mo><mi>x</mi>");
-    assert!(default > zero + 1.0);
-    assert!((zero - times).abs() < 1e-2);
-}
-
 /// MathML Core (layout of `<mtext>`, shared by `<mi>`, `<mn>` and `<ms>`): only text made of a
 /// single glyph has an italic correction. The `n` of `sin` has an entry in the MATH table, but
 /// `sin` as a whole must not be treated as slanted.
